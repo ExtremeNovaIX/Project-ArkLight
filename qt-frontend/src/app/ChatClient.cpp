@@ -7,6 +7,7 @@
 #include <QNetworkReply>
 #include <QNetworkRequest>
 #include <QUrl>
+#include <QUrlQuery>
 
 namespace {
 
@@ -82,6 +83,33 @@ QString errorMessageFromBody(const QByteArray &body, const QString &fallback) {
     return rawText.isEmpty() ? fallback : rawText;
 }
 
+QStringList liveSegmentsFromData(const QByteArray &data) {
+    QJsonParseError parseError;
+    const QJsonDocument document = QJsonDocument::fromJson(data, &parseError);
+    if (parseError.error != QJsonParseError::NoError || !document.isObject()) {
+        return {};
+    }
+
+    const QJsonObject object = document.object();
+    QStringList segments;
+    const QJsonValue reply = object.value(QStringLiteral("reply"));
+    if (reply.isArray()) {
+        const QJsonArray replyArray = reply.toArray();
+        for (const QJsonValue &value : replyArray) {
+            const QString segment = extractSegmentText(value);
+            if (!segment.isEmpty()) {
+                segments.append(segment);
+            }
+        }
+    }
+    if (!segments.isEmpty()) {
+        return segments;
+    }
+
+    const QString content = object.value(QStringLiteral("content")).toString().trimmed();
+    return content.isEmpty() ? QStringList{} : QStringList{content};
+}
+
 void ChatClient::sendMessage(const QString &baseUrl,
                              const QString &message,
                              const QString &sessionId,
@@ -125,6 +153,72 @@ void ChatClient::sendMessage(const QString &baseUrl,
     QNetworkReply *reply = m_network->post(request, QJsonDocument(payload).toJson(QJsonDocument::Compact));
     connect(reply, &QNetworkReply::finished, this, [this, reply]() {
         handleReply(reply);
+    });
+}
+
+void ChatClient::sendTypingActivity(const QString &baseUrl, const QString &sessionId) {
+    // typing 心跳只续期后端交互窗口；地址无效时直接忽略，不影响聊天输入。
+    QString normalizedBaseUrl = baseUrl.trimmed();
+    while (normalizedBaseUrl.endsWith('/')) {
+        normalizedBaseUrl.chop(1);
+    }
+    if (normalizedBaseUrl.isEmpty()) {
+        return;
+    }
+
+    QUrl url(normalizedBaseUrl + QStringLiteral("/api/chat/typing"));
+    if (!url.isValid()) {
+        return;
+    }
+    QUrlQuery query;
+    query.addQueryItem(QStringLiteral("sessionId"), sessionId);
+    url.setQuery(query);
+
+    QNetworkRequest request(url);
+    request.setRawHeader("Accept", "application/json");
+    QNetworkReply *reply = m_network->post(request, QByteArray());
+    connect(reply, &QNetworkReply::finished, reply, &QObject::deleteLater);
+}
+
+void ChatClient::openLiveMessages(const QString &baseUrl,
+                                  const QString &sessionId,
+                                  const QString &characterName) {
+    QString normalizedBaseUrl = baseUrl.trimmed();
+    while (normalizedBaseUrl.endsWith('/')) {
+        normalizedBaseUrl.chop(1);
+    }
+    if (normalizedBaseUrl.isEmpty()) {
+        return;
+    }
+
+    if (m_liveReply != nullptr) {
+        m_liveReply->abort();
+        m_liveReply->deleteLater();
+        m_liveReply = nullptr;
+    }
+    m_liveBuffer.clear();
+
+    QUrl url(normalizedBaseUrl + QStringLiteral("/api/chat/live"));
+    if (!url.isValid()) {
+        return;
+    }
+    QUrlQuery query;
+    query.addQueryItem(QStringLiteral("sessionId"), sessionId);
+    query.addQueryItem(QStringLiteral("characterName"), characterName);
+    query.addQueryItem(QStringLiteral("shortMode"), QStringLiteral("true"));
+    url.setQuery(query);
+
+    QNetworkRequest request(url);
+    request.setRawHeader("Accept", "text/event-stream");
+    m_liveReply = m_network->get(request);
+    QNetworkReply *reply = m_liveReply;
+    connect(reply, &QNetworkReply::readyRead, this, [this, reply]() {
+        if (reply == m_liveReply) {
+            handleLiveReadyRead(reply);
+        }
+    });
+    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+        handleLiveFinished(reply);
     });
 }
 
@@ -270,5 +364,56 @@ void ChatClient::handleStoryReplayReply(QNetworkReply *reply) {
                               .arg(assistantCount)
                               .arg(effectiveLength)
                               .arg(sourcePath));
+    reply->deleteLater();
+}
+
+void ChatClient::handleLiveReadyRead(QNetworkReply *reply) {
+    m_liveBuffer.append(reply->readAll());
+    while (true) {
+        int frameEnd = m_liveBuffer.indexOf("\n\n");
+        int separatorLength = 2;
+        if (frameEnd < 0) {
+            frameEnd = m_liveBuffer.indexOf("\r\n\r\n");
+            separatorLength = 4;
+        }
+        if (frameEnd < 0) {
+            return;
+        }
+
+        const QByteArray frame = m_liveBuffer.left(frameEnd);
+        m_liveBuffer.remove(0, frameEnd + separatorLength);
+        QList<QByteArray> lines = frame.split('\n');
+        QByteArray eventName;
+        QByteArray data;
+        for (QByteArray line : lines) {
+            line = line.trimmed();
+            if (line.startsWith("event:")) {
+                eventName = line.mid(6).trimmed();
+            } else if (line.startsWith("data:")) {
+                if (!data.isEmpty()) {
+                    data.append('\n');
+                }
+                data.append(line.mid(5).trimmed());
+            }
+        }
+
+        if (eventName == "rp-message") {
+            const QStringList segments = liveSegmentsFromData(data);
+            if (!segments.isEmpty()) {
+                emit liveReplyReady(segments);
+            }
+        }
+    }
+}
+
+void ChatClient::handleLiveFinished(QNetworkReply *reply) {
+    if (reply != m_liveReply) {
+        reply->deleteLater();
+        return;
+    }
+
+    handleLiveReadyRead(reply);
+    m_liveReply = nullptr;
+    m_liveBuffer.clear();
     reply->deleteLater();
 }

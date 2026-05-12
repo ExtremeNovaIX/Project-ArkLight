@@ -1147,6 +1147,8 @@ ApplicationWindow {
                                 text = ""
                             }
 
+                            onTextChanged: chatSession.reportTypingActivity()
+
                             Keys.onPressed: function(event) {
                                 if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
                                     if (event.modifiers & Qt.ShiftModifier) {

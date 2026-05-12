@@ -1,0 +1,56 @@
+assistant:
+  chat-memory:
+    # RP 短期记忆消息数达到该阈值后触发一次压缩。
+    trigger-compress-threshold: 30
+    # 每次压缩时从窗口中折叠的消息数量。
+    compress-count: 26
+    # 构造上下文时最多回填多少条历史摘要。
+    context-max-summary-count: 3
+
+  lock:
+    # 获取 session 锁的最长等待时间，单位毫秒。
+    session-lock-wait-timeout-ms: 10000
+    # session 锁获取失败后的最大重试次数。
+    session-lock-retry-count: 3
+    # session 锁重试之间的等待时间，单位毫秒。
+    session-lock-retry-delay-ms: 100
+    # 压缩租约超时时间，超时后允许恢复或重新压缩，单位毫秒。
+    compression-lease-timeout-ms: 300000
+
+  embedding-store:
+    # 向量索引数据目录。
+    path: data/vector_indices
+
+  md-repository:
+    # markdown 记忆仓库目录。
+    path: data/memory
+
+  event-tree:
+    # 近期事件参与连边前需要达到的最低相似度。
+    recent-window-score-link-threshold: 0.5
+    # 近期事件窗口保留时长，单位小时。
+    recent-window-hours: 24
+    # 近期事件窗口清理扫描间隔，单位毫秒。
+    recent-window-scan-fixed-delay-ms: 3600000
+    # 近期窗口重排时共享标签 IDF boost 的权重。
+    recent-window-idf-boost-weight: 0.9
+    # IDF 文档总数侧平滑项，降低样本较少时的波动。
+    recent-window-idf-doc-count-smoothing: 1.0
+    # IDF 标签文档频次侧平滑项，避免稀有标签被过度放大。
+    recent-window-idf-df-smoothing: 1.0
+    # IDF boost 归一化尺度，越大越保守。
+    recent-window-idf-normalization-scale: 2
+    # 触发共享标签 boost 至少需要的标签数量。
+    recent-window-idf-min-shared-tags: 2
+    # 近期窗口时间衰减系数，0 表示关闭时间衰减。
+    recent-window-time-decay-coefficient: 0.3
+    # 近期事件连边的最终最低得分阈值。
+    recent-window-final-threshold: 0.8
+
+  markdown-migration:
+    # 是否启用旧 markdown 数据迁移。
+    enabled: false
+    # 迁移时读取的旧 markdown 仓库目录。
+    vault-path: data/memory
+    # 目标文件已存在时是否覆盖。
+    overwrite-existing: false

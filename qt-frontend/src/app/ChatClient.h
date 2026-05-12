@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QByteArray>
 #include <QObject>
 #include <QStringList>
 
@@ -22,6 +23,14 @@ class ChatClient final : public QObject {
                      const QString &sessionId, const QString &characterName,
                      bool shortMode);
 
+    // 上报一次输入框活动心跳，后端据此短暂暂停 gamer 行动。
+    void sendTypingActivity(const QString &baseUrl, const QString &sessionId);
+
+    // 打开 RP 主动消息的 SSE 订阅；重复调用会替换旧连接。
+    // Open the RP proactive-message SSE stream; repeated calls replace the previous stream.
+    void openLiveMessages(const QString &baseUrl, const QString &sessionId,
+                          const QString &characterName);
+
     void startStoryReplay(const QString &baseUrl, const QString &sessionId,
                           const QString &characterName, int targetLength);
 
@@ -30,6 +39,10 @@ class ChatClient final : public QObject {
     // Emitted when the backend returns successfully and at least one
     // displayable segment is parsed.
     void replyReady(const QStringList &segments);
+
+    // 后端主动生成 RP 消息时触发。
+    // Emitted when the backend proactively generates RP text.
+    void liveReplyReady(const QStringList &segments);
 
     // 网络错误、HTTP/Qt 错误或空回复时触发。
     // Emitted for network errors, Qt reply errors, or empty replies.
@@ -44,9 +57,13 @@ class ChatClient final : public QObject {
     // or failure signals.
     void handleReply(QNetworkReply *reply);
     void handleStoryReplayReply(QNetworkReply *reply);
+    void handleLiveReadyRead(QNetworkReply *reply);
+    void handleLiveFinished(QNetworkReply *reply);
 
     // QNetworkAccessManager 应复用；以 this 为 parent，Qt 会自动释放。
     // Reuse QNetworkAccessManager; with this as parent, Qt deletes it
     // automatically.
     QNetworkAccessManager *m_network;
+    QNetworkReply *m_liveReply = nullptr;
+    QByteArray m_liveBuffer;
 };

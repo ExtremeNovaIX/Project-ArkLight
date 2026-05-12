@@ -27,8 +27,13 @@ public final class ExternalConfigBootstrap {
     private static final String SPRING_ADDITIONAL_LOCATION = "spring.config.additional-location";
     private static final List<String> DEFAULT_YAML_FILES = List.of(
             "application.yaml",
+            "application-ai.yaml",
             "application-benchmark.yaml",
+            "application-frontend.yaml",
+            "application-infrastructure.yaml",
+            "application-memory.yaml",
             "application-mcp.yaml",
+            "application-rp.yaml",
             "mcp-catalog.yaml"
     );
 

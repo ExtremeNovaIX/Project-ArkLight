@@ -6,6 +6,7 @@ import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.agent.tool.ToolSpecification;
 import dev.langchain4j.service.tool.ToolExecutor;
 import dev.langchain4j.service.tool.ToolProviderResult;
+import p1.component.agent.gamer.adapter.core.*;
 import p1.config.mcp.MCPProperties;
 
 import java.util.ArrayDeque;
@@ -174,6 +175,18 @@ public interface GameAdapter {
             queue.offerLast(prepareOperation(op, plannedState));
         }
         return queue;
+    }
+
+    /**
+     * 判断操作队列真正开始执行前是否需要重新读取一次游戏状态。
+     * <p>
+     * 默认复用 agent 决策时的状态以减少通用桥接层开销；对状态可能在模型思考期间自行推进的游戏，
+     * 适配器应返回 true，让第一条 MCP 操作也基于执行前的最新状态做修复和校验。
+     *
+     * @return true 表示队列执行前需要从 MCP 重读状态
+     */
+    default boolean shouldRefreshStateBeforeDrain() {
+        return false;
     }
 
     /**

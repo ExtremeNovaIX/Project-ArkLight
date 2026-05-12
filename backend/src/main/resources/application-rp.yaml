@@ -1,0 +1,49 @@
+assistant:
+  interaction:
+    # 单次用户文本请求占用交互窗口的兜底超时，单位毫秒。
+    user-turn-ttl-ms: 180000
+    # 前端 typing 或未来语音 VAD 心跳暂停 gamer 的用户活动窗口，输入停止后按该时长恢复，单位毫秒。
+    user-activity-ttl-ms: 3000
+    # RP 从首个可见响应字符到 API 流结束期间占用交互窗口的兜底超时，单位毫秒。
+    rp-speech-ttl-ms: 180000
+  rp:
+    proactive:
+      # 是否启用 RP 主动发言。
+      enabled: true
+      # 非游戏状态下静默多久后允许空闲主动发言，单位毫秒。
+      idle-threshold-ms: 60000
+      # 非游戏状态下两次主动发言之间的最小间隔，单位毫秒。
+      speech-cooldown-ms: 30000
+      # 游戏状态下静默多久后允许空闲主动发言，单位毫秒。
+      game-idle-threshold-ms: 120000
+      # 游戏状态下两次空闲主动发言之间的最小间隔，单位毫秒。
+      game-speech-cooldown-ms: 120000
+      # 游戏状态下表达欲触发主动发言的最小间隔，单位毫秒；0 表示只受窗口预算限制。
+      game-expression-speech-cooldown-ms: 0
+      # 游戏状态下主动发言频率预算的滑动窗口时长，单位毫秒。
+      game-proactive-rate-window-ms: 10000
+      # 任意游戏主动发言窗口内最多允许的发言次数。
+      game-proactive-max-speeches-per-window: 2
+      # 空闲会话扫描周期，单位毫秒。
+      idle-scan-interval-ms: 10000
+      # 空闲触发命中后先等待该窗口再生成主动发言，避免和用户刚发来的消息撞车，单位毫秒。
+      idle-speech-grace-ms: 5000
+      # 非游戏状态下用户长期不回复时，主动发言退避到的最长间隔，单位毫秒。
+      non-game-max-idle-interval-ms: 43200000
+    expression:
+      # 游戏行动表达候选达到该修正分后，进入 RP 主动表达队列。
+      pending-threshold: 50
+      # 达到该修正分但未进入主动队列时，只保留到行动记忆。
+      store-only-threshold: 30
+      # 对所有游戏表达候选追加的统一分数偏置，用于整体调节表达欲强弱。
+      score-bias: 8
+      # 同一 RP 会话连续接收游戏表达候选的最小间隔，单位毫秒。
+      pending-cooldown-ms: 3000
+      # 待表达候选超过该时间后可被视作过期，单位毫秒。
+      pending-stale-ms: 90000
+      # 冷却期内新候选至少高出旧候选多少分才允许替换。
+      replace-bonus: 15
+      # 低于主动表达阈值的 STORE_ONLY 候选累计到该压力值后，也触发一次主动表达。
+      desire-threshold: 100
+      # 单次 STORE_ONLY 候选按最终分数的多少百分比计入累计表达欲。
+      desire-score-weight-percent: 60

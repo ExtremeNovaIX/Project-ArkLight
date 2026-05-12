@@ -21,6 +21,12 @@ public class ActiveGameSession {
 
     private final String gameName;
     private final String sessionId;
+    /**
+     * 关联的 RP 会话 id。
+     * <p>
+     * 默认与游戏 sessionId 相同；需要把游戏会话和 RP 对话会话分开时由启动请求显式指定。
+     */
+    private final String rpSessionId;
     private volatile State state;
     private final Instant startedAt;
     private volatile Instant lastActivityAt;
@@ -40,8 +46,20 @@ public class ActiveGameSession {
      * @param sessionId 用户侧会话 id
      */
     public ActiveGameSession(String gameName, String sessionId) {
+        this(gameName, sessionId, sessionId);
+    }
+
+    /**
+     * 创建一个新的运行中会话，并绑定 RP 会话。
+     *
+     * @param gameName    游戏名
+     * @param sessionId   游戏侧会话 id
+     * @param rpSessionId RP 会话 id
+     */
+    public ActiveGameSession(String gameName, String sessionId, String rpSessionId) {
         this.gameName = gameName;
         this.sessionId = sessionId;
+        this.rpSessionId = rpSessionId == null || rpSessionId.isBlank() ? sessionId : rpSessionId.trim();
         this.state = State.RUNNING;
         this.startedAt = Instant.now();
         this.lastActivityAt = Instant.now();

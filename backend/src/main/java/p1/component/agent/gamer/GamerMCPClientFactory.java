@@ -12,7 +12,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
-import p1.component.agent.gamer.adapter.SchemaNormalizingMcpTransport;
+import p1.component.agent.gamer.adapter.core.SchemaNormalizingMcpTransport;
 import p1.config.mcp.GamerProperties;
 import p1.config.mcp.MCPProperties;
 
@@ -25,10 +25,6 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 为游戏 MCP 服务器创建 langchain4j MCP 客户端和 ToolProvider。
- * <p>
- * 每个游戏对应一个 MCP 服务器。
- * 返回的 ToolProvider 传入 AiServices.builder().toolProvider()，
- * 这样 GamerAgent 就能将每个游戏工具视为原生的 langchain4j 函数调用。
  */
 @Component
 @RequiredArgsConstructor

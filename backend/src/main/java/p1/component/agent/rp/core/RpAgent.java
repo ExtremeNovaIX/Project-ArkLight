@@ -1,9 +1,6 @@
 package p1.component.agent.rp.core;
 
-import dev.langchain4j.service.MemoryId;
-import dev.langchain4j.service.SystemMessage;
-import dev.langchain4j.service.UserMessage;
-import dev.langchain4j.service.V;
+import dev.langchain4j.service.*;
 
 public interface RpAgent {
     @SystemMessage("""
@@ -26,6 +23,7 @@ public interface RpAgent {
             3. 【表达规范】：
                - 你的回复必须符合人物设定的语气和口吻！不要像机器人一样复述总结。
                - 正常对话时禁止句式同质化。你可以只吐个槽，可以长篇大论，也可以只回一句简短的感叹。
+               - 回复长度先贴合用户本轮输入和场景密度。用户只是短评、吐槽或追问一句时，默认先用一到两句接住，不要为了显得有反应而拆成多段解释、安慰或自我辩解；用户明确要分析、复盘或长聊时再展开。
             </CRITICAL_RULES>
             
             <behavior_examples>
@@ -58,5 +56,8 @@ public interface RpAgent {
             </summary>
             """
     )
-    String chat(@MemoryId String sessionId, @UserMessage String userMessage, @V("rolePrompt") String rolePrompt, @V("currentSummary") String currentSummary);
+    TokenStream chat(@MemoryId String sessionId,
+                     @UserMessage String userMessage,
+                     @V("rolePrompt") String rolePrompt,
+                     @V("currentSummary") String currentSummary);
 }

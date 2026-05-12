@@ -70,7 +70,7 @@ public class GamerController {
         }
 
         log.info("[游戏控制器] 启动游戏循环: game={}, session={}", target.gameName(), target.sessionId());
-        ActiveGameSession session = gameLoopService.start(target.gameName(), target.sessionId());
+        ActiveGameSession session = gameLoopService.start(target.gameName(), target.sessionId(), target.rpSessionId());
 
         return ResponseEntity.ok(Map.of(
                 "message", "游戏循环已启动",
@@ -159,13 +159,28 @@ public class GamerController {
     private GameTarget resolveTarget(GamerLoopRequest request) {
         String gameName = request != null ? request.gameName : null;
         String sessionId = request != null ? request.sessionId : null;
-        return resolveTarget(gameName, sessionId);
+        String rpSessionId = request != null ? request.rpSessionId : null;
+        return resolveTarget(gameName, sessionId, rpSessionId);
     }
 
     private GameTarget resolveTarget(String gameName, String sessionId) {
+        return resolveTarget(gameName, sessionId, null);
+    }
+
+    /**
+     * 解析游戏目标和可选 RP 会话绑定。
+     *
+     * @param gameName    请求中的游戏名
+     * @param sessionId   请求中的游戏侧会话 id
+     * @param rpSessionId 请求中的 RP 会话 id
+     * @return 已规范化的目标
+     */
+    private GameTarget resolveTarget(String gameName, String sessionId, String rpSessionId) {
+        String resolvedSessionId = requestResolver.resolveSessionId(sessionId);
         return new GameTarget(
                 requestResolver.resolveGameName(gameName),
-                requestResolver.resolveSessionId(sessionId)
+                resolvedSessionId,
+                rpSessionId == null || rpSessionId.isBlank() ? resolvedSessionId : rpSessionId.trim()
         );
     }
 
@@ -173,6 +188,7 @@ public class GamerController {
         return Map.of(
                 "gameName", s.getGameName(),
                 "sessionId", s.getSessionId(),
+                "rpSessionId", s.getRpSessionId(),
                 "state", s.getState().name(),
                 "startedAt", s.getStartedAt().toString(),
                 "lastActivityAt", s.getLastActivityAt().toString(),
@@ -189,8 +205,9 @@ public class GamerController {
     public static class GamerLoopRequest {
         public String gameName;
         public String sessionId;
+        public String rpSessionId;
     }
 
-    private record GameTarget(String gameName, String sessionId) {
+    private record GameTarget(String gameName, String sessionId, String rpSessionId) {
     }
 }

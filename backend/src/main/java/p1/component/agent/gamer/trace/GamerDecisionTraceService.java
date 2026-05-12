@@ -3,7 +3,7 @@ package p1.component.agent.gamer.trace;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import p1.component.agent.gamer.adapter.GameOperation;
+import p1.component.agent.gamer.adapter.core.GameOperation;
 import p1.component.agent.gamer.bridge.GameBridgeActionStatus;
 import p1.config.mcp.GamerMemoryProperties;
 

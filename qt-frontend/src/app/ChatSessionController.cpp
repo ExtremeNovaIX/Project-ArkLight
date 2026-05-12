@@ -18,6 +18,7 @@ ChatSessionController::ChatSessionController(FrontendSettings *settings,
     // 网络客户端返回文本段落后，交给控制器按“人类打字节奏”分批显示。
     // When the network client returns text segments, the controller displays them with human-like timing.
     connect(&m_chatClient, &ChatClient::replyReady, this, &ChatSessionController::scheduleAssistantSegments);
+    connect(&m_chatClient, &ChatClient::liveReplyReady, this, &ChatSessionController::scheduleAssistantSegments);
 
     // 请求失败也写入聊天列表，这样用户能在界面上看到错误原因。
     // Request failures are appended to the chat list so the user can see the reason in the UI.
@@ -57,6 +58,7 @@ ChatSessionController::ChatSessionController(FrontendSettings *settings,
     connect(m_settings, &FrontendSettings::settingsChanged, this, [this]() {
         m_settings->save();
         syncCharacterState();
+        refreshLiveMessages();
     });
 
     // 构造时也做一次默认角色选择，保证 QML 初始界面有合理状态。
@@ -70,6 +72,7 @@ ChatSessionController::ChatSessionController(FrontendSettings *settings,
     }
 
     syncCharacterState();
+    refreshLiveMessages();
 }
 
 ChatMessageModel *ChatSessionController::messages() {
@@ -128,6 +131,16 @@ void ChatSessionController::sendMessage(const QString &content) {
         true);
 }
 
+void ChatSessionController::reportTypingActivity() {
+    // 输入变化不应进入聊天记忆；这里只上报一个短期交互占用心跳。
+    if (m_settings == nullptr) {
+        return;
+    }
+    m_chatClient.sendTypingActivity(
+        m_settings->backendBaseUrl(),
+        m_settings->sessionId());
+}
+
 void ChatSessionController::startStoryReplay() {
     if (m_busy) {
         return;
@@ -157,6 +170,16 @@ void ChatSessionController::selectCharacter(const QString &characterName) {
     m_settings->setCharacterName(characterName);
     m_settings->save();
     syncCharacterState();
+}
+
+void ChatSessionController::refreshLiveMessages() {
+    if (m_settings == nullptr) {
+        return;
+    }
+    m_chatClient.openLiveMessages(
+        m_settings->backendBaseUrl(),
+        m_settings->sessionId(),
+        m_settings->characterName());
 }
 
 void ChatSessionController::appendLocalMessage(const QString &role, const QString &content, const QString &emotion) {

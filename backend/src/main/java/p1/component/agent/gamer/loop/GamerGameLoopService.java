@@ -5,10 +5,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import p1.component.agent.gamer.GamerAgentService;
-import p1.component.agent.gamer.adapter.GameActionability;
-import p1.component.agent.gamer.adapter.GameActionabilityStatus;
+import p1.component.agent.gamer.adapter.core.GameActionability;
+import p1.component.agent.gamer.adapter.core.GameActionabilityStatus;
 import p1.component.agent.gamer.bridge.GameBridgeActionStatus;
 import p1.component.agent.gamer.bridge.GameBridgeService;
+import p1.component.agent.interaction.InteractionCoordinator;
 import p1.config.mcp.GameLoopProperties;
 
 import java.util.Collection;
@@ -33,6 +34,7 @@ public class GamerGameLoopService {
     private final GameBridgeService bridgeService;
     private final ActiveGameRegistry registry;
     private final GameLoopProperties props;
+    private final InteractionCoordinator interactionCoordinator;
     private final Map<String, ReentrantLock> sessionLocks = new ConcurrentHashMap<>();
 
     /**
@@ -91,6 +93,14 @@ public class GamerGameLoopService {
     private void processSessionWithImmediateReplan(ActiveGameSession session) {
         int immediateReplans = 0;
         while (session.getState() == ActiveGameSession.State.RUNNING) {
+            InteractionCoordinator.GameTurnPermission turnPermission =
+                    interactionCoordinator.canGameActForRpSession(session.getRpSessionId());
+            if (!turnPermission.allowed()) {
+                log.debug("[Gamer Agent循环] 交互窗口被占用，暂停本次行动: game={}, session={}, reason={}",
+                        session.getGameName(), session.getSessionId(), turnPermission.reason());
+                session.touch();
+                return;
+            }
             GameActionability actionability = bridgeService.probeActionability(session.getGameName(), session.getSessionId());
             if (actionability.status() == GameActionabilityStatus.GAME_OVER) {
                 log.info("[Gamer Agent循环] 探测到游戏结束，停止会话: game={}, session={}, reason={}",
@@ -135,6 +145,12 @@ public class GamerGameLoopService {
             if (immediateReplans > props.getMaxImmediateReplans()) {
                 log.warn("[Gamer Agent循环] 即时重规划达到上限，等待下一次慢轮询: game={}, session={}, limit={}",
                         session.getGameName(), session.getSessionId(), props.getMaxImmediateReplans());
+                return;
+            }
+
+            if (session.getState() != ActiveGameSession.State.RUNNING) {
+                log.info("[Gamer Agent循环] 队列中断后会话已不再运行，停止即时重规划: game={}, session={}, state={}",
+                        session.getGameName(), session.getSessionId(), session.getState());
                 return;
             }
 
@@ -191,11 +207,23 @@ public class GamerGameLoopService {
      * @return 正在运行的活跃会话
      */
     public ActiveGameSession start(String gameName, String sessionId) {
+        return start(gameName, sessionId, sessionId);
+    }
+
+    /**
+     * 启动或复用一个游戏循环会话，并显式绑定 RP 会话。
+     *
+     * @param gameName    游戏名
+     * @param sessionId   游戏侧会话 id
+     * @param rpSessionId RP 会话 id
+     * @return 正在运行的活跃会话
+     */
+    public ActiveGameSession start(String gameName, String sessionId, String rpSessionId) {
         ActiveGameSession existing = registry.get(gameName, sessionId);
         if (existing != null && existing.getState() == ActiveGameSession.State.RUNNING) {
             return existing;
         }
-        return registry.register(gameName, sessionId);
+        return registry.register(gameName, sessionId, rpSessionId);
     }
 
     /**

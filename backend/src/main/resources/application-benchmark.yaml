@@ -1,14 +1,19 @@
 spring:
   application:
+    # benchmark 进程在 Spring 中使用的应用名。
     name: ArcLight-chat-benchmark
   datasource:
+    # benchmark 使用的独立 H2 数据库，避免污染主业务数据。
     url: jdbc:h2:file:./data/assistant_benchmark_db;DB_CLOSE_ON_EXIT=FALSE;AUTO_RECONNECT=TRUE
 
 server:
+  # benchmark HTTP 服务端口。
   port: 18080
 
 assistant:
   embedding-store:
+    # benchmark 使用的独立向量索引目录。
     path: data/vector_indices_benchmark
   md-repository:
+    # benchmark 使用的独立 markdown 记忆目录。
     path: data/memory_benchmark

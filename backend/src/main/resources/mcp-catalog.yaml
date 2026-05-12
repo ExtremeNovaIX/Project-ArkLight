@@ -1,16 +1,27 @@
 mcp:
   catalog:
     STS2MCP:
+      # 在前端或日志中展示的 MCP 游戏名。
       display-name: "杀戮尖塔2"
+      # MCP 条目用途和安装前提说明。
       description: "杀戮尖塔2 MCP Mod。需要先安装 STS2_MCP.dll 到游戏 mods 目录，并确保 uv 已安装。"
+      # MCP 连接方式。
       transport: stdio
+      # 该游戏使用的 GameAdapter id。
       adapter: sts2
+      # 读取当前游戏状态的 MCP 工具名。
       state-tool-name: get_game_state
+      # 读取状态后等待状态稳定的最大重试次数。
       state-settle-max-attempts: 4
+      # 状态稳定重读之间的等待时间，单位毫秒。
       state-settle-delay-ms: 250
+      # 启动 MCP server 的命令。
       command: "uv"
+      # 启动 MCP server 的命令参数，installPath 会在安装目录解析后替换。
       args: ["run", "--directory", "{{installPath}}", "python", "server.py"]
+      # MCP server 建连超时时间，单位秒。
       connect-timeout-seconds: 30
+      # 注入给 gamer 的游戏策略提示。
       gameplay-guidelines:
         - 战斗中快速评估能量、防御需求、是否能斩杀；明显高收益路径可直接执行，不要穷举所有组合。
         - 算好你操作队列的能量花费，超出能量上限的操作会被直接忽视。

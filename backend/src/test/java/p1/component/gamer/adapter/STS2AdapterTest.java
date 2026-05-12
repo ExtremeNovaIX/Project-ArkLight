@@ -1,13 +1,16 @@
 package p1.component.gamer.adapter;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.agent.tool.ToolSpecification;
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 import dev.langchain4j.service.tool.ToolProviderResult;
 import org.junit.jupiter.api.Test;
-import p1.component.agent.gamer.adapter.*;
+import p1.component.agent.gamer.adapter.core.GameBridgeException;
+import p1.component.agent.gamer.adapter.core.GameOperation;
+import p1.component.agent.gamer.adapter.core.GameStateSnapshot;
+import p1.component.agent.gamer.adapter.core.QueuedGameOperation;
+import p1.component.agent.gamer.adapter.STS2Adapter;
 import p1.config.mcp.MCPProperties;
 
 import java.util.ArrayDeque;
@@ -126,7 +129,7 @@ class STS2AdapterTest {
     }
 
     @Test
-    void shouldRenderFlattenedStateWithoutHandIndex() throws Exception {
+    void shouldRenderRawSourceStateForAgent() throws Exception {
         GameStateSnapshot state = state("""
                 {
                   "state_type":"card_select",
@@ -151,18 +154,13 @@ class STS2AdapterTest {
 
         String rendered = adapter.renderStateForAgent(state);
 
-        assertTrue(rendered.contains("state.type=card_select"));
-        assertTrue(rendered.contains("card_select.type=discard"));
-        assertTrue(rendered.contains("hand:"));
-        assertTrue(rendered.contains("- name=打击 cost=1 description=造成6点伤害。"));
-        assertTrue(rendered.contains("- name=防御 cost=1 description=获得5点格挡。"));
-        assertTrue(rendered.contains("- name=贪婪 cost=0 description=不能被打出。永恒。"));
-        assertFalse(rendered.contains("- index=0 name=打击"));
-        assertTrue(rendered.contains("keywords:"));
-        assertTrue(rendered.contains("- name=永恒 description=无法从你的牌组中移除或变化。"));
-        assertFalse(rendered.contains("cards_by_name"));
-        assertTrue(rendered.contains("card_select.cards:"));
-        assertTrue(rendered.contains("- card_index=0 name=打击"));
+        assertEquals(state.json(), objectMapper.readTree(rendered));
+        assertEquals(0, objectMapper.readTree(rendered).path("player").path("hand").path(0).path("index").asInt());
+        assertEquals("永恒", objectMapper.readTree(rendered)
+                .path("player").path("hand").path(3).path("keywords").path(0).path("name").asText());
+        assertTrue(rendered.contains("\"card_select\""));
+        assertFalse(rendered.contains("state.type=card_select"));
+        assertFalse(rendered.contains("card_select.cards:"));
     }
 
     @Test
@@ -280,6 +278,33 @@ class STS2AdapterTest {
                 state("{\"state_type\":\"monster\",\"battle\":{\"turn\":\"player\",\"is_play_phase\":true}}"),
                 state("{\"state_type\":\"rewards\"}"),
                 "MCP 工具执行失败: EnergyCostTooHigh"
+        ));
+    }
+
+    @Test
+    void shouldRejectEndTurnFromPreviousCombatRound() throws Exception {
+        GameStateSnapshot planned = state("""
+                {"state_type":"monster","battle":{"round":3,"turn":"player","is_play_phase":true}}
+                """);
+        GameStateSnapshot current = state("""
+                {"state_type":"monster","battle":{"round":4,"turn":"player","is_play_phase":true}}
+                """);
+        QueuedGameOperation queued = adapter.prepareOperation(
+                new GameOperation("mp_combat_end_turn", objectMapper.readTree("{}"), "旧回合结束指令"),
+                planned
+        );
+
+        GameBridgeException ex = assertThrows(
+                GameBridgeException.class,
+                () -> adapter.repairBeforeExecute(queued, current)
+        );
+
+        assertTrue(ex.getMessage().contains("结束回合操作已过期"));
+        assertFalse(adapter.shouldContinueAfterOperationFailure(
+                queued,
+                planned,
+                current,
+                "adapter执行指令修复失败: " + ex.getMessage()
         ));
     }
 

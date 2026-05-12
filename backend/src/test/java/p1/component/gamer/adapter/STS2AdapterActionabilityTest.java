@@ -1,8 +1,8 @@
 package p1.component.gamer.adapter;
 
 import org.junit.jupiter.api.Test;
-import p1.component.agent.gamer.adapter.GameActionability;
-import p1.component.agent.gamer.adapter.GameActionabilityStatus;
+import p1.component.agent.gamer.adapter.core.GameActionability;
+import p1.component.agent.gamer.adapter.core.GameActionabilityStatus;
 import p1.component.agent.gamer.adapter.STS2Adapter;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;

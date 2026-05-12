@@ -30,14 +30,11 @@ public class RpRequestTimeAppender {
         }
 
         List<ChatMessage> messages = request.messages();
-        ChatMessage lastMessage = messages.get(messages.size() - 1);
-        if (!(lastMessage instanceof UserMessage)) {
-            return request;
-        }
-
         String sessionId = SessionUtil.normalizeSessionId(memoryId.toString());
         List<ChatMessage> updatedMessages = new ArrayList<>(messages);
-        updatedMessages.add(buildDynamicMemoryMessage(sessionId));
+        // 运行时时间背景放在本轮用户消息前，避免把元信息变成最后一个用户信号。
+        updatedMessages.add(RpRuntimeMessageInsertSupport.beforeCurrentUserMessage(updatedMessages),
+                buildDynamicMemoryMessage(sessionId));
         return request.toBuilder()
                 .messages(updatedMessages)
                 .build();

@@ -4,11 +4,13 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
-import dev.langchain4j.agent.tool.ToolSpecification;
 import dev.langchain4j.service.tool.ToolExecutor;
 import dev.langchain4j.service.tool.ToolProviderResult;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import p1.component.agent.gamer.adapter.core.*;
+import p1.component.agent.gamer.adapter.sts2.STS2OperationToolRenderer;
+import p1.component.agent.gamer.adapter.sts2.STS2StateDiffRenderer;
 import p1.config.mcp.MCPProperties;
 
 import java.util.*;
@@ -28,16 +30,19 @@ import java.util.concurrent.ConcurrentHashMap;
 public class STS2Adapter implements GameAdapter {
 
     private static final String TOOL_COMBAT_PLAY_CARD = "combat_play_card";
+    private static final String TOOL_COMBAT_END_TURN = "combat_end_turn";
     private static final String LEGACY_TOOL_PLAY_CARD = "play_card";
     private static final String MP_PREFIX = "mp_";
     private static final String META_PLANNED_CARD_NAME = "plannedCardName";
+    private static final String META_PLANNED_COMBAT_ROUND = "plannedCombatRound";
+    private static final String STALE_END_TURN_REASON = "STS2 结束回合操作已过期";
     private static final List<String> VIRTUAL_CARD_NAME_FIELDS = List.of("card", "card_name", "cardName", "name");
 
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final Map<String, String> detectedMode = new ConcurrentHashMap<>();
     private volatile String lastFetchedGameName;
-    private final StateRenderer stateRenderer = new StateRenderer();
-    private final OperationToolRenderer operationToolRenderer = new OperationToolRenderer();
+    private final STS2StateDiffRenderer stateDiffRenderer = new STS2StateDiffRenderer();
+    private final STS2OperationToolRenderer operationToolRenderer = new STS2OperationToolRenderer();
     private final PlayCardPlanCompiler playCardPlanCompiler = new PlayCardPlanCompiler();
 
     @Override
@@ -150,10 +155,9 @@ public class STS2Adapter implements GameAdapter {
     }
 
     /**
-     * 将 STS2 状态渲染成面向 agent 的 JSON。
+     * 将 STS2 MCP 返回的源状态直接注入给 agent。
      * <p>
-     * 状态字段默认原样保留，避免新界面（如 card_select）因为手写渲染白名单而丢字段。
-     * 唯一特殊处理是把 player.hand 从数组改成按牌名聚合的对象，避免 agent 根据数组顺序推算手牌下标。
+     * 状态不再做 K-V 扁平化或字段清洗，避免界面特有字段、嵌套说明和 MCP 原生结构在渲染层丢失。
      */
     @Override
     public String renderStateForAgent(GameStateSnapshot state) {
@@ -161,7 +165,8 @@ public class STS2Adapter implements GameAdapter {
             return "(未能获取 STS2 状态)";
         }
 
-        return stateRenderer.render(state);
+        String raw = state.rawJson();
+        return raw == null || raw.isBlank() ? state.json().toString() : raw;
     }
 
     /**
@@ -169,7 +174,7 @@ public class STS2Adapter implements GameAdapter {
      */
     @Override
     public String renderStateDiffForAgent(GameStateSnapshot before, GameStateSnapshot after) {
-        return stateRenderer.renderDiff(before, after);
+        return stateDiffRenderer.renderDiff(before, after);
     }
 
     /**
@@ -193,6 +198,16 @@ public class STS2Adapter implements GameAdapter {
     }
 
     /**
+     * STS2 多人模式下队友可能在模型思考期间推进回合。
+     * <p>
+     * 队列真正落到 MCP 前必须重读状态，避免第一条操作仍然拿 prompt 注入时的旧回合快照执行。
+     */
+    @Override
+    public boolean shouldRefreshStateBeforeDrain() {
+        return true;
+    }
+
+    /**
      * 执行出牌前把 card 名称翻译成 card_index。
      * <p>
      * agent 面向牌名决策；真实 STS2 MCP 仍然需要 card_index，因此这里在当前手牌中按名字查找。
@@ -200,6 +215,7 @@ public class STS2Adapter implements GameAdapter {
      */
     @Override
     public ToolExecutionRequest repairBeforeExecute(QueuedGameOperation operation, GameStateSnapshot currentState) {
+        rejectStaleEndTurn(operation, currentState);
         if (!isPlayCard(operation.request().name())) {
             return operation.request();
         }
@@ -299,7 +315,8 @@ public class STS2Adapter implements GameAdapter {
     public String renderAvailableOperations(ToolProviderResult tools,
                                             MCPProperties.GameMCPConfig config,
                                             GameStateSnapshot state) {
-        return operationToolRenderer.render(tools, config, state);
+        String modePrefix = lastFetchedGameName == null ? "" : detectedMode.getOrDefault(lastFetchedGameName, "");
+        return operationToolRenderer.render(tools, config, state, modePrefix);
     }
 
     private GameStateSnapshot tryFetchState(GameAdapterContext context, String toolName) {
@@ -339,746 +356,72 @@ public class STS2Adapter implements GameAdapter {
                 || (MP_PREFIX + LEGACY_TOOL_PLAY_CARD).equals(toolName);
     }
 
+    /**
+     * 判断工具是否会结束当前战斗回合。
+     */
+    private boolean isEndTurn(String toolName) {
+        return TOOL_COMBAT_END_TURN.equals(toolName)
+                || (MP_PREFIX + TOOL_COMBAT_END_TURN).equals(toolName);
+    }
+
+    /**
+     * 给结束回合操作记录 agent 决策时看到的战斗轮次。
+     * <p>
+     * STS2 的 `battle.round` 是当前战斗回合指纹。多人模式里队友可能在模型思考期间结束旧回合，
+     * 该字段用于在真正执行前识别旧回合遗留的结束指令。
+     */
+    private void rememberEndTurnRound(QueuedGameOperation operation,
+                                      String toolName,
+                                      GameStateSnapshot plannedState) {
+        if (!isEndTurn(toolName)) {
+            return;
+        }
+        String round = combatRound(plannedState);
+        if (!round.isBlank()) {
+            operation.metadata().put(META_PLANNED_COMBAT_ROUND, round);
+        }
+    }
+
+    /**
+     * 在 MCP 真正收到结束回合指令前拦截过期回合操作。
+     * <p>
+     * 只有结束回合需要这一层护栏：出牌等动作本来就允许 MCP 按最新状态返回失败，
+     * 但把上一回合的结束指令打进新回合会直接跳过本回合行动。
+     */
+    private void rejectStaleEndTurn(QueuedGameOperation operation, GameStateSnapshot currentState) {
+        if (!isEndTurn(operation.request().name())) {
+            return;
+        }
+        if (!isCombatPlayWindow(currentState)) {
+            throw new GameBridgeException("STS2 结束回合执行前已不在玩家出牌窗口，丢弃旧结束指令。");
+        }
+
+        String plannedRound = String.valueOf(operation.metadata().getOrDefault(META_PLANNED_COMBAT_ROUND, ""));
+        String currentRound = combatRound(currentState);
+        if (!plannedRound.isBlank() && !currentRound.isBlank() && !plannedRound.equals(currentRound)) {
+            throw new GameBridgeException(STALE_END_TURN_REASON
+                    + "：决策时 battle.round=" + plannedRound
+                    + "，执行前 battle.round=" + currentRound
+                    + "，丢弃旧回合的结束指令。");
+        }
+    }
+
+    /**
+     * 读取当前战斗轮次；状态未携带该字段时返回空串并放弃轮次比较。
+     */
+    private String combatRound(GameStateSnapshot state) {
+        if (state == null || state.json() == null) {
+            return "";
+        }
+        JsonNode round = state.json().path("battle").path("round");
+        return round.isMissingNode() || round.isNull() ? "" : round.asText("");
+    }
+
     private JsonNode hand(GameStateSnapshot state) {
         if (state == null || state.json() == null) {
             return objectMapper.createArrayNode();
         }
         return state.json().path("player").path("hand");
-    }
-
-    /**
-     * STS2 状态渲染器。
-     * <p>
-     * 该内部类把 MCP 原始 JSON 拍扁成稳定、短小的 K-V/列表结构。状态原始 JSON 仍保留在
-     * GameStateSnapshot 中供 repair 和 monitor 使用；这里的文本只面向 agent 决策。
-     */
-    private class StateRenderer {
-
-        /**
-         * 渲染给 agent 的扁平状态文本。
-         */
-        private String render(GameStateSnapshot state) {
-            JsonNode root = state.json();
-            StringBuilder sb = new StringBuilder();
-            appendLine(sb, "state.type", firstNonBlank(text(root.path("state_type")), state.stateType()));
-            appendRun(sb, root.path("run"));
-            appendBattle(sb, root.path("battle"));
-            appendPlayer(sb, root.path("player"));
-            appendMap(sb, root.path("map"));
-            appendKnownTopLevel(sb, root);
-            appendUnknownTopLevel(sb, root);
-            return sb.toString().trim();
-        }
-
-        /**
-         * 渲染操作前后状态白名单 diff，避免大段描述文本污染下一轮决策。
-         */
-        private String renderDiff(GameStateSnapshot before, GameStateSnapshot after) {
-            JsonNode beforeRoot = before == null ? objectMapper.createObjectNode() : before.json();
-            JsonNode afterRoot = after == null ? objectMapper.createObjectNode() : after.json();
-            List<String> changes = new ArrayList<>();
-            compare(changes, "state.type", stateType(before), stateType(after));
-            compare(changes, "run.act", text(beforeRoot.path("run").path("act")), text(afterRoot.path("run").path("act")));
-            compare(changes, "run.floor", text(beforeRoot.path("run").path("floor")), text(afterRoot.path("run").path("floor")));
-            compare(changes, "battle.round", text(beforeRoot.path("battle").path("round")), text(afterRoot.path("battle").path("round")));
-            compare(changes, "battle.turn", text(beforeRoot.path("battle").path("turn")), text(afterRoot.path("battle").path("turn")));
-            compare(changes, "battle.is_play_phase", text(beforeRoot.path("battle").path("is_play_phase")), text(afterRoot.path("battle").path("is_play_phase")));
-            compare(changes, "player.hp", hp(beforeRoot.path("player")), hp(afterRoot.path("player")));
-            compare(changes, "player.block", text(beforeRoot.path("player").path("block")), text(afterRoot.path("player").path("block")));
-            compare(changes, "player.energy", energy(beforeRoot.path("player")), energy(afterRoot.path("player")));
-            compare(changes, "player.gold", text(beforeRoot.path("player").path("gold")), text(afterRoot.path("player").path("gold")));
-            compare(changes, "player.hand", cardNames(beforeRoot.path("player").path("hand")), cardNames(afterRoot.path("player").path("hand")));
-            compare(changes, "piles", pileCounts(beforeRoot.path("player")), pileCounts(afterRoot.path("player")));
-            compare(changes, "enemies", enemySummary(beforeRoot.path("battle").path("enemies")), enemySummary(afterRoot.path("battle").path("enemies")));
-            compare(changes, "map.current", mapCurrent(beforeRoot.path("map")), mapCurrent(afterRoot.path("map")));
-            compare(changes, "map.next_options", mapOptions(beforeRoot.path("map").path("next_options")), mapOptions(afterRoot.path("map").path("next_options")));
-            compare(changes, "rewards", genericSummary(beforeRoot.path("rewards")), genericSummary(afterRoot.path("rewards")));
-            compare(changes, "card_select", genericSummary(beforeRoot.path("card_select")), genericSummary(afterRoot.path("card_select")));
-            if (changes.isEmpty()) {
-                return "- 状态签名无变化。";
-            }
-            return String.join("\n", changes);
-        }
-
-        /**
-         * 渲染 run 进度。
-         */
-        private void appendRun(StringBuilder sb, JsonNode run) {
-            if (!run.isObject()) {
-                return;
-            }
-            appendLine(sb, "run.act", text(run.path("act")));
-            appendLine(sb, "run.floor", text(run.path("floor")));
-            appendLine(sb, "run.ascension", text(run.path("ascension")));
-        }
-
-        /**
-         * 渲染战斗信息和敌人列表。
-         */
-        private void appendBattle(StringBuilder sb, JsonNode battle) {
-            if (!battle.isObject() || battle.isEmpty()) {
-                return;
-            }
-            appendLine(sb, "battle.round", text(battle.path("round")));
-            appendLine(sb, "battle.turn", text(battle.path("turn")));
-            appendLine(sb, "battle.is_play_phase", text(battle.path("is_play_phase")));
-            appendObjectList(sb, "enemies", battle.path("enemies"), false);
-        }
-
-        /**
-         * 渲染玩家、手牌、牌堆、遗物和药水。
-         */
-        private void appendPlayer(StringBuilder sb, JsonNode player) {
-            if (!player.isObject()) {
-                return;
-            }
-            appendLine(sb, "player.character", text(player.path("character")));
-            appendLine(sb, "player.hp", hp(player));
-            appendLine(sb, "player.block", text(player.path("block")));
-            appendLine(sb, "player.energy", energy(player));
-            appendLine(sb, "player.gold", text(player.path("gold")));
-            appendObjectList(sb, "player.status", player.path("status"), false);
-            appendObjectList(sb, "hand", player.path("hand"), false);
-            appendLine(sb, "draw_pile.count", text(player.path("draw_pile_count")));
-            appendObjectList(sb, "draw_pile", player.path("draw_pile"), false);
-            appendLine(sb, "discard_pile.count", text(player.path("discard_pile_count")));
-            appendObjectList(sb, "discard_pile", player.path("discard_pile"), false);
-            appendLine(sb, "exhaust_pile.count", text(player.path("exhaust_pile_count")));
-            appendObjectList(sb, "exhaust_pile", player.path("exhaust_pile"), false);
-            appendObjectList(sb, "relics", player.path("relics"), false);
-            appendLine(sb, "potions.max_slots", text(player.path("max_potion_slots")));
-            appendObjectList(sb, "potions", player.path("potions"), false);
-        }
-
-        /**
-         * 渲染完整地图，但用一行一个节点压缩表示。
-         */
-        private void appendMap(StringBuilder sb, JsonNode map) {
-            if (!map.isObject() || map.isEmpty()) {
-                return;
-            }
-            appendLine(sb, "map.current", mapCurrent(map));
-            appendMapOptions(sb, map.path("next_options"));
-            JsonNode nodes = map.path("nodes");
-            if (nodes.isArray() && !nodes.isEmpty()) {
-                sb.append("map.nodes:\n");
-                for (JsonNode node : nodes) {
-                    sb.append("- ").append(renderMapNode(node)).append("\n");
-                }
-            }
-            appendLine(sb, "map.boss", renderMapNode(map.path("boss")));
-        }
-
-        /**
-         * 渲染常见非战斗界面。
-         */
-        private void appendKnownTopLevel(StringBuilder sb, JsonNode root) {
-            List<String> keys = List.of(
-                    "rewards",
-                    "card_reward",
-                    "card_select",
-                    "event",
-                    "shop",
-                    "rest_site",
-                    "campfire",
-                    "chest",
-                    "treasure"
-            );
-            for (String key : keys) {
-                JsonNode node = root.path(key);
-                if (!node.isMissingNode() && !node.isNull() && !node.isEmpty()) {
-                    appendGenericNode(sb, key, node, 0);
-                }
-            }
-        }
-
-        /**
-         * 渲染未显式处理的顶层字段，避免新界面因为白名单而完全丢信息。
-         */
-        private void appendUnknownTopLevel(StringBuilder sb, JsonNode root) {
-            Set<String> handled = Set.of(
-                    "state_type",
-                    "run",
-                    "battle",
-                    "player",
-                    "map",
-                    "rewards",
-                    "card_reward",
-                    "card_select",
-                    "event",
-                    "shop",
-                    "rest_site",
-                    "campfire",
-                    "chest",
-                    "treasure"
-            );
-            Iterator<Map.Entry<String, JsonNode>> fields = root.fields();
-            while (fields.hasNext()) {
-                Map.Entry<String, JsonNode> field = fields.next();
-                if (!handled.contains(field.getKey()) && !field.getValue().isNull() && !field.getValue().isEmpty()) {
-                    appendGenericNode(sb, field.getKey(), field.getValue(), 0);
-                }
-            }
-        }
-
-        /**
-         * 渲染通用对象或数组，最多浅展开两层嵌套结构。
-         */
-        private void appendGenericNode(StringBuilder sb, String prefix, JsonNode node, int depth) {
-            if (isScalar(node)) {
-                appendLine(sb, prefix, scalar(node));
-                return;
-            }
-            if (node.isArray()) {
-                appendObjectList(sb, prefix, node, shouldShowOptionIndex(prefix));
-                return;
-            }
-            if (!node.isObject()) {
-                return;
-            }
-            Iterator<Map.Entry<String, JsonNode>> fields = node.fields();
-            while (fields.hasNext()) {
-                Map.Entry<String, JsonNode> field = fields.next();
-                JsonNode child = field.getValue();
-                String childPrefix = prefix + "." + field.getKey();
-                if (isScalar(child)) {
-                    appendLine(sb, childPrefix, scalar(child));
-                } else if (depth < 2 && !child.isEmpty()) {
-                    appendGenericNode(sb, childPrefix, child, depth + 1);
-                } else if (!child.isEmpty()) {
-                    appendLine(sb, childPrefix, compact(child));
-                }
-            }
-        }
-
-        /**
-         * 渲染对象数组；手牌和牌堆不显示索引，选择类列表会显示底层工具所需的 option。
-         */
-        private void appendObjectList(StringBuilder sb, String label, JsonNode array, boolean showOptionIndex) {
-            if (!array.isArray() || array.isEmpty()) {
-                return;
-            }
-            sb.append(label).append(":\n");
-            for (int i = 0; i < array.size(); i++) {
-                JsonNode item = array.get(i);
-                sb.append("- ");
-                if (showOptionIndex) {
-                    sb.append(optionName(label)).append("=").append(i).append(" ");
-                }
-                if (item.isObject()) {
-                    sb.append(inlineScalars(item, label)).append("\n");
-                    appendNestedObjects(sb, item, "  ", 1);
-                } else {
-                    sb.append(scalar(item)).append("\n");
-                }
-            }
-        }
-
-        /**
-         * 渲染一层到两层嵌套对象，保留诅咒、词条、意图等额外说明。
-         */
-        private void appendNestedObjects(StringBuilder sb, JsonNode object, String indent, int depth) {
-            if (depth > 2 || !object.isObject()) {
-                return;
-            }
-            Iterator<Map.Entry<String, JsonNode>> fields = object.fields();
-            while (fields.hasNext()) {
-                Map.Entry<String, JsonNode> field = fields.next();
-                JsonNode child = field.getValue();
-                if (isScalar(child) || child.isEmpty()) {
-                    continue;
-                }
-                sb.append(indent).append(field.getKey()).append(":\n");
-                if (child.isArray()) {
-                    for (JsonNode item : child) {
-                        sb.append(indent).append("- ");
-                        if (item.isObject()) {
-                            sb.append(inlineScalars(item)).append("\n");
-                            appendNestedObjects(sb, item, indent + "  ", depth + 1);
-                        } else {
-                            sb.append(scalar(item)).append("\n");
-                        }
-                    }
-                } else if (child.isObject()) {
-                    sb.append(indent).append("- ").append(inlineScalars(child)).append("\n");
-                    appendNestedObjects(sb, child, indent + "  ", depth + 1);
-                } else {
-                    sb.append(indent).append("- ").append(compact(child)).append("\n");
-                }
-            }
-        }
-
-        /**
-         * 渲染地图下一节点选项。
-         */
-        private void appendMapOptions(StringBuilder sb, JsonNode options) {
-            if (!options.isArray() || options.isEmpty()) {
-                return;
-            }
-            sb.append("map.next_options:\n");
-            for (int i = 0; i < options.size(); i++) {
-                sb.append("- node_index=").append(i).append(" ").append(renderMapNode(options.get(i))).append("\n");
-            }
-        }
-
-        /**
-         * 渲染地图节点。
-         */
-        private String renderMapNode(JsonNode node) {
-            if (!node.isObject() || node.isEmpty()) {
-                return "";
-            }
-            List<String> parts = new ArrayList<>();
-            String coord = coordinate(node);
-            if (!coord.isBlank()) {
-                parts.add("node=" + coord);
-            }
-            addPart(parts, "type", text(node.path("type")));
-            addPart(parts, "visited", text(node.path("visited")));
-            addPart(parts, "children", children(node.path("children")));
-            return String.join(" ", parts);
-        }
-
-        /**
-         * 将对象中的标量字段渲染成单行。
-         */
-        private String inlineScalars(JsonNode object) {
-            return inlineScalars(object, "");
-        }
-
-        /**
-         * 将对象中的标量字段渲染成单行，并按列表类型隐藏容易诱导错误决策的底层字段。
-         */
-        private String inlineScalars(JsonNode object, String label) {
-            List<String> parts = new ArrayList<>();
-            Iterator<Map.Entry<String, JsonNode>> fields = object.fields();
-            while (fields.hasNext()) {
-                Map.Entry<String, JsonNode> field = fields.next();
-                JsonNode value = field.getValue();
-                if (isScalar(value) && shouldRenderScalar(value) && shouldRenderScalarField(label, field.getKey())) {
-                    parts.add(field.getKey() + "=" + scalar(value));
-                }
-            }
-            return parts.isEmpty() ? compact(object) : String.join(" ", parts);
-        }
-
-        /**
-         * 判断某个标量字段是否应该渲染给 agent。
-         */
-        private boolean shouldRenderScalarField(String label, String fieldName) {
-            if (fieldName == null) {
-                return true;
-            }
-            String lowerLabel = label == null ? "" : label.toLowerCase();
-            String lowerField = fieldName.toLowerCase();
-            if (("hand".equals(lowerLabel)
-                    || lowerLabel.endsWith("_pile")
-                    || lowerLabel.endsWith(".hand"))
-                    && ("index".equals(lowerField)
-                    || "card_index".equals(lowerField)
-                    || "cardindex".equals(lowerField))) {
-                return false;
-            }
-            return true;
-        }
-
-        /**
-         * 判断某个通用列表是否应显示底层工具索引。
-         */
-        private boolean shouldShowOptionIndex(String prefix) {
-            String lower = prefix.toLowerCase();
-            return lower.contains("reward")
-                    || lower.contains("option")
-                    || lower.endsWith("cards") && lower.contains("card_select");
-        }
-
-        /**
-         * 根据列表类型选择索引字段名。
-         */
-        private String optionName(String label) {
-            String lower = label.toLowerCase();
-            if (lower.contains("card")) {
-                return "card_index";
-            }
-            if (lower.contains("reward")) {
-                return "reward_index";
-            }
-            return "option";
-        }
-
-        /**
-         * 追加一行 K-V，空值不输出。
-         */
-        private void appendLine(StringBuilder sb, String key, String value) {
-            if (value == null || value.isBlank()) {
-                return;
-            }
-            sb.append(key).append("=").append(value).append("\n");
-        }
-
-        /**
-         * 追加 diff 行。
-         */
-        private void compare(List<String> changes, String key, String before, String after) {
-            String b = firstNonBlank(before, "(空)");
-            String a = firstNonBlank(after, "(空)");
-            if (!b.equals(a)) {
-                changes.add("- " + key + ": " + b + " -> " + a);
-            }
-        }
-
-        /**
-         * 添加非空字段。
-         */
-        private void addPart(List<String> parts, String key, String value) {
-            if (value != null && !value.isBlank()) {
-                parts.add(key + "=" + value);
-            }
-        }
-
-        private String stateType(GameStateSnapshot state) {
-            return state == null ? "" : firstNonBlank(state.stateType(), text(state.json().path("state_type")));
-        }
-
-        private String hp(JsonNode player) {
-            String hp = text(player.path("hp"));
-            String maxHp = text(player.path("max_hp"));
-            if (hp.isBlank() && maxHp.isBlank()) {
-                return "";
-            }
-            return hp + "/" + maxHp;
-        }
-
-        private String energy(JsonNode player) {
-            String energy = text(player.path("energy"));
-            String maxEnergy = text(player.path("max_energy"));
-            if (energy.isBlank() && maxEnergy.isBlank()) {
-                return "";
-            }
-            return energy + "/" + maxEnergy;
-        }
-
-        private String pileCounts(JsonNode player) {
-            List<String> parts = new ArrayList<>();
-            addPart(parts, "draw", text(player.path("draw_pile_count")));
-            addPart(parts, "discard", text(player.path("discard_pile_count")));
-            addPart(parts, "exhaust", text(player.path("exhaust_pile_count")));
-            return String.join(" ", parts);
-        }
-
-        private String cardNames(JsonNode cards) {
-            if (!cards.isArray() || cards.isEmpty()) {
-                return "";
-            }
-            List<String> names = new ArrayList<>();
-            for (JsonNode card : cards) {
-                names.add(firstNonBlank(text(card.path("name")), scalar(card)));
-            }
-            return String.join(" | ", names);
-        }
-
-        private String enemySummary(JsonNode enemies) {
-            if (!enemies.isArray() || enemies.isEmpty()) {
-                return "";
-            }
-            List<String> rendered = new ArrayList<>();
-            for (JsonNode enemy : enemies) {
-                String id = firstNonBlank(text(enemy.path("entity_id")), text(enemy.path("name")), "?");
-                rendered.add(id + ":" + text(enemy.path("hp")) + "/" + text(enemy.path("max_hp"))
-                        + " block=" + text(enemy.path("block"))
-                        + " intent=" + genericSummary(enemy.path("intents"))
-                        + " status=" + genericSummary(enemy.path("status")));
-            }
-            return String.join(" | ", rendered);
-        }
-
-        private String mapCurrent(JsonNode map) {
-            if (!map.isObject() || map.isEmpty()) {
-                return "";
-            }
-            return firstNonBlank(renderMapNode(map.path("current_position")), renderMapNode(map.path("current_node")));
-        }
-
-        private String mapOptions(JsonNode options) {
-            if (!options.isArray() || options.isEmpty()) {
-                return "";
-            }
-            List<String> values = new ArrayList<>();
-            for (int i = 0; i < options.size(); i++) {
-                values.add(i + ":" + renderMapNode(options.get(i)));
-            }
-            return String.join(" | ", values);
-        }
-
-        private String genericSummary(JsonNode node) {
-            if (node == null || node.isMissingNode() || node.isNull() || node.isEmpty()) {
-                return "";
-            }
-            if (isScalar(node)) {
-                return scalar(node);
-            }
-            if (node.isArray()) {
-                List<String> values = new ArrayList<>();
-                for (JsonNode item : node) {
-                    values.add(item.isObject() ? inlineScalars(item) : scalar(item));
-                }
-                return String.join(" | ", values);
-            }
-            if (node.isObject()) {
-                return inlineScalars(node);
-            }
-            return compact(node);
-        }
-
-        private String coordinate(JsonNode node) {
-            String col = text(node.path("col"));
-            String row = text(node.path("row"));
-            if (col.isBlank() || row.isBlank()) {
-                return "";
-            }
-            return "(" + col + "," + row + ")";
-        }
-
-        private String children(JsonNode children) {
-            if (!children.isArray() || children.isEmpty()) {
-                return "";
-            }
-            List<String> values = new ArrayList<>();
-            for (JsonNode child : children) {
-                if (child.isArray() && child.size() >= 2) {
-                    values.add("(" + text(child.get(0)) + "," + text(child.get(1)) + ")");
-                } else if (child.isObject()) {
-                    values.add(coordinate(child));
-                } else {
-                    values.add(scalar(child));
-                }
-            }
-            values.removeIf(String::isBlank);
-            return String.join(",", values);
-        }
-
-        private boolean isScalar(JsonNode node) {
-            return node == null
-                    || node.isMissingNode()
-                    || node.isNull()
-                    || node.isValueNode();
-        }
-
-        private boolean shouldRenderScalar(JsonNode node) {
-            return node != null
-                    && !node.isMissingNode()
-                    && !node.isNull()
-                    && (!node.isTextual() || !node.asText("").isBlank());
-        }
-
-        private String scalar(JsonNode node) {
-            if (node == null || node.isMissingNode() || node.isNull()) {
-                return "";
-            }
-            if (node.isTextual()) {
-                return node.asText("");
-            }
-            return node.asText(node.toString());
-        }
-
-        private String text(JsonNode node) {
-            return scalar(node);
-        }
-
-        private String compact(JsonNode node) {
-            if (node == null || node.isMissingNode() || node.isNull()) {
-                return "";
-            }
-            return node.toString();
-        }
-
-        private String firstNonBlank(String... values) {
-            if (values == null) {
-                return "";
-            }
-            for (String value : values) {
-                if (value != null && !value.isBlank()) {
-                    return value.trim();
-                }
-            }
-            return "";
-        }
-    }
-
-    /**
-     * STS2 工具列表渲染器。
-     * <p>
-     * 该内部类根据当前 state_type 收窄暴露给 agent 的操作工具，减少工具选择噪音。
-     */
-    private class OperationToolRenderer {
-        /**
-         * 渲染当前状态下可用的 MCP 操作工具。
-         */
-        private String render(ToolProviderResult tools, MCPProperties.GameMCPConfig config, GameStateSnapshot state) {
-            StringBuilder sb = new StringBuilder();
-            String modePrefix = lastFetchedGameName == null ? "" : detectedMode.getOrDefault(lastFetchedGameName, "");
-            List<ToolSpecification> operationSpecs = tools.tools().keySet().stream()
-                    .filter(spec -> !isStateTool(spec.name(), config))
-                    .filter(spec -> isModeVisible(spec.name(), modePrefix))
-                    .sorted((a, b) -> a.name().compareToIgnoreCase(b.name()))
-                    .toList();
-            List<ToolSpecification> visibleSpecs = operationSpecs.stream()
-                    .filter(spec -> isOperationVisibleForState(spec.name(), state))
-                    .toList();
-            if (visibleSpecs.isEmpty()) {
-                visibleSpecs = operationSpecs;
-            }
-
-            visibleSpecs.forEach(spec -> {
-                if (isPlayCard(spec.name())) {
-                    sb.append("- ")
-                            .append(spec.name())
-                            .append(": 打出一张手牌。args 使用 {\"card\":\"手牌名称\"}；")
-                            .append("需要选择敌人的攻击牌再加 {\"target\":\"敌人 entity_id\"}；Self 目标牌不要传 target；")
-                            .append("adapter 会按当前手牌自动转换为底层 MCP 参数。\n");
-                    return;
-                }
-                sb.append("- ")
-                        .append(spec.name())
-                        .append(": ")
-                        .append(spec.description() == null ? "" : spec.description())
-                        .append("\n");
-            });
-            return sb.isEmpty() ? "(没有可用操作工具)" : sb.toString();
-        }
-
-        /**
-         * 根据检测到的游戏模式过滤工具：SP 模式下隐藏 mp_* 工具，MP 模式下只显示 mp_* 工具。
-         */
-        private boolean isModeVisible(String toolName, String modePrefix) {
-            if (toolName == null) {
-                return false;
-            }
-            boolean isMpTool = toolName.startsWith(MP_PREFIX);
-            if (MP_PREFIX.equals(modePrefix)) {
-                return isMpTool;
-            }
-            return !isMpTool;
-        }
-
-        /**
-         * 根据 state_type 判断某个操作工具是否应该暴露。
-         */
-        private boolean isOperationVisibleForState(String toolName, GameStateSnapshot state) {
-            if (state == null || state.json() == null) {
-                return true;
-            }
-
-            String name = removeModePrefix(toolName).toLowerCase();
-            String stateType = state.stateType() == null ? "" : state.stateType().toLowerCase();
-            return switch (stateType) {
-                case "monster" -> isCombatTool(name);
-                case "card_select" -> isCardSelectTool(name, state.json());
-                case "card_reward" -> isRewardPickTool(name);
-                case "rewards" -> isRewardClaimTool(name);
-                case "map" -> isMapTool(name);
-                case "event" -> isEventTool(name);
-                case "shop" -> isShopTool(name);
-                case "rest", "campfire" -> isRestTool(name);
-                case "chest", "treasure" -> isChestTool(name);
-                default -> true;
-            };
-        }
-
-        /**
-         * 去掉多人模式前缀，便于按通用工具名分类。
-         */
-        private String removeModePrefix(String toolName) {
-            if (toolName == null) {
-                return "";
-            }
-            return toolName.startsWith(MP_PREFIX) ? toolName.substring(MP_PREFIX.length()) : toolName;
-        }
-
-        /**
-         * 战斗行动阶段只展示战斗和药水工具。
-         */
-        private boolean isCombatTool(String name) {
-            return "combat_play_card".equals(name)
-                    || "combat_end_turn".equals(name)
-                    || "use_potion".equals(name);
-        }
-
-        /**
-         * card_select 优先按战斗/牌堆选牌处理；只有状态里明确带奖励字段时才展示奖励选牌工具。
-         */
-        private boolean isCardSelectTool(String name, JsonNode root) {
-            boolean rewardLike = root.has("rewards")
-                    || root.has("card_reward")
-                    || root.path("card_select").path("reward").asBoolean(false);
-            if (rewardLike) {
-                return isRewardPickTool(name);
-            }
-            boolean selectTool = name.contains("select_card")
-                    || name.contains("confirm_selection")
-                    || name.startsWith("deck_")
-                    || name.startsWith("combat_select")
-                    || name.startsWith("combat_confirm");
-            if (root.has("card_select")) {
-                return selectTool;
-            }
-            return selectTool || isRewardPickTool(name);
-        }
-
-        /**
-         * 卡牌奖励界面只需要拿牌或跳过。
-         */
-        private boolean isRewardPickTool(String name) {
-            return name.startsWith("rewards_pick")
-                    || name.startsWith("rewards_skip")
-                    || name.contains("pick_card")
-                    || name.contains("skip_card");
-        }
-
-        /**
-         * 奖励结算界面需要领取奖励或继续到地图。
-         */
-        private boolean isRewardClaimTool(String name) {
-            return name.startsWith("rewards_")
-                    || name.startsWith("claim_")
-                    || name.contains("proceed")
-                    || "use_potion".equals(name);
-        }
-
-        /**
-         * 地图界面只展示地图选择和继续类工具。
-         */
-        private boolean isMapTool(String name) {
-            return name.contains("map") || name.contains("node") || name.contains("proceed");
-        }
-
-        /**
-         * 事件界面只展示事件选项和继续类工具。
-         */
-        private boolean isEventTool(String name) {
-            return name.startsWith("event_") || name.contains("proceed");
-        }
-
-        /**
-         * 商店界面只展示购买、删牌和离开商店工具。
-         */
-        private boolean isShopTool(String name) {
-            return name.startsWith("shop_") || name.contains("purchase") || name.contains("remove") || name.contains("proceed");
-        }
-
-        /**
-         * 火堆界面只展示休息、锻造等火堆操作。
-         */
-        private boolean isRestTool(String name) {
-            return name.startsWith("rest_") || name.contains("campfire") || name.contains("proceed");
-        }
-
-        /**
-         * 宝箱界面只展示领取遗物和继续类工具。
-         */
-        private boolean isChestTool(String name) {
-            return name.contains("chest") || name.contains("relic") || name.contains("claim") || name.contains("proceed");
-        }
     }
 
     /**
@@ -1092,6 +435,7 @@ public class STS2Adapter implements GameAdapter {
          */
         private QueuedGameOperation prepareOperation(GameOperation operation, GameStateSnapshot plannedState) {
             QueuedGameOperation queued = QueuedGameOperation.from(operation, plannedState);
+            rememberEndTurnRound(queued, operation.toolName(), plannedState);
             if (!isPlayCard(operation.toolName())) {
                 return queued;
             }
@@ -1122,6 +466,7 @@ public class STS2Adapter implements GameAdapter {
 
             for (GameOperation op : operations) {
                 QueuedGameOperation queued = QueuedGameOperation.from(op, plannedState);
+                rememberEndTurnRound(queued, op.toolName(), plannedState);
                 if (isPlayCard(op.toolName())) {
                     String requestedCardName = readCardName(op.args());
                     if (!requestedCardName.isBlank()) {
@@ -1190,6 +535,11 @@ public class STS2Adapter implements GameAdapter {
                                                        GameStateSnapshot beforeState,
                                                        GameStateSnapshot afterState,
                                                        String reason) {
+        if (isEndTurn(operation.request().name())
+                && reason != null
+                && reason.contains(STALE_END_TURN_REASON)) {
+            return false;
+        }
         return isCombatPlayWindow(afterState);
     }
 
