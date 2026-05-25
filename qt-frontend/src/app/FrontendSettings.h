@@ -22,12 +22,6 @@ class FrontendSettings final : public QObject {
     Q_PROPERTY(int moteCount READ moteCount WRITE setMoteCount NOTIFY settingsChanged)
     Q_PROPERTY(int uiScalePercent READ uiScalePercent WRITE setUiScalePercent NOTIFY settingsChanged)
     Q_PROPERTY(QString backendBaseUrl READ backendBaseUrl WRITE setBackendBaseUrl NOTIFY settingsChanged)
-    Q_PROPERTY(QString aiBaseUrl READ aiBaseUrl WRITE setAiBaseUrl NOTIFY settingsChanged)
-    Q_PROPERTY(QString aiApiKey READ aiApiKey WRITE setAiApiKey NOTIFY settingsChanged)
-    Q_PROPERTY(QString aiModelName READ aiModelName WRITE setAiModelName NOTIFY settingsChanged)
-    Q_PROPERTY(QString embeddingBaseUrl READ embeddingBaseUrl WRITE setEmbeddingBaseUrl NOTIFY settingsChanged)
-    Q_PROPERTY(QString embeddingApiKey READ embeddingApiKey WRITE setEmbeddingApiKey NOTIFY settingsChanged)
-    Q_PROPERTY(QString embeddingModelName READ embeddingModelName WRITE setEmbeddingModelName NOTIFY settingsChanged)
 
 public:
     explicit FrontendSettings(QObject *parent = nullptr);
@@ -46,12 +40,6 @@ public:
     int moteCount() const;
     int uiScalePercent() const;
     QString backendBaseUrl() const;
-    QString aiBaseUrl() const;
-    QString aiApiKey() const;
-    QString aiModelName() const;
-    QString embeddingBaseUrl() const;
-    QString embeddingApiKey() const;
-    QString embeddingModelName() const;
 
     // QML 可调用的方法：重置默认值和写入本机持久化配置。
     // Methods callable from QML: reset defaults and persist settings locally.
@@ -73,12 +61,6 @@ public slots:
     void setMoteCount(int value);
     void setUiScalePercent(int value);
     void setBackendBaseUrl(const QString &value);
-    void setAiBaseUrl(const QString &value);
-    void setAiApiKey(const QString &value);
-    void setAiModelName(const QString &value);
-    void setEmbeddingBaseUrl(const QString &value);
-    void setEmbeddingApiKey(const QString &value);
-    void setEmbeddingModelName(const QString &value);
 
 signals:
     // 任何设置变化时发出；QML 绑定依赖它刷新界面。
@@ -86,6 +68,9 @@ signals:
     void settingsChanged();
 
 private:
+    // 从项目外部 config/application.yaml 读取默认值。
+    void loadExternalDefaults();
+
     // 从 QSettings 读取本机保存过的配置。
     // Load previously saved local settings from QSettings.
     void load();
@@ -104,10 +89,4 @@ private:
     int m_moteCount = 28;
     int m_uiScalePercent = 100;
     QString m_backendBaseUrl;
-    QString m_aiBaseUrl;
-    QString m_aiApiKey;
-    QString m_aiModelName;
-    QString m_embeddingBaseUrl;
-    QString m_embeddingApiKey;
-    QString m_embeddingModelName;
 };

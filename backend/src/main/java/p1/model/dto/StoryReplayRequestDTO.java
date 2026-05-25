@@ -9,10 +9,4 @@ public class StoryReplayRequestDTO {
     private String sessionId;
     private String characterName;
     private Integer targetLength;
-    private String aiBaseUrl;
-    private String aiApiKey;
-    private String aiModelName;
-    private String embeddingBaseUrl;
-    private String embeddingApiKey;
-    private String embeddingModelName;
 }

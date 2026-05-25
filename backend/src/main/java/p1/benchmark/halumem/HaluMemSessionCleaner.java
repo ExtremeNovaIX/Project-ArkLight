@@ -3,7 +3,7 @@ package p1.benchmark.halumem;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
-import p1.component.agent.context.SummaryCacheManager;
+import p1.component.agent.rp.context.SummaryCacheManager;
 import p1.config.prop.AssistantProperties;
 import p1.service.ChatLogRepository;
 import p1.utils.SessionUtil;

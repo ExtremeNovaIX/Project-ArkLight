@@ -38,6 +38,7 @@ public:
     // Q_INVOKABLE 表示 QML 可以调用这些 C++ 方法。
     // Q_INVOKABLE means QML can call these C++ methods.
     Q_INVOKABLE void sendMessage(const QString &content);
+    Q_INVOKABLE void reportTypingActivity();
     Q_INVOKABLE void startStoryReplay();
     Q_INVOKABLE void clearMessages();
     Q_INVOKABLE void selectCharacter(const QString &characterName);
@@ -58,6 +59,7 @@ private:
     void setBusy(bool value);
     void setStatusText(const QString &value);
     void syncCharacterState();
+    void refreshLiveMessages();
 
     // settings/catalog 由 main.cpp 创建，本类只保存指针，不拥有它们。
     // settings/catalog are created in main.cpp; this class stores pointers but does not own them.

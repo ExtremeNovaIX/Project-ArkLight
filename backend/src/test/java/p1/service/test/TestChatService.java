@@ -91,7 +91,7 @@ public class TestChatService {
         int attempt = 1;
         while (true) {
             try {
-                return chatService.sendChatToRpAgent(chatRequest);
+                return chatService.sendMsgToRpAgent(chatRequest);
             } catch (RuntimeException exception) {
                 System.err.printf(
                         "story-replay LLM request failed | round=%d | attempt=%d | retryIn=%ds | exception=%s | message=%s%n",

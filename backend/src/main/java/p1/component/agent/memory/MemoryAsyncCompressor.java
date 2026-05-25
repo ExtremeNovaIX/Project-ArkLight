@@ -5,8 +5,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
-import p1.component.agent.context.SummaryCacheManager;
 import p1.component.agent.memory.model.FactExtractionPipelineResult;
+import p1.component.agent.rp.context.SummaryCacheManager;
 
 import java.util.List;
 

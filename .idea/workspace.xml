@@ -4,7 +4,18 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b130ff98-1007-43a2-b161-a2069a2adc54" name="更改" comment="" />
+    <list default="true" id="b130ff98-1007-43a2-b161-a2069a2adc54" name="更改" comment="">
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/p1/component/gamer/adapter/GameAdapter.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/p1/component/gamer/GameSessionKey.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/p1/component/gamer/GameSessionKey.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/p1/component/gamer/GamerAgent.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/p1/component/gamer/GamerAgent.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/p1/component/gamer/GamerAgentService.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/p1/component/gamer/GamerAgentService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/p1/component/gamer/GamerMCPClientFactory.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/p1/component/gamer/GamerMCPClientFactory.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/p1/component/gamer/loop/GamerGameLoopService.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/p1/component/gamer/loop/GamerGameLoopService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/p1/config/mcp/MCPProperties.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/p1/config/mcp/MCPProperties.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/p1/config/mcp/McpServerRegistry.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/p1/config/mcp/McpServerRegistry.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/p1/controller/McpRegistryController.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/p1/controller/McpRegistryController.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/resources/mcp-catalog.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/resources/mcp-catalog.yaml" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -33,9 +44,9 @@
     <commands />
     <urls />
   </component>
-  <component name="ProjectColorInfo"><![CDATA[{
-  "associatedIndex": 6
-}]]></component>
+  <component name="ProjectColorInfo">{
+  &quot;associatedIndex&quot;: 6
+}</component>
   <component name="ProjectId" id="3BQLYp2XcD7VJ10lwkLUxfWVGB3" />
   <component name="ProjectViewState">
     <option name="hideEmptyMiddlePackages" value="true" />
@@ -47,19 +58,23 @@
     "RunOnceActivity.MCP Project settings loaded": "true",
     "RunOnceActivity.ShowReadmeOnStart": "true",
     "RunOnceActivity.git.unshallow": "true",
-    "git-widget-placeholder": "main",
+    "git-widget-placeholder": "mcp",
     "kotlin-language-version-configured": "true",
     "last_opened_file_path": "E:/PersonalProject/Project-1",
-    "settings.editor.selected.configurable": "reference.settings.project.maven.runner"
+    "nodejs_package_manager_path": "npm",
+    "settings.editor.selected.configurable": "reference.settings.project.maven.runner",
+    "vue.rearranger.settings.migration": "true"
   }
 }]]></component>
   <component name="SharedIndexes">
     <attachedChunks>
       <set>
-        <option value="bundled-jdk-30f59d01ecdd-2fc7cc6b9a17-intellij.indexing.shared.core-IU-253.30387.90" />
+        <option value="bundled-jdk-9823dce3aa75-a94e463ab2e7-intellij.indexing.shared.core-IU-243.26053.27" />
+        <option value="bundled-js-predefined-d6986cc7102b-1632447f56bf-JavaScript-IU-243.26053.27" />
       </set>
     </attachedChunks>
   </component>
+  <component name="SpellCheckerSettings" RuntimeDictionaries="0" Folders="0" CustomDictionaries="0" DefaultDictionary="应用程序级" UseSingleDictionary="true" transferred="true" />
   <component name="TaskManager">
     <task active="true" id="Default" summary="默认任务">
       <changelist id="b130ff98-1007-43a2-b161-a2069a2adc54" name="更改" comment="" />
@@ -67,7 +82,11 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1774416397283</updated>
+      <workItem from="1778121256309" duration="170000" />
     </task>
     <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
   </component>
 </project>

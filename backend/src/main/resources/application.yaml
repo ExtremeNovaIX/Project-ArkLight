@@ -1,125 +1,27 @@
 spring:
-  h2:
-    console:
-      enabled: true
-      path: /h2-console
-      settings:
-        web-allow-others: true
-
-  datasource:
-    url: jdbc:h2:file:./data/assistant_db;DB_CLOSE_ON_EXIT=FALSE;AUTO_RECONNECT=TRUE
-    driver-class-name: org.h2.Driver
-    username: sa
-    password:
-
-  jpa:
-    show-sql: false
-    hibernate:
-      ddl-auto: update
-
-assistant:
-  mode: api
-
-  api:
-    chat-model:
-      api-key: ${DEEPSEEK_API_KEY:default_value}
-      base-url: https://api.deepseek.com
-      model-name: deepseek-v4-flash
-      timeout-seconds: 300
-      log-enabled: false
-    embedding-model:
-      api-key: ${DASHSCOPE_API_KEY:default_value}
-      base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
-      model-name: text-embedding-v3
-
-  local:
-    chat-model:
-      base-url: http://127.0.0.1:1234/v1
-      model-name: qwen3.6
-      timeout-seconds: 600
-      log-enabled: false
-    embedding-model:
-      base-url: http://127.0.0.1:1234/v1
-      model-name: text-embedding-embedding
-
-  test-ai:
-    chat-model:
-      api-key: ${DEEPSEEK_API_KEY:default_value}
-      base-url: https://api.deepseek.com
-      model-name: deepseek-v4-flash
-      timeout-seconds: 120
-      log-enabled: false
-
-  chat-memory:
-    trigger-compress-threshold: 30
-    compress-count: 26
-    context-max-summary-count: 3
-
-  lock:
-    session-lock-wait-timeout-ms: 10000
-    session-lock-retry-count: 3
-    session-lock-retry-delay-ms: 100
-    compression-lease-timeout-ms: 300000
-
-  embedding-store:
-    path: data/vector_indices
-
-  md-repository:
-    path: data/memory
-
-  event-tree:
-    # 向量召回的最低相似度门槛。
-    # 低于该分数的 archive match 会在 recall 阶段被丢弃，不会进入候选排序。
-    # 调高：候选更少、更保守；调低：候选更多、更容易误连。
-    recent-window-score-link-threshold: 0.5
-
-    # recent-window 缓存窗口长度，单位小时。
-    # 只有这个窗口内的历史事件组会作为“近期候选”参与召回和连边。
-
-    recent-window-hours: 24
-    # recent-window 过期数据清理/扫描间隔，单位毫秒。
-    # 只影响缓存维护频率，不直接影响打分。
-    recent-window-scan-fixed-delay-ms: 3600000
-
-    # 标签区分度 boost 的权重。
-    # 最终排序分 = 时间调整后支持度 * (1 + boost-weight * 标签区分度)。
-    # 调高：共享稀有标签的候选更容易胜出；调低：排序更依赖向量相似度。
-    recent-window-idf-boost-weight: 0.9
-
-    # IDF 分子平滑项：N + doc-count-smoothing。
-    # N 是带标签的 recent group 总数。
-    # 调高：所有标签的区分度整体变强；调低：标签 boost 更保守。
-    recent-window-idf-doc-count-smoothing: 1.0
-
-    # IDF 分母平滑项：df(tag) + df-smoothing。
-    # df(tag) 是包含该 tag 的 recent group 数量。
-    # 调高：稀有标签不会被过度放大；调低：稀有标签 boost 更猛。
-    recent-window-idf-df-smoothing: 1.0
-
-    # 标签区分度归一化尺度。
-    # 用于把原始 IDF 累积分压缩到 0~1。
-    # 调大：boost 更保守，更难接近 1；调小：boost 更激进，更容易饱和。
-    recent-window-idf-normalization-scale: 2
-
-    # 触发标签 boost 所需的最少共享标签数。
-    # 调高：减少泛标签误连；调低：更容易利用单个标签增强。
-    recent-window-idf-min-shared-tags: 2
-
-    # 时间衰减强度。
-    # 时间因子 = exp(-coefficient * ageHours / recent-window-hours)。
-    # 调高：越旧的候选被压得越狠；调低：时间影响更弱；0 表示关闭时间衰减。
-    recent-window-time-decay-coefficient: 0.3
-
-    # 最终连接边的最低得分阈值，低于这个值的边会被拦截。
-    # 调高：连边更保守；调低：更容易建立关联边。
-    recent-window-final-threshold: 0.8
-
-  markdown-migration:
-    enabled: false
-    vault-path: data/memory
-    overwrite-existing: false
-
-logging:
-  level:
-    org.hibernate.SQL: WARN
-    org.hibernate.orm.jdbc.bind: WARN
+  config:
+    import:
+      # 基础设施默认配置：数据库、H2 控制台和日志级别。
+      - optional:classpath:application-infrastructure.yaml
+      # 外部基础设施配置优先于 resources 默认值。
+      - optional:${arclight.config.uri}application-infrastructure.yaml
+      # 模型供应商与模型名称默认配置。
+      - optional:classpath:application-ai.yaml
+      # 外部模型配置优先于 resources 默认值。
+      - optional:${arclight.config.uri}application-ai.yaml
+      # 对话记忆、向量索引和 markdown 存储默认配置。
+      - optional:classpath:application-memory.yaml
+      # 外部记忆配置优先于 resources 默认值。
+      - optional:${arclight.config.uri}application-memory.yaml
+      # RP 主动表达和表达欲默认配置。
+      - optional:classpath:application-rp.yaml
+      # 外部 RP 配置优先于 resources 默认值。
+      - optional:${arclight.config.uri}application-rp.yaml
+      # Web 与 Qt 前端默认设置。
+      - optional:classpath:application-frontend.yaml
+      # 外部前端配置优先于 resources 默认值。
+      - optional:${arclight.config.uri}application-frontend.yaml
+      # MCP 与 gamer 默认配置。
+      - optional:classpath:application-mcp.yaml
+      # 外部 MCP 配置优先于 resources 默认值。
+      - optional:${arclight.config.uri}application-mcp.yaml

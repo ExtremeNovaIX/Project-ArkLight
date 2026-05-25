@@ -6,11 +6,12 @@ import org.slf4j.MDC;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import p1.component.agent.interaction.InteractionCoordinator;
+import p1.component.agent.rp.core.RpReplySegmenter;
 import p1.infrastructure.mdc.ChatSessionMetrics;
 import p1.model.dto.ChatRequestDTO;
 import p1.service.ChatService;
 
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
@@ -25,6 +26,8 @@ public class ChatController {
 
     private final ChatService chatService;
     private final ChatSessionMetrics chatSessionMetrics;
+    private final RpReplySegmenter replySegmenter;
+    private final InteractionCoordinator interactionCoordinator;
 
     @PostMapping("/send")
     public ResponseEntity<?> send(@RequestBody ChatRequestDTO request) {
@@ -35,20 +38,9 @@ public class ChatController {
         MDC.put("sessionId", sessionId);
         MDC.put("chatRound", String.valueOf(currentRound));
         try {
-            String rawReply = chatService.sendChatToRpAgent(request);
+            String rawReply = chatService.sendMsgToRpAgent(request);
             rawReply = rawReply == null ? "" : rawReply;
-            List<String> replyList;
-            if (request.isShortMode()) {
-                String splitRegex = "(?<=[。！？?!;；…])(?![。！？?!;；…])|(?<=\\.)(?![。！？?!;；…\\.0-9])|(?=\\[)";
-                replyList = Arrays.stream(rawReply.split(splitRegex))
-                        .filter(s -> !s.isBlank())
-                        .map(String::trim)
-                        .map(s -> s.replace("。", ""))
-                        .filter(s -> !s.isBlank())
-                        .toList();
-            } else {
-                replyList = List.of(rawReply);
-            }
+            List<String> replyList = replySegmenter.segment(rawReply, request.isShortMode());
             return ResponseEntity.ok(replyList);
         } catch (Exception e) {
             log.warn("Chat request failed, sessionId={}, reason={}", sessionId, e.toString());
@@ -59,6 +51,20 @@ public class ChatController {
             MDC.remove("chatRound");
             MDC.remove("sessionId");
         }
+    }
+
+    /**
+     * 接收前端 typing 心跳，短暂暂停绑定到该 RP 会话的 gamer 行动。
+     * <p>
+     * 该入口不写聊天记忆，也不触发 RP 回复；输入停止后由交互调度 TTL 自动恢复行动。
+     *
+     * @param sessionId 前端当前 RP 会话 id
+     * @return 已接收的空响应
+     */
+    @PostMapping("/typing")
+    public ResponseEntity<Void> typing(@RequestParam(required = false) String sessionId) {
+        interactionCoordinator.observeUserActivity(normalizeSessionId(sessionId));
+        return ResponseEntity.accepted().build();
     }
 
     private HttpStatus statusFor(Exception e) {

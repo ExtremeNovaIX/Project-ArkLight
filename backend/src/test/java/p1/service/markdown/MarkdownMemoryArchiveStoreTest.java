@@ -2,14 +2,14 @@ package p1.service.markdown;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import p1.config.prop.AssistantProperties;
 import p1.component.agent.memory.model.ArchiveLink;
+import p1.config.prop.AssistantProperties;
 import p1.infrastructure.markdown.MarkdownFileAccess;
 import p1.infrastructure.markdown.MarkdownMemoryArchiveStore;
 import p1.infrastructure.markdown.assembler.MemoryArchiveMdAssembler;
-import p1.model.document.MemoryArchiveDocument;
 import p1.infrastructure.markdown.io.MarkdownFrontmatterIO;
 import p1.infrastructure.markdown.model.MarkdownDocument;
+import p1.model.document.MemoryArchiveDocument;
 
 import java.nio.file.Files;
 import java.nio.file.Path;

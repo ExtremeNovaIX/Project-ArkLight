@@ -1,12 +1,11 @@
 package p1.benchmark.halumem;
 
-import dev.langchain4j.data.message.ChatMessage;
 import org.junit.jupiter.api.Test;
-import p1.component.agent.context.SummaryCacheManager;
 import p1.component.agent.memory.MemoryCompressionPipeline;
 import p1.component.agent.memory.MemoryWriteService;
 import p1.component.agent.memory.model.ExtractedMemoryEvent;
 import p1.component.agent.memory.model.FactExtractionPipelineResult;
+import p1.component.agent.rp.context.SummaryCacheManager;
 import p1.model.document.MemoryArchiveDocument;
 import p1.service.markdown.MemoryArchiveStore;
 
@@ -16,9 +15,7 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 class HaluMemIngestionServiceTest {
 

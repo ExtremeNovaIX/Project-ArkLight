@@ -8,8 +8,8 @@ import p1.infrastructure.markdown.core.FrontmatterBuilder;
 import p1.infrastructure.markdown.core.FrontmatterReader;
 import p1.infrastructure.markdown.core.MarkdownBodyBuilder;
 import p1.infrastructure.markdown.core.MarkdownSections;
-import p1.model.document.MemoryArchiveDocument;
 import p1.infrastructure.markdown.model.MarkdownDocument;
+import p1.model.document.MemoryArchiveDocument;
 
 import java.util.LinkedHashSet;
 import java.util.List;

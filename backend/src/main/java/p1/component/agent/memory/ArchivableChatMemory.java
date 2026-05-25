@@ -6,9 +6,9 @@ import lombok.extern.slf4j.Slf4j;
 import p1.component.agent.memory.model.DialogueBatch;
 import p1.config.prop.AssistantProperties;
 import p1.config.prop.LockProperties;
+import p1.infrastructure.markdown.model.DialogueBatchMessage;
 import p1.model.ChatLogEntity;
 import p1.service.ChatLogRepository;
-import p1.infrastructure.markdown.model.DialogueBatchMessage;
 import p1.service.markdown.RawMdService;
 import p1.utils.ChatMessageUtil;
 

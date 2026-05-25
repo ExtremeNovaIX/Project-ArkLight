@@ -4,9 +4,9 @@ import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.UserMessage;
 import org.junit.jupiter.api.Test;
-import p1.component.agent.context.SummaryCacheManager;
 import p1.component.agent.memory.model.ExtractedMemoryEvent;
 import p1.component.agent.memory.model.FactExtractionPipelineResult;
+import p1.component.agent.rp.context.SummaryCacheManager;
 
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -14,9 +14,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentCaptor.forClass;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 class MemoryAsyncCompressorTest {
 

@@ -8,10 +8,10 @@ import org.junit.jupiter.api.Test;
 import p1.component.agent.task.checker.TaskCheckerAgent;
 import p1.component.agent.task.checker.TaskCheckerAiService;
 import p1.component.agent.task.checker.TaskCheckerVerdict;
-import p1.component.agent.task.supervisor.TaskSupervisorAgent;
 import p1.component.agent.task.factory.TaskSupervisorAiServiceFactory;
 import p1.component.agent.task.state.TaskBlackboard;
 import p1.component.agent.task.state.TaskExecuteResult;
+import p1.component.agent.task.supervisor.TaskSupervisorAgent;
 import p1.component.agent.task.supervisor.TaskSupervisorFinalDecision;
 import p1.component.agent.tools.MemorySearchTools;
 import p1.model.ChatLogEntity;
@@ -22,9 +22,7 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 

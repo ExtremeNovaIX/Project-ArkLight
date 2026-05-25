@@ -4,10 +4,10 @@ import org.springframework.stereotype.Component;
 import p1.infrastructure.markdown.core.FrontmatterBuilder;
 import p1.infrastructure.markdown.core.FrontmatterReader;
 import p1.infrastructure.markdown.core.MarkdownBodyBuilder;
-import p1.model.enums.MessageRole;
 import p1.infrastructure.markdown.model.DialogueBatchMessage;
 import p1.infrastructure.markdown.model.MarkdownDocument;
 import p1.infrastructure.markdown.model.RawBatchDocument;
+import p1.model.enums.MessageRole;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;

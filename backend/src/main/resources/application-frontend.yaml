@@ -1,0 +1,44 @@
+frontend:
+  settings:
+    # 前端默认连接的后端地址。
+    backend-base-url: http://localhost:8080
+    # 默认角色名；为空时由前端或请求决定。
+    character-name: ""
+    # 工作区展示名称。
+    workspace-name: ArkLight
+    # 操作者展示名称。
+    operator-name: Local
+  web:
+    settings:
+      # Web 前端默认主题 id。
+      theme-id: arklight
+      # Web 前端默认会话 id；为空时使用前端生成值。
+      session-id: ""
+      # Web 前端是否启用启动动画。
+      boot-animation-enabled: true
+      # Web 前端启动动画时长，单位毫秒。
+      boot-duration-ms: 3500
+      # Web 前端展示回复前的人工延迟，单位毫秒。
+      response-delay-ms: 1000
+      # Web 前端默认是否按短句模式切分回复。
+      short-mode-enabled: true
+      # Web 前端背景粒子数量。
+      mote-count: 42
+  qt:
+    settings:
+      # Qt 前端默认语言 id。
+      language-id: en
+      # Qt 前端默认主题 id。
+      theme-id: system
+      # Qt 前端默认会话 id。
+      session-id: qt-session
+      # Qt 前端是否启用启动动画。
+      boot-animation-enabled: true
+      # Qt 前端启动动画时长，单位毫秒。
+      boot-duration-ms: 1200
+      # Qt 前端展示回复前的人工延迟，单位毫秒。
+      response-delay-ms: 800
+      # Qt 前端背景粒子数量。
+      mote-count: 28
+      # Qt 前端 UI 缩放百分比。
+      ui-scale-percent: 100

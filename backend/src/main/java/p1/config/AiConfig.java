@@ -1,34 +1,15 @@
 package p1.config;
 
-import dev.langchain4j.http.client.jdk.JdkHttpClientBuilder;
-import dev.langchain4j.memory.chat.ChatMemoryProvider;
-import dev.langchain4j.model.chat.Capability;
 import dev.langchain4j.model.chat.ChatModel;
-import dev.langchain4j.model.chat.listener.ChatModelListener;
+import dev.langchain4j.model.chat.StreamingChatModel;
 import dev.langchain4j.model.embedding.EmbeddingModel;
-import dev.langchain4j.model.openai.OpenAiChatModel;
-import dev.langchain4j.model.openai.OpenAiEmbeddingModel;
-import dev.langchain4j.service.AiServices;
-import lombok.AllArgsConstructor;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.util.StringUtils;
-import p1.component.agent.aiservice.TestAiService;
-import p1.component.agent.context.RpRequestTimeAppender;
-import p1.component.agent.core.RpAgent;
-import p1.component.agent.memory.ArchivableChatMemory;
-import p1.component.agent.memory.ChatMemoryAppender;
-import p1.component.agent.memory.FactEvaluatorAiService;
-import p1.component.agent.memory.FactExtractionAiService;
-import p1.component.agent.memory.MemoryAsyncCompressor;
-import p1.benchmark.halumem.HaluMemMemoryJudgeAiService;
-import p1.benchmark.halumem.HaluMemQaAnswerAiService;
-import p1.benchmark.halumem.HaluMemQaJudgeAiService;
-import p1.component.agent.task.checker.TaskCheckerAiService;
-import p1.component.agent.tools.CallSolverTool;
+import p1.component.agent.factory.ChatModelFactory;
+import p1.component.agent.factory.EmbeddingModelFactory;
 import p1.component.log.AiServiceLoggingListener;
 import p1.component.log.AssistantLoggingListener;
 import p1.config.prop.AssistantProperties;
@@ -37,261 +18,140 @@ import p1.service.ChatLogRepository;
 import p1.service.markdown.RawMdService;
 import p1.utils.SessionUtil;
 
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.time.Duration;
-import java.util.Collections;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-
+/**
+ * AI 模型 Bean 配置。
+ * <p>
+ * 该类只负责把 yaml 中的模型配置转成 LangChain4j 模型实例；
+ * 各类 AiService 组装和聊天记忆 provider 由独立配置类负责。
+ */
 @Configuration
-@AllArgsConstructor
+@RequiredArgsConstructor
 @Slf4j
 public class AiConfig {
 
     private final AssistantProperties props;
-    private final Map<String, ArchivableChatMemory> memoryCache = new ConcurrentHashMap<>();
     private final AiServiceLoggingListener aiServiceLoggingListener;
     private final AssistantLoggingListener assistantLoggingListener;
+    private final ChatModelFactory chatModelFactory;
+    private final EmbeddingModelFactory embeddingModelFactory;
 
+    /**
+     * 构建默认同步对话模型。
+     *
+     * @return 默认对话模型
+     */
     @Bean
     public ChatModel chatLanguageModel() {
-        AssistantProperties.ChatModelConfig chatModelConfig = props.activeChatModel();
-        return buildChatModel(chatModelConfig, assistantLoggingListener, null);
+        return chatModelFactory.buildChatModel(props.activeChatModel(), assistantLoggingListener, null);
     }
 
-    @Bean(name = "rpChatModel")
-    public ChatModel rpChatModel() {
-        AssistantProperties.ChatModelConfig chatModelConfig = props.activeChatModel();
-        return buildChatModel(chatModelConfig, assistantLoggingListener, 0.8);
-    }
-
+    /**
+     * 构建后台任务对话模型。
+     *
+     * @return 后台任务模型
+     */
     @Bean(name = "backendChatModel")
     public ChatModel backendChatModel() {
-        AssistantProperties.ChatModelConfig config = props.activeChatModel();
-        return buildChatModel(config, aiServiceLoggingListener, 0.0);
+        return chatModelFactory.buildChatModel(props.activeChatModel(), aiServiceLoggingListener, 0.0);
     }
 
+    /**
+     * 构建结构化输出更稳定的监督模型。
+     *
+     * @return 监督任务模型
+     */
     @Bean(name = "supervisorChatModel")
     public ChatModel supervisorChatModel() {
-        AssistantProperties.ChatModelConfig config = props.activeChatModel();
-        return buildChatModel(config, aiServiceLoggingListener, 0.0, true);
+        return chatModelFactory.buildChatModel(props.activeChatModel(), aiServiceLoggingListener, 0.0, true);
     }
 
-    @Bean(name = "testChatModel")
-    public ChatModel testChatModel() {
-        AssistantProperties.ChatModelConfig chatModelConfig = props.getTestAi().getChatModel();
-        return buildChatModel(chatModelConfig, null, 1.0);
+    /**
+     * 构建 gamer 流式模型。
+     *
+     * @return gamer 流式模型
+     */
+    @Bean(name = "gamerStreamingChatModel")
+    public StreamingChatModel gamerStreamingChatModel() {
+        return chatModelFactory.buildStreamingChatModel(gamerChatModelConfig(), aiServiceLoggingListener, 0.3);
     }
 
-    @Bean
-    public RpAgent rpAgent(@Qualifier("rpChatModel") ChatModel chatModel,
-                           ChatMemoryProvider chatMemoryProvider,
-                           RpRequestTimeAppender rpRequestTimeAppender,
-                           CallSolverTool callSolverTool) {
-        return AiServices.builder(RpAgent.class)
-                .chatModel(chatModel)
-                .chatMemoryProvider(chatMemoryProvider)
-                .chatRequestTransformer(rpRequestTimeAppender::augment)
-                .tools(callSolverTool)
-                .build();
+    /**
+     * 构建 RP 流式对话模型。
+     * <p>
+     * 第一阶段仍可在 HTTP 入口汇总最终文本，但内部必须以 stream 生命周期判断
+     * RP 是否已经开口，给后续 TTS 和 gamer 调度提供稳定时序。
+     *
+     * @return RP 流式模型
+     */
+    @Bean(name = "rpStreamingChatModel")
+    public StreamingChatModel rpStreamingChatModel() {
+        return chatModelFactory.buildStreamingChatModel(props.activeChatModel(), assistantLoggingListener, 0.8);
     }
 
-    @Bean
-    public TestAiService testAssistant(@Qualifier("testChatModel") ChatModel chatModel) {
-        return AiServices.builder(TestAiService.class)
-                .chatModel(chatModel)
-                .build();
-    }
-
-    @Bean
-    public TaskCheckerAiService taskSupervisorCheckerAiService(@Qualifier("supervisorChatModel") ChatModel supervisorChatModel) {
-        return AiServices.builder(TaskCheckerAiService.class)
-                .chatModel(supervisorChatModel)
-                .build();
-    }
-
-    @Bean
-    public FactExtractionAiService factExtractionAiService(@Qualifier("backendChatModel") ChatModel backendChatModel) {
-        return AiServices.builder(FactExtractionAiService.class)
-                .chatModel(backendChatModel)
-                .build();
-    }
-
-    @Bean
-    public FactEvaluatorAiService factScoringAiService(@Qualifier("backendChatModel") ChatModel backendChatModel) {
-        return AiServices.builder(FactEvaluatorAiService.class)
-                .chatModel(backendChatModel)
-                .build();
-    }
-
-    @Bean
-    public HaluMemQaAnswerAiService haluMemQaAnswerAiService(@Qualifier("supervisorChatModel") ChatModel supervisorChatModel) {
-        return AiServices.builder(HaluMemQaAnswerAiService.class)
-                .chatModel(supervisorChatModel)
-                .build();
-    }
-
-    @Bean
-    public HaluMemMemoryJudgeAiService haluMemMemoryJudgeAiService(@Qualifier("supervisorChatModel") ChatModel supervisorChatModel) {
-        return AiServices.builder(HaluMemMemoryJudgeAiService.class)
-                .chatModel(supervisorChatModel)
-                .build();
-    }
-
-    @Bean
-    public HaluMemQaJudgeAiService haluMemQaJudgeAiService(@Qualifier("supervisorChatModel") ChatModel supervisorChatModel) {
-        return AiServices.builder(HaluMemQaJudgeAiService.class)
-                .chatModel(supervisorChatModel)
-                .build();
-    }
-
-    @Bean
-    public ChatMemoryProvider chatMemoryProvider(MemoryAsyncCompressor compressor,
-                                                 ChatMemoryAppender dbAppender,
-                                                 RawMdService rawMdService,
-                                                 LockProperties lockProperties,
-                                                 ChatLogRepository chatLogRepository) {
-        return memoryId -> {
-            String sessionId = SessionUtil.normalizeSessionId(memoryId.toString());
-            return memoryCache.computeIfAbsent(sessionId,
-                    id -> new ArchivableChatMemory(id, compressor, dbAppender, rawMdService, props, lockProperties, chatLogRepository)
-            );
-        };
-    }
-
+    /**
+     * 构建向量模型。
+     *
+     * @return 向量模型
+     */
     @Bean
     public EmbeddingModel embeddingModel() {
-        AssistantProperties.EmbeddingModelConfig embeddingModelConfig = props.activeEmbeddingModel();
-        OpenAiEmbeddingModel.OpenAiEmbeddingModelBuilder builder = OpenAiEmbeddingModel.builder()
-                .baseUrl(embeddingModelConfig.getBaseUrl())
-                .modelName(embeddingModelConfig.getModelName());
-
-        if (StringUtils.hasText(embeddingModelConfig.getApiKey())) {
-            builder.apiKey(embeddingModelConfig.getApiKey());
-        }
-
-        if (isLocalOpenAiCompatibleEndpoint(embeddingModelConfig.getBaseUrl())) {
-            builder.httpClientBuilder(localHttpClientBuilder(Duration.ofSeconds(30)));
-        }
-
-        return builder.build();
+        return embeddingModelFactory.buildEmbeddingModel();
     }
 
+    /**
+     * 在启动日志中打印当前模型来源。
+     *
+     * @return 启动日志任务
+     */
     @Bean
     public ApplicationRunner aiModeStartupLogger() {
         return args -> {
             AssistantProperties.ChatModelConfig chatModel = props.activeChatModel();
             AssistantProperties.EmbeddingModelConfig embeddingModel = props.activeEmbeddingModel();
-            AssistantProperties.ChatModelConfig testChatModel = props.getTestAi().getChatModel();
-            log.info("AI mode: {} | chat-model: {} @ {} | embedding-model: {} @ {}",
+            log.info("LLM mode: {} | chat-model: {} @ {} | embedding-model: {} @ {}",
                     props.getMode(),
                     chatModel.getModelName(),
                     chatModel.getBaseUrl(),
                     embeddingModel.getModelName(),
                     embeddingModel.getBaseUrl());
-            log.info("Test AI model: {} @ {}",
-                    testChatModel.getModelName(),
-                    testChatModel.getBaseUrl());
         };
     }
 
-    private ChatModel buildChatModel(AssistantProperties.ChatModelConfig config,
-                                     ChatModelListener listener,
-                                     Double temperature) {
-        return buildChatModel(config, listener, temperature, false);
+    /**
+     * 构建 gamer 专用模型配置。
+     * <p>
+     * gamer 的操作 JSON 从可见响应流解析。thinking 会拖慢首个 ACTION，
+     * 因此这里只在副本上关闭 thinking，不影响 RP 和 TaskSupervisor。
+     *
+     * @return 禁用 thinking 的 gamer 模型配置副本
+     */
+    private AssistantProperties.ChatModelConfig gamerChatModelConfig() {
+        AssistantProperties.ChatModelConfig copy = copyChatModelConfig(props.activeChatModel());
+        copy.setReturnThinking(false);
+        copy.setSendThinking(false);
+        copy.setReasoningEffort(null);
+        copy.setThinkingType("disabled");
+        return copy;
     }
 
-    private ChatModel buildChatModel(AssistantProperties.ChatModelConfig config,
-                                     ChatModelListener listener,
-                                     Double temperature,
-                                     boolean structuredOutputFriendly) {
-        boolean responseFormatJsonSchemaSupported = supportsResponseFormatJsonSchema(config);
-        OpenAiChatModel.OpenAiChatModelBuilder builder = OpenAiChatModel.builder()
-                .baseUrl(config.getBaseUrl())
-                .modelName(config.getModelName())
-                .timeout(Duration.ofSeconds(config.getTimeoutSeconds()))
-                .logRequests(config.isLogEnabled())
-                .logResponses(config.isLogEnabled());
-
-        if (StringUtils.hasText(config.getApiKey())) {
-            builder.apiKey(config.getApiKey());
-        }
-
-        if (supportsDeepSeekThinkingToggle(config)) {
-            builder.customParameters(Map.of("thinking", Map.of("type", "disabled")));
-        }
-
-        if (isLocalOpenAiCompatibleEndpoint(config.getBaseUrl())) {
-            builder.httpClientBuilder(localHttpClientBuilder(Duration.ofSeconds(config.getTimeoutSeconds())));
-        }
-
-        if (listener != null) {
-            builder.listeners(Collections.singletonList(listener));
-        }
-        if (temperature != null) {
-            builder.temperature(temperature);
-        }
-        if (structuredOutputFriendly) {
-            builder.parallelToolCalls(false);
-            if (responseFormatJsonSchemaSupported) {
-                builder.supportedCapabilities(Capability.RESPONSE_FORMAT_JSON_SCHEMA)
-                        .strictJsonSchema(true);
-            }
-        }
-        return builder.build();
-    }
-
-    private boolean supportsResponseFormatJsonSchema(AssistantProperties.ChatModelConfig config) {
-        String baseUrl = config.getBaseUrl();
-        if (!StringUtils.hasText(baseUrl)) {
-            return false;
-        }
-        try {
-            String host = URI.create(baseUrl).getHost();
-            if (host == null) {
-                return false;
-            }
-            String normalizedHost = host.toLowerCase();
-            return normalizedHost.endsWith("openai.com");
-        } catch (IllegalArgumentException ignored) {
-            return false;
-        }
-    }
-
-    private boolean supportsDeepSeekThinkingToggle(AssistantProperties.ChatModelConfig config) {
-        String baseUrl = config.getBaseUrl();
-        if (!StringUtils.hasText(baseUrl)) {
-            return false;
-        }
-        try {
-            String host = URI.create(baseUrl).getHost();
-            if (host == null) {
-                return false;
-            }
-            String normalizedHost = host.toLowerCase();
-            return normalizedHost.endsWith("deepseek.com");
-        } catch (IllegalArgumentException ignored) {
-            return false;
-        }
-    }
-
-    private boolean isLocalOpenAiCompatibleEndpoint(String baseUrl) {
-        if (!StringUtils.hasText(baseUrl)) {
-            return false;
-        }
-        try {
-            String host = URI.create(baseUrl).getHost();
-            return "127.0.0.1".equals(host) || "localhost".equalsIgnoreCase(host);
-        } catch (IllegalArgumentException ignored) {
-            return false;
-        }
-    }
-
-    private JdkHttpClientBuilder localHttpClientBuilder(Duration readTimeout) {
-        return new JdkHttpClientBuilder()
-                .httpClientBuilder(HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1))
-                .connectTimeout(Duration.ofSeconds(10))
-                .readTimeout(readTimeout);
+    /**
+     * 复制聊天模型配置，避免修改全局 activeChatModel。
+     *
+     * @param source 当前激活的模型配置
+     * @return 可独立修改的配置副本
+     */
+    private AssistantProperties.ChatModelConfig copyChatModelConfig(AssistantProperties.ChatModelConfig source) {
+        AssistantProperties.ChatModelConfig copy = new AssistantProperties.ChatModelConfig();
+        copy.setApiKey(source.getApiKey());
+        copy.setBaseUrl(source.getBaseUrl());
+        copy.setModelName(source.getModelName());
+        copy.setTimeoutSeconds(source.getTimeoutSeconds());
+        copy.setLogEnabled(source.isLogEnabled());
+        copy.setPrompt(source.getPrompt());
+        copy.setReturnThinking(source.isReturnThinking());
+        copy.setSendThinking(source.isSendThinking());
+        copy.setReasoningEffort(source.getReasoningEffort());
+        copy.setThinkingType(source.getThinkingType());
+        return copy;
     }
 }

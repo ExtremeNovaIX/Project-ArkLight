@@ -23,7 +23,7 @@ class TestChatServiceStoryReplayTest {
         Files.writeString(storyPath, "A long enough story body to force chunked replay across the frontend chat chain.");
 
         ChatService chatService = mock(ChatService.class);
-        when(chatService.sendChatToRpAgent(any())).thenReturn("received");
+        when(chatService.sendMsgToRpAgent(any())).thenReturn("received");
 
         TestChatService service = new TestChatService(
                 chatService,
@@ -38,7 +38,7 @@ class TestChatServiceStoryReplayTest {
         assertEquals(response.chunkCount(), response.userMessageCount());
         assertEquals(response.chunkCount(), response.assistantMessageCount());
         assertEquals(Math.min(3, response.chunkCount()), response.previewChunks().size());
-        verify(chatService, times(response.chunkCount())).sendChatToRpAgent(any());
+        verify(chatService, times(response.chunkCount())).sendMsgToRpAgent(any());
     }
 
     @Test

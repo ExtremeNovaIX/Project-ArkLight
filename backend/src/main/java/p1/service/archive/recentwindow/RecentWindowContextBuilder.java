@@ -8,11 +8,7 @@ import p1.model.document.RecentEventGroupDocument;
 import p1.service.markdown.RecentEventGroupMarkdownService;
 
 import java.time.LocalDateTime;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
 
 /**
  * 构建 recent-window 重排所需的上下文。

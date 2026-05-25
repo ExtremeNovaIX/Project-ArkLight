@@ -9,7 +9,6 @@ import org.springframework.stereotype.Service;
 import p1.component.agent.memory.MemoryAsyncCompressor;
 import p1.component.agent.memory.model.DialogueBatch;
 import p1.config.prop.AssistantProperties;
-import p1.config.runtime.RuntimeModelSettingsRegistry;
 import p1.infrastructure.markdown.model.DialogueBatchMessage;
 import p1.infrastructure.markdown.model.RawBatchDocument;
 import p1.service.markdown.RawMdService;
@@ -25,7 +24,6 @@ public class MessageBatchRecoveryService {
     private final MemoryAsyncCompressor memoryAsyncCompressor;
     private final RawMdService rawMdService;
     private final AssistantProperties assistantProperties;
-    private final RuntimeModelSettingsRegistry runtimeModelSettingsRegistry;
 
     @EventListener(ApplicationReadyEvent.class)
     public void recoverPendingDialogueMessages() {
@@ -68,8 +66,8 @@ public class MessageBatchRecoveryService {
         if (batch == null || batch.messages().isEmpty()) {
             return;
         }
-        if (!canRecoverWithCurrentSettings(batch.sessionId())) {
-            log.warn("[对话恢复] sessionId={}, batchId={} 暂停启动恢复，默认 AI 配置不可用，等待 Qt Settings 配置后再触发",
+        if (!canRecoverWithCurrentSettings()) {
+            log.warn("[对话恢复] sessionId={}, batchId={} 暂停启动恢复，yaml 中默认 AI 配置不可用，修正配置后再触发",
                     batch.sessionId(), batch.batchId());
             return;
         }
@@ -108,10 +106,7 @@ public class MessageBatchRecoveryService {
                 .toList();
     }
 
-    private boolean canRecoverWithCurrentSettings(String sessionId) {
-        if (runtimeModelSettingsRegistry.find(sessionId).isPresent()) {
-            return true;
-        }
+    private boolean canRecoverWithCurrentSettings() {
         AssistantProperties.ChatModelConfig chatModel = assistantProperties.activeChatModel();
         return chatModel != null
                 && hasRealText(chatModel.getBaseUrl())

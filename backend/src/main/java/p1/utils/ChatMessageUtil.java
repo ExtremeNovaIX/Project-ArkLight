@@ -31,10 +31,13 @@ public class ChatMessageUtil {
                 }
             }
             case AiMessage aiMsg -> {
+                String body;
                 if (aiMsg.hasToolExecutionRequests()) {
-                    return aiMsg.toolExecutionRequests().toString();
+                    body = aiMsg.toolExecutionRequests().toString();
+                } else {
+                    body = aiMsg.text() != null ? aiMsg.text() : "[N/A]";
                 }
-                return aiMsg.text() != null ? aiMsg.text() : "[N/A]";
+                return withReasoningContent(aiMsg.thinking(), body);
             }
             case SystemMessage sysMsg -> {
                 return sysMsg.text();
@@ -120,22 +123,53 @@ public class ChatMessageUtil {
      * 为消息添加时间戳前缀
      */
     public static ChatMessage withTimestamp(ChatMessage message, LocalDateTime time) {
-        String timedText = TimedMessageUtil.prefix(time, extractText(message));
-
         return switch (message) {
             case null -> null;
-            case UserMessage ignored -> UserMessage.from(timedText);
-            case SystemMessage ignored -> SystemMessage.from(timedText);
+            case UserMessage ignored -> UserMessage.from(TimedMessageUtil.prefix(time, extractText(message)));
+            case SystemMessage ignored -> SystemMessage.from(TimedMessageUtil.prefix(time, extractText(message)));
             case ToolExecutionResultMessage toolMessage ->
-                    ToolExecutionResultMessage.from(toolMessage.id(), toolMessage.toolName(), timedText);
+                    ToolExecutionResultMessage.from(
+                            toolMessage.id(),
+                            toolMessage.toolName(),
+                            TimedMessageUtil.prefix(time, extractText(message)));
             case AiMessage aiMessage -> {
                 List<ToolExecutionRequest> requests = aiMessage.toolExecutionRequests();
-                if (requests != null && !requests.isEmpty()) {
-                    yield AiMessage.from(timedText, requests);
+                String text = aiMessage.text();
+                if ((text == null || text.isBlank()) && requests != null && !requests.isEmpty()) {
+                    text = requests.toString();
                 }
-                yield AiMessage.from(timedText);
+                String timedText = TimedMessageUtil.prefix(time, text == null ? "[N/A]" : text);
+                if (requests != null && !requests.isEmpty()) {
+                    yield AiMessage.builder()
+                            .text(timedText)
+                            .thinking(aiMessage.thinking())
+                            .toolExecutionRequests(requests)
+                            .attributes(aiMessage.attributes())
+                            .build();
+                }
+                yield AiMessage.builder()
+                        .text(timedText)
+                        .thinking(aiMessage.thinking())
+                        .attributes(aiMessage.attributes())
+                        .build();
             }
             default -> message;
         };
+    }
+
+    /**
+     * 把模型返回的 reasoning_content 作为显式文本片段保留下来。
+     * <p>
+     * 结构化 AiMessage.thinking() 会继续留在消息对象里；这里主要服务于 markdown
+     * 持久化、压缩输入和日志格式化。
+     */
+    private static String withReasoningContent(String reasoningContent, String body) {
+        if (reasoningContent == null || reasoningContent.isBlank()) {
+            return body == null ? "[N/A]" : body;
+        }
+        return "<reasoning_content>\n"
+                + reasoningContent.trim()
+                + "\n</reasoning_content>\n"
+                + (body == null ? "[N/A]" : body);
     }
 }

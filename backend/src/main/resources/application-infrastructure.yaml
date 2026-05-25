@@ -1,0 +1,34 @@
+spring:
+  h2:
+    console:
+      # 是否启用内置 H2 控制台。
+      enabled: true
+      # H2 控制台访问路径。
+      path: /h2-console
+      settings:
+        # 是否允许非本机浏览器访问 H2 控制台。
+        web-allow-others: true
+
+  datasource:
+    # 主业务 H2 数据库文件地址。
+    url: jdbc:h2:file:./data/assistant_db;DB_CLOSE_ON_EXIT=FALSE;AUTO_RECONNECT=TRUE
+    # 主业务数据库 JDBC 驱动。
+    driver-class-name: org.h2.Driver
+    # 主业务数据库用户名。
+    username: sa
+    # 主业务数据库密码；默认 H2 开发库为空。
+    password:
+
+  jpa:
+    # 是否打印 Hibernate SQL。
+    show-sql: false
+    hibernate:
+      # Hibernate DDL 策略；update 会保留已有数据并补齐结构。
+      ddl-auto: update
+
+logging:
+  level:
+    # Hibernate SQL 日志级别。
+    org.hibernate.SQL: WARN
+    # Hibernate JDBC 参数绑定日志级别。
+    org.hibernate.orm.jdbc.bind: WARN

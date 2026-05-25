@@ -1,6 +1,7 @@
 package p1.component.agent.context;
 
 import org.junit.jupiter.api.Test;
+import p1.component.agent.rp.context.SummaryCacheManager;
 import p1.config.prop.AssistantProperties;
 
 import java.time.LocalDateTime;

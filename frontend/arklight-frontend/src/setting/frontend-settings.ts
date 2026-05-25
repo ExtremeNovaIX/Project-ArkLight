@@ -1,5 +1,6 @@
 import { ref, watch } from 'vue';
 import type { FrontendSettings } from './types';
+import { loadExternalFrontendSettings } from './external-config';
 import { defaultThemeId, getThemeDefaults, themeOptions } from '../theme/theme-registry';
 import type { ThemeId } from '../theme/types';
 
@@ -64,6 +65,25 @@ export const loadFrontendSettings = () => {
   }
 };
 
+export const hasSavedFrontendSettings = () => {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+  return Boolean(window.localStorage.getItem(FRONTEND_SETTINGS_STORAGE_KEY));
+};
+
+export const loadExternalDefaultFrontendSettings = async () => {
+  const externalSettings = await loadExternalFrontendSettings();
+  if (!externalSettings) {
+    return null;
+  }
+
+  return normalizeFrontendSettings({
+    ...defaultFrontendSettings,
+    ...externalSettings
+  });
+};
+
 export const saveFrontendSettings = (settings: FrontendSettings) => {
   if (typeof window === 'undefined') {
     return;
@@ -87,4 +107,20 @@ export const createFrontendSettings = () => {
   );
 
   return settings;
+};
+
+export const applyExternalFrontendDefaults = async (
+  settings: ReturnType<typeof createFrontendSettings>
+) => {
+  const externalDefaults = await loadExternalDefaultFrontendSettings();
+  if (!externalDefaults) {
+    return null;
+  }
+
+  if (hasSavedFrontendSettings()) {
+    return externalDefaults;
+  }
+
+  settings.value = externalDefaults;
+  return externalDefaults;
 };

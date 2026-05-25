@@ -1,6 +1,6 @@
 package p1.component.agent.task.state;
 
-import p1.component.agent.exception.TaskSupervisorRoundLimitExceededException;
+import p1.component.agent.task.exception.TaskSupervisorRoundLimitExceededException;
 
 public final class TaskSupervisorRoundBudget {
 

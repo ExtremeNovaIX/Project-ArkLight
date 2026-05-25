@@ -1,0 +1,34 @@
+mcp:
+  catalog:
+    STS2MCP:
+      # 在前端或日志中展示的 MCP 游戏名。
+      display-name: "杀戮尖塔2"
+      # MCP 条目用途和安装前提说明。
+      description: "杀戮尖塔2 MCP Mod。需要先安装 STS2_MCP.dll 到游戏 mods 目录，并确保 uv 已安装。"
+      # MCP 连接方式。
+      transport: stdio
+      # 该游戏使用的 GameAdapter id。
+      adapter: sts2
+      # 读取当前游戏状态的 MCP 工具名。
+      state-tool-name: get_game_state
+      # 读取状态后等待状态稳定的最大重试次数。
+      state-settle-max-attempts: 4
+      # 状态稳定重读之间的等待时间，单位毫秒。
+      state-settle-delay-ms: 250
+      # 启动 MCP server 的命令。
+      command: "uv"
+      # 启动 MCP server 的命令参数，installPath 会在安装目录解析后替换。
+      args: ["run", "--directory", "{{installPath}}", "python", "server.py"]
+      # MCP server 建连超时时间，单位秒。
+      connect-timeout-seconds: 30
+      # 注入给 gamer 的游戏策略提示。
+      gameplay-guidelines:
+        - 战斗中快速评估能量、防御需求、是否能斩杀；明显高收益路径可直接执行，不要穷举所有组合。
+        - 算好你操作队列的能量花费，超出能量上限的操作会被直接忽视。
+        - 当敌人没有攻击意图时是你是输出、成长（打出能力牌）的好时机。
+        - 地图选择时权衡火堆、商店、精英和普通战斗的风险收益。
+        - 平衡攻击、防御和成长能力，避免只追求短期输出。
+        - 商店优先考虑关键遗物和补充高价值卡牌，其次考虑删牌。
+        - 每回合评估剩余能量和手牌；能产生有效收益就继续行动，否则结束回合。
+        - 抽牌、弃牌、随机、领取奖励、打开选择界面等会改变行动窗口的操作必须放在本批队列末尾；触发状态变化后后台会中断剩余队列并要求重新计划。
+        - 有些时候不是所有卡都必拿，卡组越大转速越慢，你需要控制卡组大小，必要时可以跳过一些对当前构筑没用的卡牌奖励。

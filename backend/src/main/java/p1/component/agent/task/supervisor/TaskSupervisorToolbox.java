@@ -5,7 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.agent.tool.Tool;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
-import p1.component.agent.task.promptrenderer.TaskSupervisorToolRenderer;
+import p1.component.agent.task.context.TaskSupervisorToolRenderer;
 import p1.component.agent.task.state.TaskBlackboard;
 import p1.component.agent.task.state.TaskSupervisorBlackboardAppendResult;
 import p1.component.agent.task.state.TaskSupervisorBlackboardEntry;

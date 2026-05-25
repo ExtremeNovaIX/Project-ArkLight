@@ -2,9 +2,9 @@ package p1.service.markdown;
 
 import org.junit.jupiter.api.Test;
 import p1.component.agent.memory.model.ArchiveLink;
-import p1.model.document.MemoryArchiveDocument;
-import p1.infrastructure.markdown.model.MarkdownDocument;
 import p1.infrastructure.markdown.assembler.MemoryArchiveMdAssembler;
+import p1.infrastructure.markdown.model.MarkdownDocument;
+import p1.model.document.MemoryArchiveDocument;
 
 import java.time.LocalDateTime;
 import java.util.List;

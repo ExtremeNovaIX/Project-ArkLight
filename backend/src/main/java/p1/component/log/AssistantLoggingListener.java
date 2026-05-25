@@ -15,7 +15,9 @@ import org.springframework.boot.ansi.AnsiColor;
 import org.springframework.boot.ansi.AnsiOutput;
 import org.springframework.boot.ansi.AnsiStyle;
 import org.springframework.stereotype.Component;
+import p1.component.agent.reasoning.ReasoningContentRecorder;
 import p1.infrastructure.mdc.ChatSessionMetrics;
+import p1.utils.LogUtil;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -28,6 +30,7 @@ import static p1.utils.SessionUtil.normalizeSessionId;
 public class AssistantLoggingListener implements ChatModelListener {
 
     private final ChatSessionMetrics chatSessionMetrics;
+    private final ReasoningContentRecorder reasoningContentRecorder;
     private final Map<String, String> pendingInputs = new ConcurrentHashMap<>();
 
     @Override
@@ -39,6 +42,8 @@ public class AssistantLoggingListener implements ChatModelListener {
         String sessionId = normalizeSessionId(MDC.get("sessionId"));
         int currentRound = resolveCurrentRound(sessionId);
         String cacheKey = buildCacheKey(sessionId, currentRound);
+        String reasoningContent = response.aiMessage() == null ? "" : response.aiMessage().thinking();
+        reasoningContentRecorder.recordLatest(sessionId, reasoningContent);
 
         String currentInput = extractUserInput(request);
         if (!currentInput.isBlank()) {
@@ -66,7 +71,12 @@ public class AssistantLoggingListener implements ChatModelListener {
                 .append(AnsiOutput.toString(AnsiColor.WHITE, "[SessionId]: ", AnsiColor.DEFAULT, sessionId)).append("\n")
                 .append(AnsiOutput.toString(AnsiColor.WHITE, "[当前对话轮数]: ", AnsiColor.DEFAULT, currentRound)).append("\n")
                 .append(AnsiOutput.toString(AnsiColor.CYAN, "[请求]: " + input)).append("\n")
-                .append(AnsiOutput.toString(AnsiColor.BRIGHT_WHITE, "[输出]: " + aiOutput.trim())).append("\n")
+                .append(AnsiOutput.toString(AnsiColor.BRIGHT_WHITE, "[输出]: " + aiOutput.trim())).append("\n");
+        if (reasoningContent != null && !reasoningContent.isBlank()) {
+            sb.append(AnsiOutput.toString(AnsiColor.BRIGHT_CYAN,
+                    "[推理内容]: " + LogUtil.trimTail(reasoningContent.trim(), 1200))).append("\n");
+        }
+        sb
                 .append(AnsiOutput.toString(AnsiColor.WHITE, "[本次调用 Tokens]: ",
                         AnsiColor.BRIGHT_YELLOW, "[I:", currentTokens.input(), " O:", currentTokens.output(), " T:", currentTokens.total(), "]",
                         AnsiColor.DEFAULT)).append("\n")

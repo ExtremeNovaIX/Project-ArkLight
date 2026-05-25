@@ -1,9 +1,9 @@
 package p1.component.agent.task;
 
 import org.junit.jupiter.api.Test;
-import p1.component.agent.task.promptrenderer.TaskBlackboardRenderer;
-import p1.component.agent.task.promptrenderer.TaskCheckerPromptRenderer;
-import p1.component.agent.task.promptrenderer.TaskSupervisorPromptRenderer;
+import p1.component.agent.task.context.TaskBlackboardRenderer;
+import p1.component.agent.task.context.TaskCheckerPromptRenderer;
+import p1.component.agent.task.context.TaskSupervisorPromptRenderer;
 import p1.component.agent.task.state.TaskBlackboard;
 import p1.component.agent.task.supervisor.TaskSupervisorFinalDecision;
 

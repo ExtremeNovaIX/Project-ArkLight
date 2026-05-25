@@ -13,6 +13,7 @@ import org.springframework.boot.ansi.AnsiColor;
 import org.springframework.boot.ansi.AnsiOutput;
 import org.springframework.boot.ansi.AnsiStyle;
 import org.springframework.stereotype.Component;
+import p1.component.agent.reasoning.ReasoningContentRecorder;
 import p1.infrastructure.mdc.ChatSessionMetrics;
 import p1.utils.ChatMessageUtil;
 import p1.utils.LogUtil;
@@ -25,6 +26,7 @@ import static p1.utils.SessionUtil.normalizeSessionId;
 public class AiServiceLoggingListener implements ChatModelListener {
 
     private final ChatSessionMetrics chatSessionMetrics;
+    private final ReasoningContentRecorder reasoningContentRecorder;
 
     @Override
     public void onResponse(ChatModelResponseContext context) {
@@ -37,7 +39,12 @@ public class AiServiceLoggingListener implements ChatModelListener {
         ChatSessionMetrics.TokenSnapshot currentTokens = ChatSessionMetrics.TokenSnapshot.from(usage);
         ChatSessionMetrics.TokenSnapshot tokenTotals = chatSessionMetrics.addAndGetTokenTotals(sessionId, usage);
 
-        String aiOutput = response.aiMessage().text() == null ? "[N/A]" : response.aiMessage().text();
+        String reasoningContent = response.aiMessage() == null ? "" : response.aiMessage().thinking();
+        reasoningContentRecorder.recordLatest(sessionId, reasoningContent);
+
+        String aiOutput = response.aiMessage() == null || response.aiMessage().text() == null
+                ? "[N/A]"
+                : response.aiMessage().text();
 
         StringBuilder sb = new StringBuilder();
         sb.append("\n")
@@ -49,6 +56,10 @@ public class AiServiceLoggingListener implements ChatModelListener {
         sb.append(AnsiOutput.toString(AnsiColor.WHITE, "[服务信息]: ", AnsiColor.DEFAULT, MDC.get("serviceInfo"))).append("\n");
         sb.append(AnsiOutput.toString(AnsiColor.WHITE, "[SessionId]: ", AnsiColor.DEFAULT, sessionId)).append("\n");
         sb.append(AnsiOutput.toString(AnsiColor.WHITE, "[请求]: ", AnsiColor.DEFAULT, LogUtil.trimTail(inputStr, 600))).append("\n");
+        if (reasoningContent != null && !reasoningContent.isBlank()) {
+            sb.append(AnsiOutput.toString(AnsiColor.BRIGHT_GREEN, "[推理内容]: ",
+                    AnsiColor.DEFAULT, reasoningContent.trim())).append("\n");
+        }
         sb.append(AnsiOutput.toString(AnsiColor.BRIGHT_GREEN, "[最终响应]: ", AnsiColor.DEFAULT, aiOutput.trim())).append("\n");
         sb.append(AnsiOutput.toString(AnsiColor.WHITE, "[本次调用 Tokens]: ",
                 AnsiColor.BRIGHT_YELLOW, "[I:", currentTokens.input(), " O:", currentTokens.output(), " T:", currentTokens.total(), "]\n",
@@ -65,8 +76,8 @@ public class AiServiceLoggingListener implements ChatModelListener {
                 "[Hit:", tokenTotals.cachedInput(), " I:", tokenTotals.input(), " Rate:", tokenTotals.cachedInputRatePercent(), "]\n",
                 AnsiColor.DEFAULT));
         sb.append(AnsiOutput.toString(AnsiColor.BRIGHT_GREEN, AnsiStyle.BOLD,
-                "==================== [后台LLM跟踪结束] ====================",
-                AnsiStyle.NORMAL))
+                        "==================== [后台LLM跟踪结束] ====================",
+                        AnsiStyle.NORMAL))
                 .append("\n");
 
         log.info(sb.toString());

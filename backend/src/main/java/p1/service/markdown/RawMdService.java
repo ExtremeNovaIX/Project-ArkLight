@@ -4,12 +4,12 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
-import p1.model.enums.MessageRole;
 import p1.infrastructure.markdown.assembler.RawMdAssembler;
 import p1.infrastructure.markdown.model.DialogueBatchMessage;
 import p1.infrastructure.markdown.model.MarkdownDocument;
 import p1.infrastructure.markdown.model.RawBatchDocument;
 import p1.infrastructure.markdown.model.RawDialogueMessageRef;
+import p1.model.enums.MessageRole;
 import p1.service.lock.SessionLockExecutor;
 
 import java.time.Duration;

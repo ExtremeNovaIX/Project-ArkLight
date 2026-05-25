@@ -6,13 +6,7 @@ import p1.component.agent.tools.MemorySearchTools;
 import p1.model.document.MemoryArchiveDocument;
 import p1.service.markdown.MemoryArchiveStore;
 
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
+import java.util.*;
 
 final class HaluMemRenderSupport {
 

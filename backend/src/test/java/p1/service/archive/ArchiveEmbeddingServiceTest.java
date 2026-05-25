@@ -7,7 +7,6 @@ import dev.langchain4j.model.output.Response;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import p1.config.prop.AssistantProperties;
-import p1.config.runtime.RuntimeModelSettingsRegistry;
 import p1.infrastructure.markdown.MarkdownFileAccess;
 import p1.infrastructure.markdown.MarkdownMemoryArchiveStore;
 import p1.infrastructure.markdown.assembler.MemoryArchiveMdAssembler;
@@ -49,9 +48,7 @@ class ArchiveEmbeddingServiceTest {
         EmbeddingModel embeddingModel = new TestEmbeddingModel();
         EmbeddingService embeddingService = new EmbeddingService(
                 new SessionMemoryVectorStoreFactory(props),
-                embeddingModel,
-                props,
-                new RuntimeModelSettingsRegistry()
+                embeddingModel
         );
         ArchiveEmbeddingService service = new ArchiveEmbeddingService(embeddingService, archiveService);
 

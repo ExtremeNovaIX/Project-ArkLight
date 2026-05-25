@@ -3,8 +3,8 @@ package p1.infrastructure.markdown.assembler;
 import org.springframework.stereotype.Component;
 import p1.infrastructure.markdown.core.FrontmatterBuilder;
 import p1.infrastructure.markdown.core.MarkdownBodyBuilder;
-import p1.model.enums.MessageRole;
 import p1.infrastructure.markdown.model.MarkdownDocument;
+import p1.model.enums.MessageRole;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;

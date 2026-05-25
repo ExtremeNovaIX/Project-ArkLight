@@ -40,14 +40,13 @@ public class StoryReplayService {
                 DEFAULT_CHARACTER_NAME
         );
         Integer targetLength = request == null ? null : request.getTargetLength();
-        return replayStory(resolveStoryPath(STORY_DIRECTORY), sessionId, characterName, targetLength, request);
+        return replayStory(resolveStoryPath(STORY_DIRECTORY), sessionId, characterName, targetLength);
     }
 
     private StoryReplayResultDTO replayStory(Path storyPath,
                                              String sessionId,
                                              String characterName,
-                                             Integer targetLength,
-                                             StoryReplayRequestDTO request) {
+                                             Integer targetLength) {
         AtomicInteger assistantReplyCount = new AtomicInteger();
         AtomicInteger roundCounter = new AtomicInteger();
 
@@ -59,7 +58,6 @@ public class StoryReplayService {
             chatRequest.setMessage(chunk);
             chatRequest.setCharacterName(characterName);
             chatRequest.setShortMode(false);
-            applyModelOverrides(chatRequest, request);
 
             MDC.put("sessionId", sessionId);
             MDC.put("chatRound", String.valueOf(round));
@@ -139,18 +137,6 @@ public class StoryReplayService {
 
         throw new IllegalStateException("Missing story file. Expected: "
                 + markdownPath.toAbsolutePath() + " or " + textPath.toAbsolutePath());
-    }
-
-    private void applyModelOverrides(ChatRequestDTO chatRequest, StoryReplayRequestDTO request) {
-        if (request == null) {
-            return;
-        }
-        chatRequest.setAiBaseUrl(request.getAiBaseUrl());
-        chatRequest.setAiApiKey(request.getAiApiKey());
-        chatRequest.setAiModelName(request.getAiModelName());
-        chatRequest.setEmbeddingBaseUrl(request.getEmbeddingBaseUrl());
-        chatRequest.setEmbeddingApiKey(request.getEmbeddingApiKey());
-        chatRequest.setEmbeddingModelName(request.getEmbeddingModelName());
     }
 
     private String firstText(String value, String fallback) {

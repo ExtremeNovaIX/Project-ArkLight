@@ -1,12 +1,12 @@
 package p1.infrastructure.markdown.assembler;
 
 import org.springframework.stereotype.Component;
+import p1.infrastructure.markdown.codec.RecentEventGroupLinkCodec;
 import p1.infrastructure.markdown.core.FrontmatterBuilder;
 import p1.infrastructure.markdown.core.FrontmatterReader;
 import p1.infrastructure.markdown.core.MarkdownBodyBuilder;
-import p1.infrastructure.markdown.codec.RecentEventGroupLinkCodec;
-import p1.model.document.RecentEventGroupDocument;
 import p1.infrastructure.markdown.model.MarkdownDocument;
+import p1.model.document.RecentEventGroupDocument;
 
 import java.util.List;
 import java.util.Map;

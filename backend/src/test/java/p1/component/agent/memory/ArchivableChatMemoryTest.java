@@ -5,8 +5,8 @@ import dev.langchain4j.data.message.UserMessage;
 import org.junit.jupiter.api.Test;
 import p1.config.prop.AssistantProperties;
 import p1.config.prop.LockProperties;
-import p1.service.ChatLogRepository;
 import p1.infrastructure.markdown.model.RawBatchDocument;
+import p1.service.ChatLogRepository;
 import p1.service.markdown.RawMdService;
 import p1.utils.ChatMessageUtil;
 

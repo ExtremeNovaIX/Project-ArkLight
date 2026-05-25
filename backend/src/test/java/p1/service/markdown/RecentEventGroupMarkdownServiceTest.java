@@ -2,17 +2,17 @@ package p1.service.markdown;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import p1.config.prop.AssistantProperties;
 import p1.component.agent.memory.model.RecentEventGroupLinkRecord;
+import p1.config.prop.AssistantProperties;
 import p1.infrastructure.markdown.MarkdownFileAccess;
 import p1.infrastructure.markdown.MarkdownMemoryArchiveStore;
+import p1.infrastructure.markdown.MarkdownRecentEventGroupStore;
 import p1.infrastructure.markdown.assembler.MemoryArchiveMdAssembler;
 import p1.infrastructure.markdown.assembler.RecentEventGroupMdAssembler;
-import p1.infrastructure.markdown.MarkdownRecentEventGroupStore;
-import p1.model.document.MemoryArchiveDocument;
-import p1.model.document.RecentEventGroupDocument;
 import p1.infrastructure.markdown.io.MarkdownFrontmatterIO;
 import p1.infrastructure.markdown.model.MarkdownDocument;
+import p1.model.document.MemoryArchiveDocument;
+import p1.model.document.RecentEventGroupDocument;
 
 import java.nio.file.Path;
 import java.time.LocalDateTime;

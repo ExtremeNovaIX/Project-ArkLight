@@ -8,6 +8,7 @@ import BackendSettingsPanel from './setting/BackendSettingsPanel.vue';
 import FrontendSettingsPanel from './setting/FrontendSettingsPanel.vue';
 import {
   createFrontendSettings,
+  applyExternalFrontendDefaults,
   getDefaultFrontendSettings,
   normalizeFrontendSettings,
   saveFrontendSettings
@@ -23,6 +24,7 @@ interface AssistantReplyStep {
 }
 
 const frontendSettings = createFrontendSettings();
+const externalDefaultSettings = ref<FrontendSettings | null>(null);
 
 const messages = ref<Message[]>([]);
 
@@ -40,6 +42,7 @@ const isSendLocked = ref(false);
 
 let bootTitleTimer: ReturnType<typeof setTimeout> | undefined;
 let bootDismissTimer: ReturnType<typeof setTimeout> | undefined;
+let liveMessageSource: EventSource | undefined;
 const pendingResponseTimers = new Set<ReturnType<typeof setTimeout>>();
 
 const activeTheme = computed(
@@ -115,6 +118,22 @@ const clampNumber = (value: number, min: number, max: number) =>
 const getChatApiUrl = () => {
   const normalizedBaseUrl = frontendSettings.value.backendBaseUrl.trim().replace(/\/+$/, '');
   return `${normalizedBaseUrl}/api/chat/send`;
+};
+
+const getChatTypingUrl = () => {
+  const normalizedBaseUrl = frontendSettings.value.backendBaseUrl.trim().replace(/\/+$/, '');
+  const typingUrl = new URL(`${normalizedBaseUrl}/api/chat/typing`);
+  typingUrl.searchParams.set('sessionId', frontendSettings.value.sessionId);
+  return typingUrl.toString();
+};
+
+const getChatLiveUrl = () => {
+  const normalizedBaseUrl = frontendSettings.value.backendBaseUrl.trim().replace(/\/+$/, '');
+  const liveUrl = new URL(`${normalizedBaseUrl}/api/chat/live`);
+  liveUrl.searchParams.set('sessionId', frontendSettings.value.sessionId);
+  liveUrl.searchParams.set('characterName', getRoleNameForRequest());
+  liveUrl.searchParams.set('shortMode', String(frontendSettings.value.shortModeEnabled));
+  return liveUrl.toString();
 };
 
 const getRoleNameForRequest = () =>
@@ -295,7 +314,7 @@ const updateFrontendSettings = (nextSettings: FrontendSettings) => {
 };
 
 const resetFrontendSettings = () => {
-  applyFrontendSettings(getDefaultFrontendSettings(frontendSettings.value.themeId));
+  applyFrontendSettings(externalDefaultSettings.value ?? getDefaultFrontendSettings(frontendSettings.value.themeId));
 };
 
 const updateBackendBaseUrl = (baseUrl: string) => {
@@ -413,6 +432,34 @@ const extractReplySteps = (payload: unknown) => {
     .filter((step): step is AssistantReplyStep => Boolean(step));
 };
 
+const closeLiveMessages = () => {
+  liveMessageSource?.close();
+  liveMessageSource = undefined;
+};
+
+const connectLiveMessages = () => {
+  if (typeof window === 'undefined' || typeof window.EventSource === 'undefined') {
+    return;
+  }
+
+  closeLiveMessages();
+  const source = new EventSource(getChatLiveUrl());
+  source.addEventListener('rp-message', (event) => {
+    try {
+      const payload = JSON.parse((event as MessageEvent<string>).data) as { content?: unknown; reply?: unknown };
+      const replySteps = extractReplySteps(payload.reply ?? payload.content ?? payload);
+      if (!replySteps.length) {
+        return;
+      }
+      isAssistantTyping.value = true;
+      void scheduleAssistantMessages(replySteps);
+    } catch {
+      // EventSource 会自动重连；单条格式异常不应打断后续主动消息。
+    }
+  });
+  liveMessageSource = source;
+};
+
 const sendMessage = async () => {
   const content = userInput.value.trim();
   if (!content || isSendLocked.value) {
@@ -488,6 +535,31 @@ const sendMessage = async () => {
   }
 };
 
+const reportTypingActivity = () => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  try {
+    void fetch(getChatTypingUrl(), {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json'
+      },
+      keepalive: true
+    }).catch(() => {
+      // typing 心跳失败时保留正常聊天流程，下一次输入会重新上报。
+    });
+  } catch {
+    // 后端地址尚未配置或格式无效时，不让 typing 心跳影响输入框。
+  }
+};
+
+const updateUserInput = (value: string) => {
+  userInput.value = value;
+  reportTypingActivity();
+};
+
 watch(
   () => frontendSettings.value.moteCount,
   (count) => {
@@ -504,6 +576,17 @@ watch(
 );
 
 watch(
+  [
+    () => frontendSettings.value.backendBaseUrl,
+    () => frontendSettings.value.sessionId,
+    () => frontendSettings.value.characterName
+  ],
+  () => {
+    connectLiveMessages();
+  }
+);
+
+watch(
   [() => messages.value.length, isAssistantTyping],
   () => {
     void nextTick(() => {
@@ -515,12 +598,15 @@ watch(
   { flush: 'post' }
 );
 
-onMounted(() => {
+onMounted(async () => {
+  externalDefaultSettings.value = await applyExternalFrontendDefaults(frontendSettings);
   startBootSequence();
-  void loadCharacters();
+  await loadCharacters();
+  connectLiveMessages();
 });
 
 onBeforeUnmount(() => {
+  closeLiveMessages();
   clearBootTimers();
   pendingResponseTimers.forEach((timerId) => clearTimeout(timerId));
   pendingResponseTimers.clear();
@@ -546,7 +632,7 @@ onBeforeUnmount(() => {
       :is-send-disabled="isSendLocked"
       :theme-text="activeTheme.text"
       @open-settings="openSettings"
-      @update:user-input="userInput = $event"
+      @update:user-input="updateUserInput"
       @send-message="sendMessage"
     />
 

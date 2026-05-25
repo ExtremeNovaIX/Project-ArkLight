@@ -788,86 +788,6 @@ ApplicationWindow {
                         }
                     }
 
-                    SettingSection {
-                        title: trText("Model Overrides", "模型覆盖")
-                        description: trText("Optional runtime model settings. Leave empty to use backend defaults.", "可选的运行时模型设置，留空则使用后端默认值。")
-
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: sp(12)
-
-                            Label { Layout.preferredWidth: sp(132); text: trText("AI Base URL", "AI 地址"); color: paletteToken.text; font.pixelSize: sp(14) }
-                            SettingField {
-                                placeholderText: trText("Optional", "可选")
-                                text: frontendSettings.aiBaseUrl
-                                onEditingFinished: frontendSettings.aiBaseUrl = text
-                            }
-                        }
-
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: sp(12)
-
-                            Label { Layout.preferredWidth: sp(132); text: trText("AI API Key", "AI 密钥"); color: paletteToken.text; font.pixelSize: sp(14) }
-                            SettingField {
-                                placeholderText: trText("AI API Key", "AI API 密钥")
-                                text: frontendSettings.aiApiKey
-                                echoMode: TextInput.Password
-                                passwordCharacter: "*"
-                                onEditingFinished: frontendSettings.aiApiKey = text
-                            }
-                        }
-
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: sp(12)
-
-                            Label { Layout.preferredWidth: sp(132); text: trText("AI Model", "AI 模型"); color: paletteToken.text; font.pixelSize: sp(14) }
-                            SettingField {
-                                placeholderText: trText("Model name", "模型名称")
-                                text: frontendSettings.aiModelName
-                                onEditingFinished: frontendSettings.aiModelName = text
-                            }
-                        }
-
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: sp(12)
-
-                            Label { Layout.preferredWidth: sp(132); text: trText("Embedding URL", "向量地址"); color: paletteToken.text; font.pixelSize: sp(14) }
-                            SettingField {
-                                placeholderText: trText("Optional", "可选")
-                                text: frontendSettings.embeddingBaseUrl
-                                onEditingFinished: frontendSettings.embeddingBaseUrl = text
-                            }
-                        }
-
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: sp(12)
-
-                            Label { Layout.preferredWidth: sp(132); text: trText("Embedding Key", "向量密钥"); color: paletteToken.text; font.pixelSize: sp(14) }
-                            SettingField {
-                                placeholderText: trText("Embedding API Key", "向量 API 密钥")
-                                text: frontendSettings.embeddingApiKey
-                                echoMode: TextInput.Password
-                                passwordCharacter: "*"
-                                onEditingFinished: frontendSettings.embeddingApiKey = text
-                            }
-                        }
-
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: sp(12)
-
-                            Label { Layout.preferredWidth: sp(132); text: trText("Embedding Model", "向量模型"); color: paletteToken.text; font.pixelSize: sp(14) }
-                            SettingField {
-                                placeholderText: trText("Model name", "模型名称")
-                                text: frontendSettings.embeddingModelName
-                                onEditingFinished: frontendSettings.embeddingModelName = text
-                            }
-                        }
-                    }
                 }
             }
 
@@ -1226,6 +1146,8 @@ ApplicationWindow {
                                 chatSession.sendMessage(text)
                                 text = ""
                             }
+
+                            onTextChanged: chatSession.reportTypingActivity()
 
                             Keys.onPressed: function(event) {
                                 if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {

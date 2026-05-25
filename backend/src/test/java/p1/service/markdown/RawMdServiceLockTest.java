@@ -3,8 +3,8 @@ package p1.service.markdown;
 import org.junit.jupiter.api.Test;
 import p1.config.prop.LockProperties;
 import p1.infrastructure.markdown.assembler.RawMdAssembler;
-import p1.model.enums.MessageRole;
 import p1.infrastructure.markdown.model.RawBatchDocument;
+import p1.model.enums.MessageRole;
 import p1.service.lock.SessionLockExecutor;
 
 import java.time.LocalDateTime;
