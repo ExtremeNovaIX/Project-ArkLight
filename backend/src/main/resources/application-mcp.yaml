@@ -23,6 +23,17 @@ gamer:
     poll-interval-ms: 500
     # 队列被状态变化打断后，单次 tick 内允许立即重规划的次数。
     max-immediate-replans: 5
+    slow-observe:
+      # 是否启用无有效动作时的慢观察退避，用于多人等待队友或敌方回合时减少空转。
+      enabled: true
+      # 连续多少次没有有效动作后开始放慢单会话观察频率。
+      threshold: 2
+      # 首次慢观察间隔，单位毫秒。
+      initial-ms: 1000
+      # 每次继续无有效动作时增加的观察间隔，单位毫秒。
+      step-ms: 1000
+      # 慢观察最大间隔，单位毫秒。
+      max-ms: 3000
   streaming:
     # 单次模型 stream 内最多接受多少个 ACTION。
     max-actions-per-stream: 12

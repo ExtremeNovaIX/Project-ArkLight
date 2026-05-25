@@ -35,6 +35,7 @@ public class GamerGameLoopService {
     private final ActiveGameRegistry registry;
     private final GameLoopProperties props;
     private final InteractionCoordinator interactionCoordinator;
+    private final GameLoopObservationBackoffService observationBackoffService;
     private final Map<String, ReentrantLock> sessionLocks = new ConcurrentHashMap<>();
 
     /**
@@ -65,6 +66,9 @@ public class GamerGameLoopService {
      */
     private void processSession(ActiveGameSession session) {
         if (session.getState() != ActiveGameSession.State.RUNNING) {
+            return;
+        }
+        if (observationBackoffService.shouldSkip(session, props)) {
             return;
         }
         ReentrantLock lock = sessionLock(session.getGameName(), session.getSessionId());
@@ -98,6 +102,7 @@ public class GamerGameLoopService {
             if (!turnPermission.allowed()) {
                 log.debug("[Gamer Agent循环] 交互窗口被占用，暂停本次行动: game={}, session={}, reason={}",
                         session.getGameName(), session.getSessionId(), turnPermission.reason());
+                observationBackoffService.recordNoEffectiveAction(session, props, turnPermission.reason());
                 session.touch();
                 return;
             }
@@ -106,16 +111,19 @@ public class GamerGameLoopService {
                 log.info("[Gamer Agent循环] 探测到游戏结束，停止会话: game={}, session={}, reason={}",
                         session.getGameName(), session.getSessionId(), actionability.reason());
                 session.setState(ActiveGameSession.State.STOPPED);
+                observationBackoffService.reset(session);
                 return;
             }
             if (!actionability.actionable()) {
                 log.debug("[Gamer Agent循环] 当前无需行动: game={}, session={}, status={}, reason={}",
                         session.getGameName(), session.getSessionId(), actionability.status(), actionability.reason());
                 session.resetFailures();
+                observationBackoffService.recordNoEffectiveAction(session, props, actionability.reason());
                 session.touch();
                 return;
             }
 
+            observationBackoffService.reset(session);
             int totalSteps = session.incrementAndGetTotalSteps();
             try {
                 agentService.play(session.getGameName(), session.getSessionId(), nextPrompt(immediateReplans));
@@ -132,10 +140,16 @@ public class GamerGameLoopService {
             if (status == GameBridgeActionStatus.GAME_OVER) {
                 log.info("[Gamer Agent循环] 游戏结束，停止会话: game={}, session={}", session.getGameName(), session.getSessionId());
                 session.setState(ActiveGameSession.State.STOPPED);
+                observationBackoffService.reset(session);
                 return;
             }
 
             if (status != GameBridgeActionStatus.INTERRUPTED) {
+                if (status == GameBridgeActionStatus.WAIT) {
+                    observationBackoffService.recordNoEffectiveAction(session, props, "gamer 返回 WAIT");
+                } else {
+                    observationBackoffService.reset(session);
+                }
                 log.debug("[Gamer Agent循环] 本轮决策完成: game={}, session={}, bridgeStatus={}, totalStep={}",
                         session.getGameName(), session.getSessionId(), status, totalSteps);
                 return;
@@ -151,6 +165,7 @@ public class GamerGameLoopService {
             if (session.getState() != ActiveGameSession.State.RUNNING) {
                 log.info("[Gamer Agent循环] 队列中断后会话已不再运行，停止即时重规划: game={}, session={}, state={}",
                         session.getGameName(), session.getSessionId(), session.getState());
+                observationBackoffService.reset(session);
                 return;
             }
 
@@ -221,9 +236,12 @@ public class GamerGameLoopService {
     public ActiveGameSession start(String gameName, String sessionId, String rpSessionId) {
         ActiveGameSession existing = registry.get(gameName, sessionId);
         if (existing != null && existing.getState() == ActiveGameSession.State.RUNNING) {
+            observationBackoffService.reset(existing);
             return existing;
         }
-        return registry.register(gameName, sessionId, rpSessionId);
+        ActiveGameSession session = registry.register(gameName, sessionId, rpSessionId);
+        observationBackoffService.reset(session);
+        return session;
     }
 
     /**
@@ -246,6 +264,7 @@ public class GamerGameLoopService {
         ActiveGameSession session = registry.get(gameName, sessionId);
         if (session != null) {
             session.setState(ActiveGameSession.State.PAUSED);
+            observationBackoffService.reset(session);
             log.info("[Gamer Agent循环] 会话已暂停: game={}, session={}", gameName, sessionId);
         }
     }
@@ -260,6 +279,7 @@ public class GamerGameLoopService {
         ActiveGameSession session = registry.get(gameName, sessionId);
         if (session != null) {
             session.setState(ActiveGameSession.State.RUNNING);
+            observationBackoffService.reset(session);
             log.info("[Gamer Agent循环] 会话已恢复: game={}, session={}", gameName, sessionId);
         }
     }

@@ -6,7 +6,17 @@ assistant:
     user-activity-ttl-ms: 3000
     # RP 从首个可见响应字符到 API 流结束期间占用交互窗口的兜底超时，单位毫秒。
     rp-speech-ttl-ms: 180000
+    wait:
+      # 用户说“等等/等一下”后，默认等待多久再由 RP 主动询问是否继续，单位秒。
+      default-seconds: 10
+      # 等待状态最长保留多久，防止用户离开后 gamer 永久停住，单位分钟。
+      max-hold-minutes: 30
+      # 等待计时到点后直接投递给前端的 RP 询问文本。
+      reminder-text: 好了没？
   rp:
+    # 是否在 RP 收到每条用户消息时先执行通用指令路由。
+    # 路由模型地址、模型名和超时等固定参数写在 InstructionRouterModelConfig 中。
+    instruction-router-enabled: true
     proactive:
       # 是否启用 RP 主动发言。
       enabled: true

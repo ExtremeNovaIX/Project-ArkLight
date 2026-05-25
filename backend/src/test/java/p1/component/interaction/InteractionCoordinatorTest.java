@@ -55,4 +55,21 @@ class InteractionCoordinatorTest {
         assertFalse(coordinator.canGameActForGamer(
                 "STS2MCP", GameSessionKey.of("STS2MCP", "game-session")).allowed());
     }
+
+    @Test
+    void shouldBlockGameUntilGameWaitIsReleased() {
+        ActiveGameRegistry registry = new ActiveGameRegistry();
+        registry.register("STS2MCP", "game-session", "rp-session");
+        InteractionCoordinator coordinator = new InteractionCoordinator(registry, new AssistantProperties());
+
+        coordinator.beginGameWait("rp-session", java.time.Duration.ofMinutes(5));
+
+        assertFalse(coordinator.canGameActForGamer(
+                "STS2MCP", GameSessionKey.of("STS2MCP", "game-session")).allowed());
+
+        coordinator.endGameWait("rp-session");
+
+        assertTrue(coordinator.canGameActForGamer(
+                "STS2MCP", GameSessionKey.of("STS2MCP", "game-session")).allowed());
+    }
 }

@@ -83,6 +83,9 @@ backend/benchmark/longmemeval_s_cleaned.json
 /backend/benchmark/halumem/__pycache__/
 backend/benchmark/halumem/*.jsonl
 /backend/benchmark/halumem/__pycache__
+# LLM sidecar runtime（本地模型 + CUDA DLL，自行下载）
+/backend/llm/
+
 # MCP 服务器目录（第三方代码，自动扫描注册）
 /mcp-servers/*
 !/mcp-servers/.gitkeep

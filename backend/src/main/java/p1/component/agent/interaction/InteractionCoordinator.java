@@ -77,6 +77,28 @@ public class InteractionCoordinator {
     }
 
     /**
+     * 登记游戏等待 hold。
+     * <p>
+     * 该 hold 用于“等等/先别动”一类用户意图，会一直阻塞 gamer 行动直到显式释放，
+     * 或超过最大兜底时间自动过期。
+     *
+     * @param rpSessionId RP 会话 id
+     * @param ttl         等待 hold 的兜底保留时间
+     */
+    public void beginGameWait(String rpSessionId, Duration ttl) {
+        renew(rpSessionId, HoldKind.GAME_WAIT, ttl);
+    }
+
+    /**
+     * 释放游戏等待 hold。
+     *
+     * @param rpSessionId RP 会话 id
+     */
+    public void endGameWait(String rpSessionId) {
+        removePulse(rpSessionId, HoldKind.GAME_WAIT);
+    }
+
+    /**
      * 判断当前 RP 会话绑定的 gamer 是否可以开始或继续行动。
      *
      * @param rpSessionId RP 会话 id
@@ -157,6 +179,25 @@ public class InteractionCoordinator {
                 .put(pulseId(kind), new Hold(kind, expiresAt));
         log.debug("[交互调度] 已续期会话交互窗口: session={}, kind={}, ttlMs={}",
                 normalizedSessionId, kind, ttl.toMillis());
+    }
+
+    /**
+     * 移除无需显式 lease 对象的稳定占用。
+     *
+     * @param rpSessionId RP 会话 id
+     * @param kind        占用类型
+     */
+    private void removePulse(String rpSessionId, HoldKind kind) {
+        String normalizedSessionId = normalizeSessionId(rpSessionId);
+        SessionHolds holds = holdsByRpSession.get(normalizedSessionId);
+        if (holds == null) {
+            return;
+        }
+        holds.remove(pulseId(kind));
+        if (holds.empty()) {
+            holdsByRpSession.remove(normalizedSessionId, holds);
+        }
+        log.debug("[交互调度] 已移除会话稳定占用: session={}, kind={}", normalizedSessionId, kind);
     }
 
     /**
@@ -287,7 +328,8 @@ public class InteractionCoordinator {
     private enum HoldKind {
         USER_TURN("用户消息正在处理"),
         USER_ACTIVITY("用户正在输入或说话"),
-        RP_SPEAKING("RP 正在说话");
+        RP_SPEAKING("RP 正在说话"),
+        GAME_WAIT("等待用户确认继续");
 
         private final String description;
 

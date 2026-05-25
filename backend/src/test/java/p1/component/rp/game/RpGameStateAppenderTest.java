@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import p1.component.agent.gamer.GameSessionKey;
 import p1.component.agent.gamer.loop.ActiveGameRegistry;
 import p1.component.agent.gamer.projection.GamerActionSnapshotService;
+import p1.component.agent.interaction.GameCoordinationService;
 import p1.component.agent.rp.game.context.RpCurrentGameContextService;
 import p1.component.agent.rp.game.context.RpGameStateAppender;
 
@@ -23,7 +24,7 @@ class RpGameStateAppenderTest {
 
     @Test
     void shouldKeepNonGameRequestFreeOfGameContext() {
-        RpGameStateAppender appender = new RpGameStateAppender(new ActiveGameRegistry(), null, null);
+        RpGameStateAppender appender = new RpGameStateAppender(new ActiveGameRegistry(), null, null, null);
         ChatRequest request = ChatRequest.builder()
                 .messages(List.of(UserMessage.from("普通闲聊")))
                 .build();
@@ -40,11 +41,14 @@ class RpGameStateAppenderTest {
         registry.register("STS2MCP", "game-session", "rp-session");
         RpCurrentGameContextService contextService = mock(RpCurrentGameContextService.class);
         GamerActionSnapshotService snapshotService = mock(GamerActionSnapshotService.class);
+        GameCoordinationService coordinationService = mock(GameCoordinationService.class);
         when(contextService.build("STS2MCP", "game-session")).thenReturn("<current_game_state />");
         when(snapshotService.renderForRp(
                 "STS2MCP", GameSessionKey.of("STS2MCP", "game-session")))
                 .thenReturn("<recent_game_actions>刚打出一张牌</recent_game_actions>");
-        RpGameStateAppender appender = new RpGameStateAppender(registry, contextService, snapshotService);
+        when(coordinationService.renderWaitContext("rp-session"))
+                .thenReturn("<game_wait>waiting=true</game_wait>");
+        RpGameStateAppender appender = new RpGameStateAppender(registry, contextService, snapshotService, coordinationService);
         UserMessage currentUserMessage = UserMessage.from("你可以直接结束回合吗？");
         ChatRequest request = ChatRequest.builder()
                 .messages(List.of(AiMessage.from("前一轮回复"), currentUserMessage))
@@ -55,6 +59,8 @@ class RpGameStateAppenderTest {
         assertEquals(3, updated.messages().size());
         AiMessage gameContext = assertInstanceOf(AiMessage.class, updated.messages().get(1));
         assertTrue(gameContext.text().contains("APPLY_INSTRUCTION"));
+        assertTrue(gameContext.text().contains("game_coordination"));
+        assertTrue(gameContext.text().contains("<game_wait>waiting=true</game_wait>"));
         assertTrue(gameContext.text().contains("5 秒"));
         assertTrue(gameContext.text().contains("<recent_game_actions>刚打出一张牌</recent_game_actions>"));
         assertSame(currentUserMessage, updated.messages().get(2));

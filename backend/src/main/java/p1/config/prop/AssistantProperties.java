@@ -80,6 +80,12 @@ public class AssistantProperties {
     @Data
     public static class RpConfig {
         /**
+         * 是否在 RP 收到每条用户消息时先执行通用指令路由。
+         * <p>
+         * 这里只控制 RP 是否消费路由结果；路由模型地址、模型名和超时等固定参数写在通用路由配置类中。
+         */
+        private boolean instructionRouterEnabled = false;
+        /**
          * RP 主动发言配置。
          */
         private ProactiveConfig proactive = new ProactiveConfig();
@@ -189,6 +195,26 @@ public class AssistantProperties {
          * RP 从首个可见响应字符到流结束期间持有交互窗口的兜底超时，单位毫秒。
          */
         private long rpSpeechTtlMs = 180000;
+        /**
+         * 游戏等待调度配置。
+         */
+        private WaitConfig wait = new WaitConfig();
+    }
+
+    @Data
+    public static class WaitConfig {
+        /**
+         * RP 判断用户要求“等一下”时，默认等待多久后询问用户是否继续，单位秒。
+         */
+        private long defaultSeconds = 10;
+        /**
+         * 等待 hold 的最长保留时间，防止用户离开后会话永久阻塞，单位分钟。
+         */
+        private long maxHoldMinutes = 30;
+        /**
+         * 等待计时到点后，直接投递给前端的 RP 询问文本。
+         */
+        private String reminderText = "好了没？";
     }
 
     @Data
