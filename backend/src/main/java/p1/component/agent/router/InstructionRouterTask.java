@@ -22,8 +22,7 @@ public record InstructionRouterTask(
             {
               "intent": "从 allowed_intents 中选择一个",
               "confidence": 0.0 到 1.0,
-              "instruction": "如果 intent 需要转发动作，保留用户原始意图的极短摘要；否则为空",
-              "reason": "一句话说明分类依据"
+              "instruction": "如果 intent 需要转发动作，保留用户原始意图的极短摘要；否则为空"
             }
             如果不确定，输出 CHAT，confidence 不要高于 0.5。
             """;

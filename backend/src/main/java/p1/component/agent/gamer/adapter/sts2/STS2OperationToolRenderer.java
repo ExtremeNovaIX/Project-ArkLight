@@ -88,9 +88,18 @@ public class STS2OperationToolRenderer {
         }
         boolean isMpTool = toolName.startsWith(MP_PREFIX);
         if (MP_PREFIX.equals(modePrefix)) {
-            return isMpTool;
+            return isMpTool || isSharedTool(toolName);
         }
         return !isMpTool;
+    }
+
+    private boolean isSharedTool(String toolName) {
+        return "menu_select".equals(toolName)
+                || toolName.startsWith("deck_")
+                || "get_profile".equals(toolName)
+                || "list_profiles".equals(toolName)
+                || "switch_profile".equals(toolName)
+                || "delete_profile".equals(toolName);
     }
 
     /**
@@ -120,9 +129,17 @@ public class STS2OperationToolRenderer {
 
         String name = removeModePrefix(toolName).toLowerCase();
         String stateType = state.stateType() == null ? "" : state.stateType().toLowerCase();
+        if ("card_select".equals(stateType)) {
+            return isCardSelectTool(name, state.json());
+        }
+
+        JsonNode battle = state.json().path("battle");
+        if (battle.isObject() && !battle.isEmpty()) {
+            return isCombatTool(name);
+        }
+
         return switch (stateType) {
             case "monster" -> isCombatTool(name);
-            case "card_select" -> isCardSelectTool(name, state.json());
             case "card_reward" -> isRewardPickTool(name);
             case "rewards" -> isRewardClaimTool(name);
             case "map" -> isMapTool(name);
@@ -173,15 +190,31 @@ public class STS2OperationToolRenderer {
         if (rewardLike) {
             return isRewardPickTool(name);
         }
-        boolean selectTool = name.contains("select_card")
-                || name.contains("confirm_selection")
-                || name.startsWith("deck_")
-                || name.startsWith("combat_select")
-                || name.startsWith("combat_confirm");
-        if (root.has("card_select")) {
-            return selectTool;
+        if (isDeckCardSelect(root.path("card_select"))) {
+            return name.startsWith("deck_");
         }
-        return selectTool || isRewardPickTool(name);
+        if (isCombatCardSelect(root.path("card_select"))) {
+            return name.startsWith("combat_select") || name.startsWith("combat_confirm");
+        }
+        return name.startsWith("deck_");
+    }
+
+    private boolean isDeckCardSelect(JsonNode cardSelect) {
+        String screenType = cardSelect.path("screen_type").asText("").toLowerCase();
+        String type = cardSelect.path("type").asText("").toLowerCase();
+        String prompt = cardSelect.path("prompt").asText("").toLowerCase();
+        return "simple_select".equals(screenType)
+                || screenType.contains("deck")
+                || type.contains("deck")
+                || type.contains("discard")
+                || prompt.contains("抽牌堆")
+                || prompt.contains("弃牌堆");
+    }
+
+    private boolean isCombatCardSelect(JsonNode cardSelect) {
+        String screenType = cardSelect.path("screen_type").asText("").toLowerCase();
+        String type = cardSelect.path("type").asText("").toLowerCase();
+        return screenType.contains("combat") || type.contains("combat");
     }
 
     /**

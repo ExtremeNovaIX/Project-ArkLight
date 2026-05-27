@@ -46,7 +46,7 @@ public class InstructionRouterModelConfig {
      * @return 超时时间，单位毫秒
      */
     public long timeoutMs() {
-        return 500;
+        return 3000;
     }
 
     /**
@@ -91,7 +91,7 @@ public class InstructionRouterModelConfig {
      * @return 按参数拆分的启动命令；为空表示不启动
      */
     public List<String> runtimeCommand() {
-        return List.of("llm/llama-server.exe", "-m", "llm/models/Qwen3.5-0.8B-Q8_0.gguf", "--port", "8087", "-ngl", "99", "-c", "4096", "-np", "2", "-ctk", "q4_0", "-ctv", "q4_0", "--cache-ram", "512");
+        return List.of("llm/llama-server.exe", "-m", "llm/models/Qwen3.5-0.8B-Q8_0.gguf", "--port", "8087", "-ngl", "99", "-c", "4096", "-np", "2", "-ctk", "q4_0", "-ctv", "q4_0", "--cache-ram", "512", "--reasoning", "off");
     }
 
     /**
@@ -109,6 +109,6 @@ public class InstructionRouterModelConfig {
      * @return 等待时间，单位毫秒
      */
     public long runtimeStartupWaitMs() {
-        return 1000;
+        return 3000;
     }
 }

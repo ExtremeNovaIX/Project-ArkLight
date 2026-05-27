@@ -95,7 +95,7 @@ public class GameBridgeService {
         sb.append("<bridge_rules>\n")
                 .append("- 系统已经注入最新游戏状态，不要调用任何状态查询工具。\n")
                 .append("- latest_game_state 是游戏 MCP 返回的源 JSON；优先直接读取其中的原生字段。\n")
-                .append("- 游戏操作必须输出 ACTION JSON，一次提交一个候选操作队列。\n")
+                .append("- 游戏操作必须输出 ACTION JSON，一次提交一个候选操作队列；关键战术分叉可输出 ASK JSON 向用户确认。\n")
                 .append("- operations 中的每一项使用下方列出的 MCP 工具名和参数；桥接层会逐条执行。\n")
                 .append("- MCP 业务失败后，如果最新状态仍可行动，桥接层会记录错误、跳过失败操作并继续剩余队列。\n")
                 .append("- state_type 变化、进入新界面、抽牌/弃牌导致手牌不可预测变化时，桥接层会中断队列并丢弃剩余操作。\n")
@@ -104,8 +104,11 @@ public class GameBridgeService {
                 .append("- gamer_memory 只是历史决策摘要，不能覆盖 latest_game_state 中的当前事实。\n")
                 .append("</bridge_rules>\n\n");
         sb.append("<streaming_output_rules>\n")
-                .append("- 每个 JSON 对象必须包含 operations；同一稳定行动窗口内尽量一次提交完整确定队列。\n")
-                .append("- 每个 JSON 对象必须包含 expression；这是给 RP 人格消化的内心活动候选，不是给用户照读的台词。\n")
+                .append("- JSON 对象只能是 ACTION 或 ASK；同一稳定行动窗口内尽量一次提交完整确定队列。\n")
+                .append("- ACTION 必须包含 operations；ASK 不包含 operations，用于关键战术分叉时直接向用户提出短问题。\n")
+                .append("- 只有用户偏好、关键资源消耗、隐藏信息或高风险路线选择会明显改变结果时才 ASK；普通可判断局面必须直接 ACTION。\n")
+                .append("- ASK JSON 格式：{\"type\":\"ask\",\"question\":\"这回合稳还是赌？\",\"choices\":[\"稳一点\",\"赌一波\",\"你判断\"],\"reason\":\"赌成功能击杀，失败会亏防御资源。\",\"default_choice\":\"稳一点\"}\n")
+                .append("- ACTION 必须包含 expression；这是给 RP 人格消化的内心活动候选，不是给用户照读的台词。ASK 不需要 expression。\n")
                 .append("- expression 要诚实表达这一步有没有想开口的冲动，不要因为它未必会被说出口就主动压低分数；真正发言频率由 RP 层控制。\n")
                 .append("- expression.score 为 0-100；普通操作 0-30，策略转向 45-65，风险/改计划/失误/关键选择 70-90。\n")
                 .append("- expression.inner_thought 必须是自然内心活动，避免写工具名、JSON、桥接层、MCP、日志等技术细节。\n")
@@ -119,9 +122,9 @@ public class GameBridgeService {
         }
         if (!rpInstruction.isBlank()) {
             sb.append("<external_game_instruction>\n")
-                    .append("用户通过 RP 对话提交了新的游戏意图：")
+                    .append("外部交互通道提交了新的游戏意图或系统提示：")
                     .append(rpInstruction)
-                    .append("\n请优先遵守该意图，并基于 latest_game_state 重新规划；不要沿用被打断的旧队列。")
+                    .append("\n请优先遵守该提示，并基于 latest_game_state 重新规划；不要沿用被打断的旧队列。")
                     .append("\n</external_game_instruction>\n\n");
         }
         if (lastActionResult != null && !lastActionResult.isBlank()) {

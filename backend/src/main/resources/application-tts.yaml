@@ -1,0 +1,110 @@
+tts:
+  enabled: ${TTS_ENABLED:true}
+  # 可选：gpt-sovits-http、voxcpm2-http
+  provider: voxcpm2-http
+  synthesis-timeout-ms: 60000
+  first-chunk-min-chars: 6
+  first-chunk-chars: 12
+  max-chunk-chars: 40
+  sentence-end-marks:
+    - "。"
+    - "！"
+    - "？"
+    - "；"
+    - "…"
+    - "."
+    - "!"
+    - "?"
+    - ";"
+    - "\n"
+
+  gpt-so-vits:
+    base-url: ${GPT_SOVITS_BASE_URL:http://127.0.0.1:9880}
+    ref-audio-path: ${GPT_SOVITS_REF_AUDIO_PATH:}
+    prompt-text: ${GPT_SOVITS_PROMPT_TEXT:}
+    text-lang: zh
+    prompt-lang: zh
+    media-type: wav
+    speed-factor: 1.0
+    top-k: 15
+    top-p: 1.0
+    temperature: 1.0
+    seed: -1
+    # 以下参数通常使用默认值，如需调整取消注释即可
+    # text-split-method: cut0
+    # batch-size: 4
+    # batch-threshold: 0.75
+    # split-bucket: true
+    # fragment-interval: 0.08
+    # streaming-mode: 0
+    # parallel-infer: true
+    # repetition-penalty: 1.35
+    # sample-steps: 32
+    # super-sampling: false
+    # overlap-length: 2
+    # min-chunk-length: 16
+    # aux-ref-audio-paths: []
+
+  vox-cpm2:
+    base-url: ${VOXCPM2_BASE_URL:http://127.0.0.1:8810}
+    reference-wav-path: ${VOXCPM2_REFERENCE_WAV_PATH:}
+    prompt-text: ${VOXCPM2_PROMPT_TEXT:}
+    cfg-value: 2.0
+    inference-timesteps: 10
+    normalize: true
+    denoise: false
+    media-type: wav
+    streaming-enabled: true
+    badcase-retry-attempts: 1
+    # extra-body: {}
+    runtime:
+      auto-start-enabled: true
+      startup-command:
+        - .venv\Scripts\python.exe
+        - ..\..\..\tools\voxcpm2_tts_server.py
+        - --model-id
+        - models\VoxCPM2
+        - --device
+        - cuda
+        - --host
+        - 127.0.0.1
+        - --port
+        - "8810"
+      working-directory: tts/runtime/VoxCPM2
+      bind-address: 127.0.0.1
+      port: 8810
+      health-path: /health
+      log-file-path: voxcpm2-server.log
+      startup-wait-ms: 1000
+      max-restart-attempts: 1
+      # 以下字段使用默认值，如需调整取消注释即可
+      # launcher-command: []
+      # python-executable: ""
+      # api-server-script: ""
+      # tts-config-path: ""
+      # extra-args: []
+      # environment: {}
+
+  runtime:
+    auto-start-enabled: true
+    startup-command:
+      - cmd
+      - /c
+      - runtime\python.exe api_v2.py -a 127.0.0.1 -p 9880 -c GPT_SoVITS/configs/tts_infer.yaml
+    working-directory: tts/runtime/GPT-SoVITS-v2pro
+    bind-address: 127.0.0.1
+    port: 9880
+    health-path: /docs
+    log-file-path: gpt-sovits-server.log
+    startup-wait-ms: 1000
+    max-restart-attempts: 1
+    # 以下字段使用默认值，如需调整取消注释即可
+    # launcher-command:
+    #   - uv
+    #   - run
+    #   - python
+    # python-executable: ""
+    # api-server-script: api_v2.py
+    # tts-config-path: GPT_SoVITS/configs/tts_infer.yaml
+    # extra-args: []
+    # environment: {}

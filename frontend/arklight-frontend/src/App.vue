@@ -43,7 +43,17 @@ const isSendLocked = ref(false);
 let bootTitleTimer: ReturnType<typeof setTimeout> | undefined;
 let bootDismissTimer: ReturnType<typeof setTimeout> | undefined;
 let liveMessageSource: EventSource | undefined;
+let ttsAudioSource: EventSource | undefined;
+let ttsAudioContext: AudioContext | undefined;
+let ttsPcmWorkletNode: AudioWorkletNode | undefined;
+let ttsPcmWorkletReady: Promise<AudioWorkletNode | null> | undefined;
+let ttsNextPlayTime = 0;
+let ttsAudioConnectionVersion = 0;
+let ttsAudioPlaybackChain: Promise<void> = Promise.resolve();
 const pendingResponseTimers = new Set<ReturnType<typeof setTimeout>>();
+const TTS_AUDIO_START_MARGIN_SECONDS = 0.02;
+const TTS_CHUNK_CROSSFADE_SECONDS = 0.012;
+const TTS_PLAYBACK_TEMPO = 1.1;
 
 const activeTheme = computed(
   () => themeRegistryMap[frontendSettings.value.themeId] ?? themeRegistryMap[defaultThemeId]
@@ -133,6 +143,13 @@ const getChatLiveUrl = () => {
   liveUrl.searchParams.set('sessionId', frontendSettings.value.sessionId);
   liveUrl.searchParams.set('characterName', getRoleNameForRequest());
   liveUrl.searchParams.set('shortMode', String(frontendSettings.value.shortModeEnabled));
+  return liveUrl.toString();
+};
+
+const getTtsLiveUrl = () => {
+  const normalizedBaseUrl = frontendSettings.value.backendBaseUrl.trim().replace(/\/+$/, '');
+  const liveUrl = new URL(`${normalizedBaseUrl}/api/tts/live`);
+  liveUrl.searchParams.set('sessionId', frontendSettings.value.sessionId);
   return liveUrl.toString();
 };
 
@@ -437,6 +454,15 @@ const closeLiveMessages = () => {
   liveMessageSource = undefined;
 };
 
+const closeTtsAudio = () => {
+  ttsAudioConnectionVersion += 1;
+  ttsAudioSource?.close();
+  ttsAudioSource = undefined;
+  ttsPcmWorkletNode?.port.postMessage({ type: 'reset' });
+  ttsNextPlayTime = 0;
+  ttsAudioPlaybackChain = Promise.resolve();
+};
+
 const connectLiveMessages = () => {
   if (typeof window === 'undefined' || typeof window.EventSource === 'undefined') {
     return;
@@ -460,12 +486,294 @@ const connectLiveMessages = () => {
   liveMessageSource = source;
 };
 
+const ensureTtsAudioContext = async () => {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+  const AudioContextCtor = window.AudioContext
+    || (window as Window & typeof globalThis & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+  if (!AudioContextCtor) {
+    return null;
+  }
+  if (!ttsAudioContext) {
+    ttsAudioContext = new AudioContextCtor();
+  }
+  if (ttsAudioContext.state === 'suspended') {
+    await ttsAudioContext.resume().catch(() => undefined);
+  }
+  return ttsAudioContext;
+};
+
+const ensureTtsPcmWorklet = async (audioContext: AudioContext) => {
+  if (!audioContext.audioWorklet) {
+    return null;
+  }
+  if (ttsPcmWorkletNode) {
+    return ttsPcmWorkletNode;
+  }
+  if (!ttsPcmWorkletReady) {
+    const baseUrl = import.meta.env.BASE_URL.endsWith('/')
+      ? import.meta.env.BASE_URL
+      : `${import.meta.env.BASE_URL}/`;
+    ttsPcmWorkletReady = audioContext.audioWorklet
+      .addModule(`${baseUrl}tts-pcm-worklet.js`)
+      .then(() => {
+        const node = new AudioWorkletNode(audioContext, 'tts-pcm-player', {
+          numberOfInputs: 0,
+          numberOfOutputs: 1,
+          outputChannelCount: [2],
+          processorOptions: {
+            tempo: TTS_PLAYBACK_TEMPO
+          }
+        });
+        node.connect(audioContext.destination);
+        ttsPcmWorkletNode = node;
+        return node;
+      })
+      .catch(() => null);
+  }
+  return ttsPcmWorkletReady;
+};
+
+const base64ToArrayBuffer = (base64: string) => {
+  const binary = window.atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return bytes.buffer;
+};
+
+const decodePcmS16Le = (audioBase64: string) => {
+  const bytes = new Uint8Array(base64ToArrayBuffer(audioBase64));
+  const sampleCount = Math.floor(bytes.byteLength / 2);
+  const samples = new Float32Array(sampleCount);
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  for (let index = 0; index < sampleCount; index += 1) {
+    samples[index] = view.getInt16(index * 2, true) / 32768;
+  }
+  return samples;
+};
+
+const resamplePcm = (samples: Float32Array, sourceSampleRate: number, targetSampleRate: number) => {
+  if (!sourceSampleRate || sourceSampleRate === targetSampleRate || samples.length <= 1) {
+    return samples;
+  }
+  const outputLength = Math.max(1, Math.round(samples.length * targetSampleRate / sourceSampleRate));
+  const output = new Float32Array(outputLength);
+  const ratio = sourceSampleRate / targetSampleRate;
+  for (let index = 0; index < outputLength; index += 1) {
+    const sourceIndex = index * ratio;
+    const leftIndex = Math.floor(sourceIndex);
+    const rightIndex = Math.min(leftIndex + 1, samples.length - 1);
+    const fraction = sourceIndex - leftIndex;
+    output[index] = samples[leftIndex] * (1 - fraction) + samples[rightIndex] * fraction;
+  }
+  return output;
+};
+
+const audioBufferToMonoPcm = (audioBuffer: AudioBuffer) => {
+  const samples = new Float32Array(audioBuffer.length);
+  if (audioBuffer.numberOfChannels <= 1) {
+    audioBuffer.copyFromChannel(samples, 0);
+    return samples;
+  }
+
+  const channelSamples = new Float32Array(audioBuffer.length);
+  for (let channel = 0; channel < audioBuffer.numberOfChannels; channel += 1) {
+    audioBuffer.copyFromChannel(channelSamples, channel);
+    for (let index = 0; index < samples.length; index += 1) {
+      samples[index] += channelSamples[index] / audioBuffer.numberOfChannels;
+    }
+  }
+  return samples;
+};
+
+const pushTtsPcmSamples = async (
+  samples: Float32Array,
+  sourceSampleRate: number,
+  connectionVersion: number
+) => {
+  if (!samples.length || connectionVersion !== ttsAudioConnectionVersion) {
+    return false;
+  }
+
+  const audioContext = await ensureTtsAudioContext();
+  if (!audioContext || connectionVersion !== ttsAudioConnectionVersion) {
+    return false;
+  }
+
+  const workletNode = await ensureTtsPcmWorklet(audioContext);
+  if (!workletNode || connectionVersion !== ttsAudioConnectionVersion) {
+    return false;
+  }
+
+  const outputSamples = resamplePcm(samples, sourceSampleRate || audioContext.sampleRate, audioContext.sampleRate);
+  workletNode.port.postMessage({ type: 'push', samples: outputSamples }, [outputSamples.buffer]);
+  return true;
+};
+
+const flushTtsPcmAudio = async (connectionVersion: number) => {
+  if (connectionVersion !== ttsAudioConnectionVersion) {
+    return;
+  }
+
+  const audioContext = await ensureTtsAudioContext();
+  if (!audioContext || connectionVersion !== ttsAudioConnectionVersion) {
+    return;
+  }
+
+  const workletNode = await ensureTtsPcmWorklet(audioContext);
+  if (workletNode && connectionVersion === ttsAudioConnectionVersion) {
+    workletNode.port.postMessage({ type: 'flush' });
+  }
+};
+
+const calculateTtsFadeDuration = (duration: number) => {
+  if (!Number.isFinite(duration) || duration <= 0) {
+    return 0;
+  }
+  return Math.min(TTS_CHUNK_CROSSFADE_SECONDS, duration / 4);
+};
+
+const playTtsAudioBuffer = async (audioBuffer: AudioBuffer, connectionVersion: number) => {
+  if (connectionVersion !== ttsAudioConnectionVersion) {
+    return;
+  }
+  const audioContext = await ensureTtsAudioContext();
+  if (!audioContext || connectionVersion !== ttsAudioConnectionVersion) {
+    return;
+  }
+
+  const source = audioContext.createBufferSource();
+  const gainNode = audioContext.createGain();
+  source.buffer = audioBuffer;
+  source.connect(gainNode);
+  gainNode.connect(audioContext.destination);
+
+  const fadeDuration = calculateTtsFadeDuration(audioBuffer.duration);
+  const startAt = Math.max(audioContext.currentTime + TTS_AUDIO_START_MARGIN_SECONDS, ttsNextPlayTime);
+  const endAt = startAt + audioBuffer.duration;
+  if (fadeDuration > 0) {
+    const fadeInEnd = Math.min(startAt + fadeDuration, endAt);
+    const fadeOutStart = Math.max(startAt, endAt - fadeDuration);
+    gainNode.gain.setValueAtTime(0, startAt);
+    gainNode.gain.linearRampToValueAtTime(1, fadeInEnd);
+    if (fadeOutStart > fadeInEnd) {
+      gainNode.gain.setValueAtTime(1, fadeOutStart);
+    }
+    gainNode.gain.linearRampToValueAtTime(0, endAt);
+  } else {
+    gainNode.gain.setValueAtTime(1, startAt);
+  }
+  source.start(startAt);
+  ttsNextPlayTime = Math.max(startAt, endAt - fadeDuration);
+};
+
+const playTtsAudio = async (audioBase64: string, connectionVersion: number) => {
+  if (!audioBase64 || connectionVersion !== ttsAudioConnectionVersion) {
+    return;
+  }
+  const audioContext = await ensureTtsAudioContext();
+  if (!audioContext || connectionVersion !== ttsAudioConnectionVersion) {
+    return;
+  }
+
+  const audioBuffer = await audioContext.decodeAudioData(base64ToArrayBuffer(audioBase64));
+  if (await pushTtsPcmSamples(audioBufferToMonoPcm(audioBuffer), audioBuffer.sampleRate, connectionVersion)) {
+    return;
+  }
+  await playTtsAudioBuffer(audioBuffer, connectionVersion);
+};
+
+const queueTtsAudio = (audioBase64: string, connectionVersion: number) => {
+  // decodeAudioData 是异步的；串行化后才能保证后到的音频不会抢先排进播放时间线。
+  ttsAudioPlaybackChain = ttsAudioPlaybackChain
+    .then(() => playTtsAudio(audioBase64, connectionVersion))
+    .catch(() => undefined);
+};
+
+const enqueueTtsPcmAudio = async (
+  payload: { audioBase64?: string; sampleRate?: number },
+  connectionVersion: number
+) => {
+  if (!payload.audioBase64 || connectionVersion !== ttsAudioConnectionVersion) {
+    return;
+  }
+  const audioContext = await ensureTtsAudioContext();
+  if (!audioContext || connectionVersion !== ttsAudioConnectionVersion) {
+    return;
+  }
+
+  const sourceSampleRate = payload.sampleRate || audioContext.sampleRate;
+  const decodedSamples = decodePcmS16Le(payload.audioBase64);
+  if (await pushTtsPcmSamples(decodedSamples, sourceSampleRate, connectionVersion)) {
+    return;
+  }
+
+  const samples = resamplePcm(decodedSamples, sourceSampleRate, audioContext.sampleRate);
+  const audioBuffer = audioContext.createBuffer(1, samples.length, audioContext.sampleRate);
+  audioBuffer.copyToChannel(samples, 0);
+  await playTtsAudioBuffer(audioBuffer, connectionVersion);
+};
+
+const queueTtsPcmAudio = (
+  payload: { audioBase64?: string; sampleRate?: number },
+  connectionVersion: number
+) => {
+  ttsAudioPlaybackChain = ttsAudioPlaybackChain
+    .then(() => enqueueTtsPcmAudio(payload, connectionVersion))
+    .catch(() => undefined);
+};
+
+const queueTtsPcmFlush = (connectionVersion: number) => {
+  ttsAudioPlaybackChain = ttsAudioPlaybackChain
+    .then(() => flushTtsPcmAudio(connectionVersion))
+    .catch(() => undefined);
+};
+
+const isPcmTtsAudio = (mediaType?: string) =>
+  (mediaType ?? '').toLowerCase().startsWith('audio/pcm');
+
+const connectTtsAudio = () => {
+  if (typeof window === 'undefined' || typeof window.EventSource === 'undefined') {
+    return;
+  }
+
+  closeTtsAudio();
+  const connectionVersion = ttsAudioConnectionVersion;
+  const source = new EventSource(getTtsLiveUrl());
+  source.addEventListener('tts-audio', (event) => {
+    try {
+      const payload = JSON.parse((event as MessageEvent<string>).data) as {
+        audioBase64?: string;
+        mediaType?: string;
+        sampleRate?: number;
+        finalChunk?: boolean;
+      };
+      if (payload.finalChunk) {
+        queueTtsPcmFlush(connectionVersion);
+        return;
+      }
+      if (isPcmTtsAudio(payload.mediaType)) {
+        queueTtsPcmAudio(payload, connectionVersion);
+        return;
+      }
+      queueTtsAudio(payload.audioBase64 ?? '', connectionVersion);
+    } catch {
+      // 音频 SSE 单帧异常不影响后续播放。
+    }
+  });
+  ttsAudioSource = source;
+};
+
 const sendMessage = async () => {
   const content = userInput.value.trim();
   if (!content || isSendLocked.value) {
     return;
   }
 
+  void ensureTtsAudioContext();
   isSendLocked.value = true;
   messages.value.push({
     id: Date.now(),
@@ -583,6 +891,7 @@ watch(
   ],
   () => {
     connectLiveMessages();
+    connectTtsAudio();
   }
 );
 
@@ -603,10 +912,12 @@ onMounted(async () => {
   startBootSequence();
   await loadCharacters();
   connectLiveMessages();
+  connectTtsAudio();
 });
 
 onBeforeUnmount(() => {
   closeLiveMessages();
+  closeTtsAudio();
   clearBootTimers();
   pendingResponseTimers.forEach((timerId) => clearTimeout(timerId));
   pendingResponseTimers.clear();

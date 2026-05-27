@@ -50,7 +50,6 @@ public class AiServiceConfig {
                 .streamingChatModel(streamingChatModel)
                 .chatMemoryProvider(chatMemoryProvider)
                 .chatRequestTransformer(rpChatRequestAugmenter::augment)
-                .tools(callSolverTool)
                 .toolProvider(rpGameToolProvider)
                 .build();
     }

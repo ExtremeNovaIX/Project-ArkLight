@@ -22,7 +22,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * 负责三件事：用 JSON 模式获取状态、修复出牌索引漂移、
  * 以及在 state_type 或手牌数量出现意外变化（比如出牌后手牌增加）时中断剩余队列。
  * <p>
- * 首次获取状态时自动检测单人/多人模式（依次尝试 get_game_state 和 mp_get_game_state），
+ * 首次获取状态时自动检测单人/多人模式，并优先信任状态内容中的多人特征，
  * 无需手动在 mcp-catalog.yaml 中配置 tool-prefix 或 state-tool-name。
  */
 @Component
@@ -61,8 +61,9 @@ public class STS2Adapter implements GameAdapter {
     /**
      * 自动检测单人/多人模式并获取游戏状态。
      * <p>
-     * 首次调用时依次尝试 get_game_state（单人）和 mp_get_game_state（多人），
-     * 以第一个返回有效状态（含 state_type 且非 error）的工具为准，缓存检测结果。
+     * 首次调用时会先读取单人端点的状态；如果状态内容显示处于多人大厅或多人 run，
+     * 即使该状态来自 get_game_state，也缓存为多人模式。多人 run 中单人端点会被
+     * HTTP 409 拒绝，此时再回退到 mp_get_game_state。
      * 后续调用优先使用缓存模式；缓存失效时自动重新检测。
      */
     @Override
@@ -75,6 +76,12 @@ public class STS2Adapter implements GameAdapter {
             String toolName = cachedPrefix + context.config().getStateToolName();
             GameStateSnapshot state = tryFetchState(context, toolName);
             if (isValidState(state)) {
+                String detectedPrefix = detectModePrefix(state);
+                if (detectedPrefix != null && !detectedPrefix.equals(cachedPrefix)) {
+                    detectedMode.put(gameName, detectedPrefix);
+                    log.info("[STS2] 状态内容修正模式 prefix='{}' -> '{}': game={}",
+                            cachedPrefix, detectedPrefix, gameName);
+                }
                 return state;
             }
             log.info("[STS2] 缓存模式 prefix='{}' 已失效，重新检测: game={}", cachedPrefix, gameName);
@@ -85,8 +92,10 @@ public class STS2Adapter implements GameAdapter {
         String spName = context.config().getStateToolName();
         GameStateSnapshot spState = tryFetchState(context, spName);
         if (isValidState(spState)) {
-            detectedMode.put(gameName, "");
-            log.info("[STS2] 检测到单人模式: game={}", gameName);
+            String detectedPrefix = detectModePrefix(spState);
+            String prefix = detectedPrefix == null ? "" : detectedPrefix;
+            detectedMode.put(gameName, prefix);
+            log.info("[STS2] 检测到{}模式: game={}", MP_PREFIX.equals(prefix) ? "多人" : "单人", gameName);
             return spState;
         }
 
@@ -215,6 +224,7 @@ public class STS2Adapter implements GameAdapter {
      */
     @Override
     public ToolExecutionRequest repairBeforeExecute(QueuedGameOperation operation, GameStateSnapshot currentState) {
+        rejectStaleMenuOperation(operation, currentState);
         rejectStaleEndTurn(operation, currentState);
         if (!isPlayCard(operation.request().name())) {
             return operation.request();
@@ -337,6 +347,63 @@ public class STS2Adapter implements GameAdapter {
         }
     }
 
+    private String detectModePrefix(GameStateSnapshot state) {
+        JsonNode root = state == null ? null : state.json();
+        if (root == null || root.isMissingNode()) {
+            return null;
+        }
+
+        String gameMode = root.path("game_mode").asText("");
+        if ("multiplayer".equalsIgnoreCase(gameMode)) {
+            return MP_PREFIX;
+        }
+        if ("singleplayer".equalsIgnoreCase(gameMode)) {
+            return "";
+        }
+
+        String menuScreen = root.path("menu_screen").asText("");
+        if (menuScreen.toLowerCase(Locale.ROOT).startsWith("multiplayer")) {
+            return MP_PREFIX;
+        }
+
+        JsonNode lobby = root.path("lobby");
+        if (lobby.isObject()) {
+            String lobbyType = lobby.path("type").asText("");
+            if ("singleplayer".equalsIgnoreCase(lobbyType)) {
+                return "";
+            }
+            if (!lobbyType.isBlank()
+                    || lobby.has("players")
+                    || lobby.has("player_count")
+                    || lobby.has("all_ready")
+                    || lobby.has("is_local_ready")
+                    || lobby.has("local_player_id")) {
+                return MP_PREFIX;
+            }
+        }
+
+        if (root.has("local_player_slot") || root.has("player_count") || root.has("net_type")) {
+            return MP_PREFIX;
+        }
+        if (hasOption(root.path("options"), "unready")) {
+            return MP_PREFIX;
+        }
+        return null;
+    }
+
+    private boolean hasOption(JsonNode options, String name) {
+        if (options == null || !options.isArray() || name == null || name.isBlank()) {
+            return false;
+        }
+        for (JsonNode option : options) {
+            String optionName = option.isTextual() ? option.asText("") : option.path("name").asText("");
+            if (name.equalsIgnoreCase(optionName)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private boolean isValidState(GameStateSnapshot state) {
         if (state == null || state.json() == null) {
             return false;
@@ -362,6 +429,10 @@ public class STS2Adapter implements GameAdapter {
     private boolean isEndTurn(String toolName) {
         return TOOL_COMBAT_END_TURN.equals(toolName)
                 || (MP_PREFIX + TOOL_COMBAT_END_TURN).equals(toolName);
+    }
+
+    private boolean isMenuSelect(String toolName) {
+        return "menu_select".equals(toolName);
     }
 
     /**
@@ -404,6 +475,21 @@ public class STS2Adapter implements GameAdapter {
                     + "，执行前 battle.round=" + currentRound
                     + "，丢弃旧回合的结束指令。");
         }
+    }
+
+    private void rejectStaleMenuOperation(QueuedGameOperation operation, GameStateSnapshot currentState) {
+        if (!isMenuSelect(operation.request().name())) {
+            return;
+        }
+        String stateType = currentState == null ? "" : currentState.stateType();
+        if ("menu".equalsIgnoreCase(stateType) || "game_over".equalsIgnoreCase(stateType)) {
+            return;
+        }
+        String displayStateType = stateType == null || stateType.isBlank() ? "unknown" : stateType;
+        throw new GameBridgeException("STS2 菜单操作已过期：当前 state_type="
+                + displayStateType
+                + "，丢弃旧的 menu_select。agent操作描述："
+                + operation.note());
     }
 
     /**
@@ -522,7 +608,8 @@ public class STS2Adapter implements GameAdapter {
             return false;
         }
         JsonNode battle = state.json().path("battle");
-        return "monster".equals(state.stateType())
+        return battle.isObject()
+                && !battle.isEmpty()
                 && "player".equals(battle.path("turn").asText(""))
                 && battle.path("is_play_phase").asBoolean(false);
     }

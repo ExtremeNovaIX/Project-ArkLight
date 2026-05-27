@@ -9,6 +9,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import p1.component.agent.interaction.InteractionCoordinator;
+import p1.component.agent.tts.TtsSpeechService;
+import p1.component.agent.tts.TtsSpeechSession;
 import p1.config.prop.AssistantProperties;
 
 import java.util.concurrent.CountDownLatch;
@@ -32,6 +34,7 @@ public class RpSpeechTurnService {
 
     private final InteractionCoordinator interactionCoordinator;
     private final AssistantProperties assistantProperties;
+    private final TtsSpeechService ttsSpeechService;
 
     /**
      * 执行并收集一次 RP 文本流。
@@ -64,6 +67,7 @@ public class RpSpeechTurnService {
         private final AtomicReference<StreamingHandle> streamingHandle = new AtomicReference<>();
         private final StringBuilder response = new StringBuilder();
         private volatile InteractionCoordinator.InteractionLease speechLease;
+        private volatile TtsSpeechSession ttsSession;
         private volatile Throwable error;
 
         private SpeechCollector(String rpSessionId, String source) {
@@ -90,7 +94,11 @@ public class RpSpeechTurnService {
             if (speechLease == null && !text.isBlank()) {
                 // thinking 不会进入该回调；首个可见字符到达才认为 RP 真正开始说话。
                 speechLease = interactionCoordinator.beginRpSpeech(rpSessionId);
+                ttsSession = ttsSpeechService.open(rpSessionId, source);
                 log.debug("[RP发言流] 首个响应字符已到达: session={}, source={}", rpSessionId, source);
+            }
+            if (ttsSession != null) {
+                ttsSession.accept(text);
             }
         }
 
@@ -159,7 +167,19 @@ public class RpSpeechTurnService {
             if (handle != null && !handle.isCancelled()) {
                 handle.cancel();
             }
+            cancelTts(reason);
             log.warn("[RP发言流] 已取消响应流: session={}, source={}, reason={}", rpSessionId, source, reason);
+        }
+
+        /**
+         * 取消 TTS 合成。
+         *
+         * @param reason 取消原因
+         */
+        private void cancelTts(String reason) {
+            if (ttsSession != null) {
+                ttsSession.cancel(reason);
+            }
         }
 
         /**
@@ -168,6 +188,13 @@ public class RpSpeechTurnService {
         private void finish() {
             if (!closed.compareAndSet(false, true)) {
                 return;
+            }
+            if (ttsSession != null) {
+                if (error == null) {
+                    ttsSession.finish();
+                } else {
+                    ttsSession.cancel(error.getMessage());
+                }
             }
             if (speechLease != null) {
                 speechLease.close();

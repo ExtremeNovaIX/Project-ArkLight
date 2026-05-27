@@ -22,6 +22,11 @@ public class AssistantProperties {
         return activeProvider().getChatModel();
     }
 
+    public ChatModelConfig activeGamerModel() {
+        ProviderConfig provider = activeProvider();
+        return mergedChatModel(provider.getChatModel(), provider.getGamerModel());
+    }
+
     public EmbeddingModelConfig activeEmbeddingModel() {
         return activeProvider().getEmbeddingModel();
     }
@@ -38,7 +43,32 @@ public class AssistantProperties {
     @Data
     public static class ProviderConfig {
         private ChatModelConfig chatModel;
+        private ChatModelConfig gamerModel;
         private EmbeddingModelConfig embeddingModel;
+    }
+
+    private ChatModelConfig mergedChatModel(ChatModelConfig base, ChatModelConfig override) {
+        if (override == null) {
+            return base;
+        }
+        ChatModelConfig merged = new ChatModelConfig();
+        merged.setApiKey(firstNonBlank(override.getApiKey(), base == null ? null : base.getApiKey()));
+        merged.setBaseUrl(firstNonBlank(override.getBaseUrl(), base == null ? null : base.getBaseUrl()));
+        merged.setModelName(firstNonBlank(override.getModelName(), base == null ? null : base.getModelName()));
+        merged.setTimeoutSeconds(override.getTimeoutSeconds() != null
+                ? override.getTimeoutSeconds()
+                : base == null ? null : base.getTimeoutSeconds());
+        merged.setLogEnabled(override.isLogEnabled());
+        merged.setPrompt(firstNonBlank(override.getPrompt(), base == null ? null : base.getPrompt()));
+        merged.setReturnThinking(override.isReturnThinking());
+        merged.setSendThinking(override.isSendThinking());
+        merged.setReasoningEffort(firstNonBlank(override.getReasoningEffort(), base == null ? null : base.getReasoningEffort()));
+        merged.setThinkingType(firstNonBlank(override.getThinkingType(), base == null ? null : base.getThinkingType()));
+        return merged;
+    }
+
+    private String firstNonBlank(String primary, String fallback) {
+        return primary == null || primary.isBlank() ? fallback : primary;
     }
 
     @Data
