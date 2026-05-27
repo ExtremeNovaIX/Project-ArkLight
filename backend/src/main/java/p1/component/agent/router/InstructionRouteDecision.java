@@ -19,7 +19,6 @@ public record InstructionRouteDecision(
         String intent,
         double confidence,
         String instruction,
-        String reason,
         String rawResponse
 ) {
 
@@ -30,7 +29,7 @@ public record InstructionRouteDecision(
      * @return CHAT 决策
      */
     public static InstructionRouteDecision chat(String reason) {
-        return new InstructionRouteDecision(true, "CHAT", 1.0, "", reason, "");
+        return new InstructionRouteDecision(true, "CHAT", 1.0, "", "");
     }
 
     /**
@@ -40,7 +39,7 @@ public record InstructionRouteDecision(
      * @return 不可用决策
      */
     public static InstructionRouteDecision unavailable(String reason) {
-        return new InstructionRouteDecision(false, "UNAVAILABLE", 0.0, "", reason, "");
+        return new InstructionRouteDecision(false, "UNAVAILABLE", 0.0, "", "");
     }
 
     /**

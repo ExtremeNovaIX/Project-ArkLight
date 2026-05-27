@@ -116,8 +116,8 @@ public class RpGameControlIntentInterceptor {
             return new RouterOutcome(false, Optional.empty());
         }
         if (!decision.confidentEnough(routerModelConfig.minConfidence())) {
-            log.debug("[RP游戏控制路由] 低置信度，忽略: session={}, intent={}, confidence={}, reason={}",
-                    sessionId, decision.intent(), decision.confidence(), decision.reason());
+            log.debug("[RP游戏控制路由] 低置信度，忽略: session={}, intent={}, confidence={}",
+                    sessionId, decision.intent(), decision.confidence());
             return new RouterOutcome(true, Optional.empty());
         }
 
@@ -153,35 +153,35 @@ public class RpGameControlIntentInterceptor {
                 <examples>
                 <example>
                 <user>等等，我先看看局面</user>
-                <output>{"intent": "WAIT", "confidence": 0.95, "instruction": "", "reason": "纯等待无动作"}</output>
+                <output>{"intent": "WAIT", "confidence": 0.95, "instruction": ""}</output>
                 </example>
                 <example>
                 <user>先停一下</user>
-                <output>{"intent": "WAIT", "confidence": 0.95, "instruction": "", "reason": "要求暂停"}</output>
+                <output>{"intent": "WAIT", "confidence": 0.95, "instruction": ""}</output>
                 </example>
                 <example>
                 <user>好了继续吧</user>
-                <output>{"intent": "READY", "confidence": 0.9, "instruction": "", "reason": "确认继续"}</output>
+                <output>{"intent": "READY", "confidence": 0.9, "instruction": ""}</output>
                 </example>
                 <example>
                 <user>别等了，不用停</user>
-                <output>{"intent": "READY", "confidence": 0.9, "instruction": "", "reason": "取消等待"}</output>
+                <output>{"intent": "READY", "confidence": 0.9, "instruction": ""}</output>
                 </example>
                 <example>
                 <user>直接结束回合</user>
-                <output>{"intent": "APPLY_INSTRUCTION", "confidence": 0.95, "instruction": "结束回合", "reason": "具体游戏动作"}</output>
+                <output>{"intent": "APPLY_INSTRUCTION", "confidence": 0.95, "instruction": "结束回合"}</output>
                 </example>
                 <example>
                 <user>给我出两张防御</user>
-                <output>{"intent": "APPLY_INSTRUCTION", "confidence": 0.95, "instruction": "出两张防御", "reason": "具体游戏动作"}</output>
+                <output>{"intent": "APPLY_INSTRUCTION", "confidence": 0.95, "instruction": "出两张防御"}</output>
                 </example>
                 <example>
                 <user>为什么这么打</user>
-                <output>{"intent": "CHAT", "confidence": 0.9, "instruction": "", "reason": "纯提问"}</output>
+                <output>{"intent": "CHAT", "confidence": 0.9, "instruction": ""}</output>
                 </example>
                 <example>
                 <user>现在局面怎么样</user>
-                <output>{"intent": "CHAT", "confidence": 0.9, "instruction": "", "reason": "询问局面"}</output>
+                <output>{"intent": "CHAT", "confidence": 0.9, "instruction": ""}</output>
                 </example>
                 </examples>
 
@@ -199,8 +199,8 @@ public class RpGameControlIntentInterceptor {
             case INTENT_WAIT -> {
                 String reason = "用户要求等待：" + userMessage.trim();
                 String result = coordinationService.waitForUser(sessionId, 0, reason);
-                log.info("[RP游戏控制路由] 已登记等待: session={}, confidence={}, reason={}",
-                        sessionId, decision.confidence(), decision.reason());
+                log.info("[RP游戏控制路由] 已登记等待: session={}, confidence={}",
+                        sessionId, decision.confidence());
                 yield Optional.of(new HandledGameControlIntent(INTENT_WAIT, result));
             }
             case INTENT_READY -> {
@@ -208,8 +208,8 @@ public class RpGameControlIntentInterceptor {
                     yield Optional.empty();
                 }
                 String result = coordinationService.markReady(sessionId);
-                log.info("[RP游戏控制路由] 已确认继续: session={}, confidence={}, reason={}",
-                        sessionId, decision.confidence(), decision.reason());
+                log.info("[RP游戏控制路由] 已确认继续: session={}, confidence={}",
+                        sessionId, decision.confidence());
                 yield Optional.of(new HandledGameControlIntent(INTENT_READY, result));
             }
             case INTENT_APPLY_INSTRUCTION -> {

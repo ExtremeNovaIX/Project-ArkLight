@@ -51,7 +51,11 @@ public class LocalModelInstructionRouter implements InstructionRouter {
 
         try {
             String responseBody = execute(request);
-            return parseDecision(responseBody, request.allowedIntents());
+            InstructionRouteDecision decision = parseDecision(responseBody, request.allowedIntents());
+            log.info("[指令路由] 本地路由判断完成: scene={}, intent={}, confidence={}, instruction={}",
+                    request.sceneId(), decision.normalizedIntent(), String.format("%.2f", decision.confidence()),
+                    abbreviate(decision.instruction(), 120));
+            return decision;
         } catch (Exception e) {
             log.warn("[指令路由] 本地路由模型调用失败: scene={}, reason={}",
                     request.sceneId(), e.getMessage());
@@ -150,8 +154,7 @@ public class LocalModelInstructionRouter implements InstructionRouter {
         }
         double confidence = clamp(decisionNode.path("confidence").asDouble(0.0), 0.0, 1.0);
         String instruction = decisionNode.path("instruction").asText("").trim();
-        String reason = decisionNode.path("reason").asText("").trim();
-        return new InstructionRouteDecision(true, intent, confidence, instruction, reason, content);
+        return new InstructionRouteDecision(true, intent, confidence, instruction, content);
     }
 
     /**
@@ -208,5 +211,21 @@ public class LocalModelInstructionRouter implements InstructionRouter {
      */
     private String nullToBlank(String value) {
         return value == null ? "" : value;
+    }
+
+    /**
+     * 日志文本截断，避免路由输出刷屏。
+     *
+     * @param value 原始文本
+     * @param maxLength 最大长度
+     * @return 截断后的文本
+     */
+    private String abbreviate(String value, int maxLength) {
+        if (value == null || value.isBlank()) {
+            return "";
+        }
+        String normalized = value.replaceAll("\\s+", " ").trim();
+        int limit = Math.max(1, maxLength);
+        return normalized.length() <= limit ? normalized : normalized.substring(0, limit) + "...";
     }
 }

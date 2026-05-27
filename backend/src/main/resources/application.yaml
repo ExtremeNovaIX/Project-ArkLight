@@ -17,6 +17,10 @@ spring:
       - optional:classpath:application-rp.yaml
       # 外部 RP 配置优先于 resources 默认值。
       - optional:${arclight.config.uri}application-rp.yaml
+      # TTS 外部服务接入默认配置。
+      - optional:classpath:application-tts.yaml
+      # 外部 TTS 配置优先于 resources 默认值。
+      - optional:${arclight.config.uri}application-tts.yaml
       # Web 与 Qt 前端默认设置。
       - optional:classpath:application-frontend.yaml
       # 外部前端配置优先于 resources 默认值。

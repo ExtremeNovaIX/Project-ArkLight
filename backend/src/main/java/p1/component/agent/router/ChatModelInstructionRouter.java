@@ -80,8 +80,7 @@ public class ChatModelInstructionRouter implements InstructionRouter {
         }
         double confidence = clamp(decisionNode.path("confidence").asDouble(0.0), 0.0, 1.0);
         String instruction = decisionNode.path("instruction").asText("").trim();
-        String reason = decisionNode.path("reason").asText("").trim();
-        return new InstructionRouteDecision(true, intent, confidence, instruction, reason, content);
+        return new InstructionRouteDecision(true, intent, confidence, instruction, content);
     }
 
     private String extractJson(String content) {

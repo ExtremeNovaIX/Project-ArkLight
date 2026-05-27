@@ -34,6 +34,7 @@ public final class ExternalConfigBootstrap {
             "application-memory.yaml",
             "application-mcp.yaml",
             "application-rp.yaml",
+            "application-tts.yaml",
             "mcp-catalog.yaml"
     );
 
