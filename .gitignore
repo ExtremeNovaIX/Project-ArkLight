@@ -88,6 +88,7 @@ backend/benchmark/halumem/*.jsonl
 /backend/benchmark/halumem/__pycache__
 # LLM sidecar runtime（本地模型 + CUDA DLL，自行下载）
 /backend/llm/
+/.claude
 
 # TTS sidecar runtime（GPT-SoVITS 等外部服务与权重，自行下载）
 /backend/tts/
