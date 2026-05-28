@@ -133,7 +133,6 @@ tts:
   provider: voxcpm2-http
   vox-cpm2:
     base-url: http://127.0.0.1:8810
-    control-instruction: ''
     reference-wav-path: ''
     prompt-text: ''
     cfg-value: 2.0
@@ -149,41 +148,28 @@ tts:
 
 `normalize: true` 建议保持开启。中文里混入英文或数字时，关闭它可能出现异常短音频。
 
-## 三种用法
+## 两种用法
 
-### 1. 音色设计
+### 1. 普通克隆
 
-不填参考音频，只用自然语言描述声音：
-
-```yaml
-tts:
-  vox-cpm2:
-    control-instruction: 年轻女性，中文，声音自然，语气轻快
-    reference-wav-path: ''
-    prompt-text: ''
-```
-
-### 2. 普通克隆
-
-只填 `reference-wav-path`。这是推荐默认模式，稳定性最好：
-
-```yaml
-tts:
-  vox-cpm2:
-    control-instruction: ''
-    reference-wav-path: E:\PersonalProject\Project-1\backend\tts\runtime\VoxCPM2\voices\rossi.wav
-    prompt-text: ''
-```
-
-### 3. Ultimate Clone
-
-同时填参考音频和文本。这个模式更强，但要求 `prompt-text` 和参考音频内容严格一致；如果不一致，可能出现含混、伪中文或口音异常：
+只填 `reference-wav-path`。稳定性最好：
 
 ```yaml
 tts:
   vox-cpm2:
     reference-wav-path: E:\PersonalProject\Project-1\backend\tts\runtime\VoxCPM2\voices\rossi.wav
-    prompt-text: 我是洛希娜，授名是狼魄，寓意是狼群的瑰宝。
+    prompt-text: ''
+```
+
+### 2. 高保真克隆
+
+同时填写 `reference-wav-path` 和 `prompt-text`。`prompt-text` 必须是参考音频的逐字文本：
+
+```yaml
+tts:
+  vox-cpm2:
+    reference-wav-path: E:\PersonalProject\Project-1\backend\tts\runtime\VoxCPM2\voices\rossi.wav
+    prompt-text: 我是洛希娜，授名是狼魄，寓意是狼群的瑰宝，可要乖乖记好了！
 ```
 
 ## 直接测试
@@ -194,6 +180,7 @@ tts:
 $body = @{
   text = "你好，我是洛希娜，现在开始测试克隆音色。"
   reference_wav_path = "E:\PersonalProject\Project-1\backend\tts\runtime\VoxCPM2\voices\rossi.wav"
+  prompt_text = "我是洛希娜，授名是狼魄，寓意是狼群的瑰宝，可要乖乖记好了！"
   cfg_value = 1.5
   inference_timesteps = 20
   normalize = $true
@@ -209,31 +196,9 @@ Invoke-WebRequest `
   -OutFile E:\PersonalProject\Project-1\backend\tts\runtime\VoxCPM2\clone-reference-only.wav
 ```
 
-Ultimate Clone 测试：
-
-```powershell
-$body = @{
-  text = "你好，我是洛希娜，现在开始测试克隆音色。"
-  reference_wav_path = "E:\PersonalProject\Project-1\backend\tts\runtime\VoxCPM2\voices\rossi.wav"
-  prompt_text = "我是洛希娜，授名是狼魄，寓意是狼群的瑰宝。"
-  cfg_value = 1.5
-  inference_timesteps = 20
-  normalize = $true
-  denoise = $false
-  media_type = "wav"
-} | ConvertTo-Json
-
-Invoke-WebRequest `
-  -Uri http://127.0.0.1:8810/tts `
-  -Method POST `
-  -ContentType "application/json" `
-  -Body $body `
-  -OutFile E:\PersonalProject\Project-1\backend\tts\runtime\VoxCPM2\clone-ultimate.wav
-```
-
 ## 常见问题
 
-- **输出像方言或伪中文**：先去掉 `prompt_text`，改用普通克隆。Ultimate Clone 对文本和音频匹配要求很高。
+- **输出像方言或伪中文**：先用普通克隆验证参考音频是否干净；高保真克隆需要 `prompt_text` 与参考音频逐字匹配。
 - **输出只有 0 秒或很短**：检查是否开启 `normalize: true`，并避免在文本里混入未规范化的英文/数字串。
 - **显卡没占用**：检查 PyTorch 是否 CUDA 版，运行上面的 CUDA 验证命令。
 - **第一次启动很慢**：可以先保留 `--no-optimize`。确认能跑通后，再去掉它测试速度。

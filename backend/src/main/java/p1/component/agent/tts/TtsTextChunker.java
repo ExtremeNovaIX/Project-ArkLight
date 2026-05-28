@@ -7,12 +7,13 @@ import java.util.List;
  * TTS 流式文本切句器。
  * <p>
  * 上游 LLM partial text 往往很碎；直接逐字合成会导致语音抖动和请求过多。
- * 该组件按标点和最大长度切段，在低延迟与自然度之间取一个保守平衡。
+ * 该组件累计到目标长度后，等待最近的句末标点切段，避免在句中硬切。
  */
 public class TtsTextChunker {
 
     private final TtsConfig config;
     private final StringBuilder buffer = new StringBuilder();
+    private int emittedChunks = 0;
 
     public TtsTextChunker(TtsConfig config) {
         this.config = config;
@@ -51,15 +52,27 @@ public class TtsTextChunker {
 
     private boolean shouldFlush(char latestChar) {
         int length = visibleLength();
-        if (length >= Math.max(1, config.maxChunkChars())) {
+        if (emittedChunks == 0) {
+            return firstChunkShouldFlush(length, latestChar);
+        }
+        return length >= config.maxChunkChars() && config.sentenceEndMarks().contains(latestChar);
+    }
+
+    private boolean firstChunkShouldFlush(int length, char latestChar) {
+        if (length >= config.firstChunkMinChars() && config.sentenceEndMarks().contains(latestChar)) {
             return true;
         }
-        return length >= Math.max(1, config.minChunkChars())
-                && config.sentenceEndMarks().contains(latestChar);
+        return length >= config.firstChunkChars() && config.firstChunkEndMarks().contains(latestChar);
     }
 
     private int visibleLength() {
-        return buffer.toString().trim().length();
+        int length = 0;
+        for (int i = 0; i < buffer.length(); i++) {
+            if (!Character.isWhitespace(buffer.charAt(i))) {
+                length++;
+            }
+        }
+        return length;
     }
 
     private void flushInto(List<String> chunks) {
@@ -67,6 +80,7 @@ public class TtsTextChunker {
         buffer.setLength(0);
         if (!chunk.isBlank()) {
             chunks.add(chunk);
+            emittedChunks++;
         }
     }
 }

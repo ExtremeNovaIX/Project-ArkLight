@@ -34,8 +34,8 @@ class TtsTextNormalizerTest {
         TtsTextChunker chunker = new TtsTextChunker(config);
         List<String> chunks = new ArrayList<>();
 
-        chunks.addAll(chunker.append(normalizer.normalize("[开")));
-        chunks.addAll(chunker.append(normalizer.normalize("心]你好。")));
+        chunks.addAll(chunker.append("[开"));
+        chunks.addAll(chunker.append("心]你好。"));
         chunks.addAll(chunker.flush());
         String joinedChunk = chunks.get(0);
 

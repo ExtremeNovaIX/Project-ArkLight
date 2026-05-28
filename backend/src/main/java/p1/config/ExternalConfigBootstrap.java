@@ -15,7 +15,7 @@ import java.util.Map;
 /**
  * 启动期外部配置引导器。
  * <p>
- * 该引导器在 Spring Boot 读取配置文件之前运行：先把 resources 根目录下的 yaml/yml 默认配置复制到外部 config 目录，
+ * 该引导器在 Spring Boot 读取配置文件之前运行：先把少量用户常改的 yaml 默认配置复制到外部 config 目录，
  * 再把外部目录追加为高优先级配置来源。
  */
 public final class ExternalConfigBootstrap {
@@ -25,17 +25,10 @@ public final class ExternalConfigBootstrap {
     private static final String CONFIG_DIR_ENV = "ARCLIGHT_CONFIG_DIR";
     private static final String DEFAULT_CONFIG_DIR = "../config";
     private static final String SPRING_ADDITIONAL_LOCATION = "spring.config.additional-location";
-    private static final List<String> DEFAULT_YAML_FILES = List.of(
-            "application.yaml",
-            "application-ai.yaml",
-            "application-benchmark.yaml",
-            "application-frontend.yaml",
-            "application-infrastructure.yaml",
-            "application-memory.yaml",
-            "application-mcp.yaml",
-            "application-rp.yaml",
-            "application-tts.yaml",
-            "mcp-catalog.yaml"
+    private static final List<YamlTemplate> USER_EDITABLE_YAML_FILES = List.of(
+            new YamlTemplate("application-ai.yaml", "classpath:config-template/application-ai.yaml"),
+            new YamlTemplate("application-tts.yaml", "classpath:config-template/application-tts.yaml"),
+            new YamlTemplate("mcp-catalog.yaml", "classpath:mcp-catalog.yaml")
     );
 
     private ExternalConfigBootstrap() {
@@ -67,26 +60,26 @@ public final class ExternalConfigBootstrap {
     }
 
     /**
-     * 加载本项目明确支持的默认 yaml 配置。
+     * 加载本项目明确支持、且通常需要用户编辑的默认 yaml 配置。
      * <p>
      * 不使用 classpath*:*.yaml 全量扫描，避免把依赖包根目录里的 config.yaml 等无关文件复制到外部配置目录。
      *
-     * @return 按 DEFAULT_YAML_FILES 顺序排列的 yaml 资源列表
+     * @return 按 USER_EDITABLE_YAML_FILES 顺序排列的 yaml 资源列表
      */
     private static List<YamlResource> discoverYamlResources() {
         PathMatchingResourcePatternResolver resolver = new PathMatchingResourcePatternResolver();
         Map<String, YamlResource> resources = new LinkedHashMap<>();
-        for (String fileName : DEFAULT_YAML_FILES) {
-            Resource resource = resolver.getResource("classpath:" + fileName);
+        for (YamlTemplate template : USER_EDITABLE_YAML_FILES) {
+            Resource resource = resolver.getResource(template.resourceLocation());
             if (resource.exists()) {
-                resources.put(fileName, new YamlResource(fileName, resource));
+                resources.put(template.fileName(), new YamlResource(template.fileName(), resource));
             }
         }
         return List.copyOf(resources.values());
     }
 
     /**
-     * 如果外部 yaml 文件不存在，则逐个从 resources 复制默认配置。
+     * 如果外部常用配置文件不存在，则逐个从 resources 复制默认配置。
      *
      * @param configDir     外部配置目录
      * @param yamlResources resources 根目录下的 yaml/yml 配置
@@ -161,5 +154,14 @@ public final class ExternalConfigBootstrap {
      * @param resource classpath 资源
      */
     private record YamlResource(String fileName, Resource resource) {
+    }
+
+    /**
+     * 外部配置模板资源。
+     *
+     * @param fileName         复制到外部 config 目录后的文件名
+     * @param resourceLocation classpath 模板位置
+     */
+    private record YamlTemplate(String fileName, String resourceLocation) {
     }
 }

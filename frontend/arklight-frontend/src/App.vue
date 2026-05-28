@@ -45,10 +45,14 @@ let bootDismissTimer: ReturnType<typeof setTimeout> | undefined;
 let liveMessageSource: EventSource | undefined;
 let ttsAudioSource: EventSource | undefined;
 let ttsAudioContext: AudioContext | undefined;
+let ttsPcmWorkletNode: AudioWorkletNode | undefined;
+let ttsPcmWorkletReady: Promise<AudioWorkletNode | null> | undefined;
 let ttsNextPlayTime = 0;
 let ttsAudioConnectionVersion = 0;
 let ttsAudioPlaybackChain: Promise<void> = Promise.resolve();
 const pendingResponseTimers = new Set<ReturnType<typeof setTimeout>>();
+const TTS_AUDIO_START_MARGIN_SECONDS = 0.02;
+const TTS_CHUNK_CROSSFADE_SECONDS = 0.012;
 
 const activeTheme = computed(
   () => themeRegistryMap[frontendSettings.value.themeId] ?? themeRegistryMap[defaultThemeId]
@@ -453,6 +457,7 @@ const closeTtsAudio = () => {
   ttsAudioConnectionVersion += 1;
   ttsAudioSource?.close();
   ttsAudioSource = undefined;
+  ttsPcmWorkletNode?.port.postMessage({ type: 'reset' });
   ttsNextPlayTime = 0;
   ttsAudioPlaybackChain = Promise.resolve();
 };
@@ -498,6 +503,34 @@ const ensureTtsAudioContext = async () => {
   return ttsAudioContext;
 };
 
+const ensureTtsPcmWorklet = async (audioContext: AudioContext) => {
+  if (!audioContext.audioWorklet) {
+    return null;
+  }
+  if (ttsPcmWorkletNode) {
+    return ttsPcmWorkletNode;
+  }
+  if (!ttsPcmWorkletReady) {
+    const baseUrl = import.meta.env.BASE_URL.endsWith('/')
+      ? import.meta.env.BASE_URL
+      : `${import.meta.env.BASE_URL}/`;
+    ttsPcmWorkletReady = audioContext.audioWorklet
+      .addModule(`${baseUrl}tts-pcm-worklet.js`)
+      .then(() => {
+        const node = new AudioWorkletNode(audioContext, 'tts-pcm-player', {
+          numberOfInputs: 0,
+          numberOfOutputs: 1,
+          outputChannelCount: [2]
+        });
+        node.connect(audioContext.destination);
+        ttsPcmWorkletNode = node;
+        return node;
+      })
+      .catch(() => null);
+  }
+  return ttsPcmWorkletReady;
+};
+
 const base64ToArrayBuffer = (base64: string) => {
   const binary = window.atob(base64);
   const bytes = new Uint8Array(binary.length);
@@ -505,6 +538,75 @@ const base64ToArrayBuffer = (base64: string) => {
     bytes[index] = binary.charCodeAt(index);
   }
   return bytes.buffer;
+};
+
+const decodePcmS16Le = (audioBase64: string) => {
+  const bytes = new Uint8Array(base64ToArrayBuffer(audioBase64));
+  const sampleCount = Math.floor(bytes.byteLength / 2);
+  const samples = new Float32Array(sampleCount);
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  for (let index = 0; index < sampleCount; index += 1) {
+    samples[index] = view.getInt16(index * 2, true) / 32768;
+  }
+  return samples;
+};
+
+const resamplePcm = (samples: Float32Array, sourceSampleRate: number, targetSampleRate: number) => {
+  if (!sourceSampleRate || sourceSampleRate === targetSampleRate || samples.length <= 1) {
+    return samples;
+  }
+  const outputLength = Math.max(1, Math.round(samples.length * targetSampleRate / sourceSampleRate));
+  const output = new Float32Array(outputLength);
+  const ratio = sourceSampleRate / targetSampleRate;
+  for (let index = 0; index < outputLength; index += 1) {
+    const sourceIndex = index * ratio;
+    const leftIndex = Math.floor(sourceIndex);
+    const rightIndex = Math.min(leftIndex + 1, samples.length - 1);
+    const fraction = sourceIndex - leftIndex;
+    output[index] = samples[leftIndex] * (1 - fraction) + samples[rightIndex] * fraction;
+  }
+  return output;
+};
+
+const calculateTtsFadeDuration = (duration: number) => {
+  if (!Number.isFinite(duration) || duration <= 0) {
+    return 0;
+  }
+  return Math.min(TTS_CHUNK_CROSSFADE_SECONDS, duration / 4);
+};
+
+const playTtsAudioBuffer = async (audioBuffer: AudioBuffer, connectionVersion: number) => {
+  if (connectionVersion !== ttsAudioConnectionVersion) {
+    return;
+  }
+  const audioContext = await ensureTtsAudioContext();
+  if (!audioContext || connectionVersion !== ttsAudioConnectionVersion) {
+    return;
+  }
+
+  const source = audioContext.createBufferSource();
+  const gainNode = audioContext.createGain();
+  source.buffer = audioBuffer;
+  source.connect(gainNode);
+  gainNode.connect(audioContext.destination);
+
+  const fadeDuration = calculateTtsFadeDuration(audioBuffer.duration);
+  const startAt = Math.max(audioContext.currentTime + TTS_AUDIO_START_MARGIN_SECONDS, ttsNextPlayTime);
+  const endAt = startAt + audioBuffer.duration;
+  if (fadeDuration > 0) {
+    const fadeInEnd = Math.min(startAt + fadeDuration, endAt);
+    const fadeOutStart = Math.max(startAt, endAt - fadeDuration);
+    gainNode.gain.setValueAtTime(0, startAt);
+    gainNode.gain.linearRampToValueAtTime(1, fadeInEnd);
+    if (fadeOutStart > fadeInEnd) {
+      gainNode.gain.setValueAtTime(1, fadeOutStart);
+    }
+    gainNode.gain.linearRampToValueAtTime(0, endAt);
+  } else {
+    gainNode.gain.setValueAtTime(1, startAt);
+  }
+  source.start(startAt);
+  ttsNextPlayTime = Math.max(startAt, endAt - fadeDuration);
 };
 
 const playTtsAudio = async (audioBase64: string, connectionVersion: number) => {
@@ -517,16 +619,7 @@ const playTtsAudio = async (audioBase64: string, connectionVersion: number) => {
   }
 
   const audioBuffer = await audioContext.decodeAudioData(base64ToArrayBuffer(audioBase64));
-  if (connectionVersion !== ttsAudioConnectionVersion) {
-    return;
-  }
-  const source = audioContext.createBufferSource();
-  source.buffer = audioBuffer;
-  source.connect(audioContext.destination);
-
-  const startAt = Math.max(audioContext.currentTime + 0.02, ttsNextPlayTime);
-  source.start(startAt);
-  ttsNextPlayTime = startAt + audioBuffer.duration;
+  await playTtsAudioBuffer(audioBuffer, connectionVersion);
 };
 
 const queueTtsAudio = (audioBase64: string, connectionVersion: number) => {
@@ -535,6 +628,43 @@ const queueTtsAudio = (audioBase64: string, connectionVersion: number) => {
     .then(() => playTtsAudio(audioBase64, connectionVersion))
     .catch(() => undefined);
 };
+
+const enqueueTtsPcmAudio = async (
+  payload: { audioBase64?: string; sampleRate?: number },
+  connectionVersion: number
+) => {
+  if (!payload.audioBase64 || connectionVersion !== ttsAudioConnectionVersion) {
+    return;
+  }
+  const audioContext = await ensureTtsAudioContext();
+  if (!audioContext || connectionVersion !== ttsAudioConnectionVersion) {
+    return;
+  }
+
+  const sourceSampleRate = payload.sampleRate || audioContext.sampleRate;
+  const samples = resamplePcm(decodePcmS16Le(payload.audioBase64), sourceSampleRate, audioContext.sampleRate);
+  const workletNode = await ensureTtsPcmWorklet(audioContext);
+  if (workletNode && connectionVersion === ttsAudioConnectionVersion) {
+    workletNode.port.postMessage({ type: 'push', samples }, [samples.buffer]);
+    return;
+  }
+
+  const audioBuffer = audioContext.createBuffer(1, samples.length, audioContext.sampleRate);
+  audioBuffer.copyToChannel(samples, 0);
+  await playTtsAudioBuffer(audioBuffer, connectionVersion);
+};
+
+const queueTtsPcmAudio = (
+  payload: { audioBase64?: string; sampleRate?: number },
+  connectionVersion: number
+) => {
+  ttsAudioPlaybackChain = ttsAudioPlaybackChain
+    .then(() => enqueueTtsPcmAudio(payload, connectionVersion))
+    .catch(() => undefined);
+};
+
+const isPcmTtsAudio = (mediaType?: string) =>
+  (mediaType ?? '').toLowerCase().startsWith('audio/pcm');
 
 const connectTtsAudio = () => {
   if (typeof window === 'undefined' || typeof window.EventSource === 'undefined') {
@@ -548,9 +678,15 @@ const connectTtsAudio = () => {
     try {
       const payload = JSON.parse((event as MessageEvent<string>).data) as {
         audioBase64?: string;
+        mediaType?: string;
+        sampleRate?: number;
         finalChunk?: boolean;
       };
       if (payload.finalChunk) {
+        return;
+      }
+      if (isPcmTtsAudio(payload.mediaType)) {
+        queueTtsPcmAudio(payload, connectionVersion);
         return;
       }
       queueTtsAudio(payload.audioBase64 ?? '', connectionVersion);

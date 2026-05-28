@@ -147,7 +147,7 @@ public class TtsRuntimeManager {
             return;
         }
 
-        List<String> command = runtimeCommand(profile.runtime());
+        List<String> command = resolveExecutable(runtimeCommand(profile.runtime()), workingDirectory);
         try {
             ProcessBuilder builder = new ProcessBuilder(command);
             builder.directory(workingDirectory.toFile());
@@ -214,6 +214,30 @@ public class TtsRuntimeManager {
             command.addAll(runtime.getExtraArgs());
         }
         return command;
+    }
+
+    /**
+     * Windows/JDK 对 {@link ProcessBuilder#directory(java.io.File)} 的处理不会可靠地解析第一个可执行文件。
+     * 配置仍保持相对路径；真正启动前只把带路径分隔符的相对 executable 解析到工作目录下。
+     *
+     * @param command          原始启动命令
+     * @param workingDirectory TTS 工作目录
+     * @return executable 已解析的启动命令
+     */
+    List<String> resolveExecutable(List<String> command, Path workingDirectory) {
+        if (command == null || command.isEmpty()) {
+            return List.of();
+        }
+        List<String> resolved = new ArrayList<>(command);
+        String executable = resolved.getFirst();
+        if (!hasText(executable) || !containsPathSeparator(executable)) {
+            return resolved;
+        }
+        Path executablePath = Path.of(executable);
+        if (!executablePath.isAbsolute()) {
+            resolved.set(0, workingDirectory.resolve(executablePath).normalize().toString());
+        }
+        return resolved;
     }
 
     /**
@@ -412,6 +436,10 @@ public class TtsRuntimeManager {
                 || normalized.endsWith(".ps1")
                 || normalized.endsWith(".exe")
                 || normalized.endsWith(".py");
+    }
+
+    private boolean containsPathSeparator(String value) {
+        return value.indexOf('/') >= 0 || value.indexOf('\\') >= 0;
     }
 
     private boolean hasText(String value) {

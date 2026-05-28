@@ -18,7 +18,7 @@ import static p1.utils.SessionUtil.normalizeSessionId;
 /**
  * TTS 发言编排服务。
  * <p>
- * RP 流式文本进入这里后，会被清理、切句、顺序合成并推送给前端。该服务不直接依赖 RP Agent，
+ * RP 流式文本进入这里后，会被清理、按句末标点分段合成并推送给前端。该服务不直接依赖 RP Agent，
  * 只把 session/source 当作音频路由信息使用。
  */
 @Service
@@ -30,7 +30,6 @@ public class TtsSpeechService {
     private final TtsProviderRegistry providerRegistry;
     private final TtsRuntimeManager runtimeManager;
     private final TtsTextNormalizer textNormalizer;
-    private final TtsStyleExtractor styleExtractor;
     private final TtsAudioHub audioHub;
     private final AtomicBoolean unavailableLogged = new AtomicBoolean(false);
     private final AtomicBoolean disabledLogged = new AtomicBoolean(false);
@@ -96,8 +95,7 @@ public class TtsSpeechService {
         private final String source;
         private final TtsProvider provider;
         private final TtsTextChunker chunker = new TtsTextChunker(config);
-        private volatile String currentControlInstruction = "";
-        private volatile String currentVoxTag = "";
+        private boolean styleBoundaryAllowed = true;
         private final StringBuilder pending = new StringBuilder();
         private final AtomicLong sequence = new AtomicLong();
         private final AtomicBoolean closed = new AtomicBoolean(false);
@@ -111,77 +109,108 @@ public class TtsSpeechService {
         }
 
         /**
-         * 接收 RP 流式输出片段，并在形成完整短句后排队合成。
+         * 接收 RP 流式输出片段，并在形成完整文本段后排队合成。
          *
          * @param text 新到达的文本片段
          */
         @Override
         public void accept(String text) {
-            if (closed.get()) {
+            if (closed.get() || text == null || text.isEmpty()) {
                 return;
             }
 
             pending.append(text);
+            processPending(false);
+        }
 
-            // 流式 chunk 可能拆散句首括号（...），等闭合后再提取风格
-            String remaining;
-            if (config.voxCpmProviderEnabled() && hasLeadingOpenParen(pending)) {
-                TtsStyleExtractor.StyleExtractionResult result = styleExtractor.extract(pending.toString());
-                if (result.hasStyle()) {
-                    currentControlInstruction = result.controlInstruction();
-                    currentVoxTag = result.voxTag();
-                    remaining = result.cleanText();
+        private void processPending(boolean finishing) {
+            int start = 0;
+            while (start < pending.length()) {
+                int styleOpen = findNextStyleOpen(pending, start);
+                if (styleOpen < 0) {
+                    appendText(pending.substring(start));
                     pending.setLength(0);
-                } else if (noCloseParen(pending)) {
-                    if (pending.length() > 80) {
-                        remaining = drainPending();
-                    } else {
+                    return;
+                }
+
+                if (styleOpen > start) {
+                    appendText(pending.substring(start, styleOpen));
+                }
+
+                int styleClose = findStyleClose(pending, styleOpen + 1);
+                if (styleClose < 0) {
+                    if (!finishing) {
+                        pending.delete(0, styleOpen);
                         return;
                     }
-                } else {
-                    remaining = drainPending();
+                    pending.setLength(0);
+                    return;
                 }
-            } else {
-                remaining = drainPending();
-            }
 
-            if (remaining.isBlank()) {
-                return;
+                styleBoundaryAllowed = false;
+                start = styleClose + 1;
             }
-
-            String normalized = textNormalizer.normalize(remaining);
-            if (normalized.isBlank()) {
-                return;
-            }
-            // VoxCPM2 非语言标签插入文本头部（在 normalize 之后，避免被当作情绪标签剥掉）
-            if (!currentVoxTag.isEmpty()) {
-                normalized = "[" + currentVoxTag + "]" + normalized;
-                currentVoxTag = "";
-            }
-            enqueueAll(chunker.append(normalized));
-        }
-
-        private boolean hasLeadingOpenParen(CharSequence s) {
-            for (int i = 0; i < s.length(); i++) {
-                char c = s.charAt(i);
-                if (c == '（' || c == '(') return true;
-                if (!Character.isWhitespace(c)) return false;
-            }
-            return false;
-        }
-
-        private boolean noCloseParen(CharSequence s) {
-            for (int i = 0; i < s.length(); i++) {
-                char c = s.charAt(i);
-                if (c == '）' || c == ')') return false;
-            }
-            return true;
-        }
-
-        private String drainPending() {
-            String drained = pending.toString();
             pending.setLength(0);
-            return drained;
+        }
+
+        private int findNextStyleOpen(CharSequence text, int from) {
+            boolean styleAllowed = styleBoundaryAllowed;
+            for (int i = from; i < text.length(); i++) {
+                char c = text.charAt(i);
+                if (isOpenParen(c) && styleAllowed) {
+                    return i;
+                }
+                if (isSentenceEnd(c) || c == '\n' || c == '\r') {
+                    styleAllowed = true;
+                } else if (!Character.isWhitespace(c)) {
+                    styleAllowed = false;
+                }
+            }
+            return -1;
+        }
+
+        private int findStyleClose(CharSequence text, int from) {
+            for (int i = from; i < text.length(); i++) {
+                char c = text.charAt(i);
+                if (isCloseParen(c)) {
+                    return i;
+                }
+            }
+            return -1;
+        }
+
+        private void appendText(String text) {
+            if (text == null || text.isEmpty()) {
+                return;
+            }
+            updateStyleBoundary(text);
+            enqueueAll(chunker.append(text));
+        }
+
+        private void updateStyleBoundary(String text) {
+            if (text == null || text.isEmpty()) {
+                return;
+            }
+            for (int i = 0; i < text.length(); i++) {
+                char c = text.charAt(i);
+                if (isSentenceEnd(c) || c == '\n' || c == '\r') {
+                    styleBoundaryAllowed = true;
+                } else if (!Character.isWhitespace(c)) {
+                    styleBoundaryAllowed = false;
+                }
+            }
+        }
+
+        private boolean isOpenParen(char c) {
+            return c == '（' || c == '(';
+        }
+
+        private boolean isCloseParen(char c) {
+            return c == '）' || c == ')';
+        }
+
+        private boolean isSentenceEnd(char c) {
+            return config.sentenceEndMarks().contains(c);
         }
 
         /**
@@ -192,6 +221,7 @@ public class TtsSpeechService {
             if (!closed.compareAndSet(false, true)) {
                 return;
             }
+            processPending(true);
             enqueueAll(chunker.flush());
             long finalSequence = sequence.incrementAndGet();
             synchronized (this) {
@@ -218,20 +248,23 @@ public class TtsSpeechService {
         }
 
         /**
-         * 将多个短句按顺序加入合成队列。
+         * 将多个文本段按顺序加入合成队列。
          *
-         * @param chunks 短句列表
+         * @param chunks 文本段列表
          */
         private void enqueueAll(List<String> chunks) {
             for (String chunk : chunks) {
-                enqueue(chunk);
+                String normalized = textNormalizer.normalize(chunk);
+                if (!normalized.isBlank()) {
+                    enqueue(normalized);
+                }
             }
         }
 
         /**
-         * 将单个短句追加到串行合成链路。
+         * 将单个文本段追加到串行合成链路。
          *
-         * @param text 待合成短句
+         * @param text 待合成文本
          */
         private void enqueue(String text) {
             if (cancelled.get()) {
@@ -241,9 +274,8 @@ public class TtsSpeechService {
                 return;
             }
             long currentSequence = sequence.incrementAndGet();
-            String ctrl = currentControlInstruction;
             synchronized (this) {
-                chain = chain.thenRunAsync(() -> synthesizeAndPublish(currentSequence, text, ctrl), executor)
+                chain = chain.thenRunAsync(() -> synthesizeAndPublish(currentSequence, text), executor)
                         .exceptionally(error -> {
                             if (!cancelled.get()) {
                                 log.warn("[TTS] 合成短句失败: session={}, sequence={}, text={}, reason={}",
@@ -258,15 +290,15 @@ public class TtsSpeechService {
          * 调用 provider 合成音频并推送给前端订阅者。
          *
          * @param currentSequence 当前短句序号
-         * @param text            待合成短句
+         * @param text            待合成文本
          */
-        private void synthesizeAndPublish(long currentSequence, String text, String ctrl) {
+        private void synthesizeAndPublish(long currentSequence, String text) {
             if (cancelled.get()) {
                 return;
             }
             try {
                 provider.synthesize(
-                        new TtsSynthesisRequest(sessionId, source, currentSequence, text, ctrl),
+                        new TtsSynthesisRequest(sessionId, source, currentSequence, text),
                         frame -> {
                             if (!cancelled.get()) {
                                 audioHub.publishAudio(sessionId, source, currentSequence, text, frame);

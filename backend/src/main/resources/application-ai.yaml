@@ -22,6 +22,23 @@ assistant:
       reasoning-effort: ${LLM_REASONING_EFFORT:}
       # 供应商支持 thinking.type 时使用的思考模式；enabled/disabled 取决于供应商实现。
       thinking-type: ${LLM_THINKING_TYPE:enabled}
+    gamer-model:
+      # Gamer 专用模型 API Key；为空时复用 chat-model。
+      api-key: ${GAMER_MODEL_API_KEY:}
+      # Gamer 专用模型 OpenAI-compatible API 地址；为空时复用 chat-model。
+      base-url: ${GAMER_MODEL_BASE_URL:}
+      # Gamer 专用模型名称；为空时复用 chat-model。
+      model-name: ${GAMER_MODEL_NAME:}
+      # 是否打印 gamer 模型原始请求和响应日志。
+      log-enabled: false
+      # Gamer ACTION 从可见响应流解析，默认不接收 thinking。
+      return-thinking: false
+      # Gamer ACTION 从可见响应流解析，默认不回传 thinking。
+      send-thinking: false
+      # Gamer 默认不发送 reasoning_effort。
+      reasoning-effort: ${GAMER_MODEL_REASONING_EFFORT:}
+      # Gamer 默认禁用 thinking.type。
+      thinking-type: ${GAMER_MODEL_THINKING_TYPE:disabled}
     embedding-model:
       # 远端向量模型 API Key，默认从环境变量读取。
       api-key: ${DASHSCOPE_API_KEY:default_value}
@@ -48,6 +65,21 @@ assistant:
       reasoning-effort: ${LLM_REASONING_EFFORT:}
       # 本地模型支持 thinking.type 时使用的思考模式。
       thinking-type: ${LLM_THINKING_TYPE:enabled}
+    gamer-model:
+      # 本地 Gamer 模型 OpenAI-compatible API 地址；为空时复用 chat-model。
+      base-url: ${LOCAL_GAMER_MODEL_BASE_URL:}
+      # 本地 Gamer 模型名称；为空时复用 chat-model。
+      model-name: ${LOCAL_GAMER_MODEL_NAME:}
+      # 是否打印本地 Gamer 模型原始请求和响应日志。
+      log-enabled: false
+      # Gamer ACTION 从可见响应流解析，默认不接收 thinking。
+      return-thinking: false
+      # Gamer ACTION 从可见响应流解析，默认不回传 thinking。
+      send-thinking: false
+      # 本地 Gamer 模型默认不发送 reasoning_effort。
+      reasoning-effort: ${LOCAL_GAMER_MODEL_REASONING_EFFORT:}
+      # 本地 Gamer 模型默认禁用 thinking.type。
+      thinking-type: ${LOCAL_GAMER_MODEL_THINKING_TYPE:disabled}
     embedding-model:
       # 本地向量模型 OpenAI-compatible API 地址。
       base-url: http://127.0.0.1:1234/v1

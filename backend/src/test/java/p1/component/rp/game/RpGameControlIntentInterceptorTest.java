@@ -91,7 +91,7 @@ class RpGameControlIntentInterceptorTest {
     @Test
     void shouldUseInstructionRouterBeforeRuleFallback() {
         Fixture fixture = new Fixture(request ->
-                new InstructionRouteDecision(true, "WAIT", 0.91, "", "用户要观察局面", "{}"));
+                new InstructionRouteDecision(true, "WAIT", 0.91, "", "{}"));
         fixture.registry.register("STS2MCP", "game-session", "rp-session");
         fixture.properties.getRp().setInstructionRouterEnabled(true);
 
@@ -110,7 +110,7 @@ class RpGameControlIntentInterceptorTest {
         fixture.interceptor.intercept("rp-session", "先停一下");
 
         fixture = new Fixture(request ->
-                new InstructionRouteDecision(true, "READY", 0.92, "", "用户取消等待", "{}"),
+                new InstructionRouteDecision(true, "READY", 0.92, "", "{}"),
                 fixture.registry,
                 fixture.coordinator,
                 fixture.coordinationService,
@@ -128,7 +128,7 @@ class RpGameControlIntentInterceptorTest {
     @Test
     void shouldNotFallbackWhenRouterConfidentlyReturnsChat() {
         Fixture fixture = new Fixture(request ->
-                new InstructionRouteDecision(true, "CHAT", 0.95, "", "普通聊天", "{}"));
+                new InstructionRouteDecision(true, "CHAT", 0.95, "", "{}"));
         fixture.registry.register("STS2MCP", "game-session", "rp-session");
         fixture.properties.getRp().setInstructionRouterEnabled(true);
 
@@ -144,7 +144,7 @@ class RpGameControlIntentInterceptorTest {
         AtomicInteger routeCount = new AtomicInteger();
         Fixture fixture = new Fixture(request -> {
             routeCount.incrementAndGet();
-            return new InstructionRouteDecision(true, "CHAT", 0.98, "", "普通 RP 对话", "{}");
+            return new InstructionRouteDecision(true, "CHAT", 0.98, "", "{}");
         });
         fixture.properties.getRp().setInstructionRouterEnabled(true);
 

@@ -14,7 +14,7 @@ class InstructionRouteDecisionTest {
         assertEquals("CHAT", decision.intent());
         assertEquals(1.0, decision.confidence());
         assertEquals("", decision.instruction());
-        assertEquals("empty message", decision.reason());
+        assertEquals("", decision.rawResponse());
     }
 
     @Test
@@ -24,13 +24,13 @@ class InstructionRouteDecisionTest {
         assertFalse(decision.available());
         assertEquals("UNAVAILABLE", decision.intent());
         assertEquals(0.0, decision.confidence());
-        assertEquals("timeout", decision.reason());
+        assertEquals("", decision.rawResponse());
     }
 
     @Test
     void shouldBeConfidentEnoughWhenAboveThreshold() {
         InstructionRouteDecision decision = new InstructionRouteDecision(
-                true, "WAIT", 0.8, "", "", "");
+                true, "WAIT", 0.8, "", "");
 
         assertTrue(decision.confidentEnough(0.65));
     }
@@ -38,7 +38,7 @@ class InstructionRouteDecisionTest {
     @Test
     void shouldNotBeConfidentEnoughWhenBelowThreshold() {
         InstructionRouteDecision decision = new InstructionRouteDecision(
-                true, "WAIT", 0.5, "", "", "");
+                true, "WAIT", 0.5, "", "");
 
         assertFalse(decision.confidentEnough(0.65));
     }
@@ -53,7 +53,7 @@ class InstructionRouteDecisionTest {
     @Test
     void shouldNormalizeIntent() {
         InstructionRouteDecision decision = new InstructionRouteDecision(
-                true, "  wait  ", 0.9, "", "", "");
+                true, "  wait  ", 0.9, "", "");
 
         assertEquals("WAIT", decision.normalizedIntent());
     }
@@ -61,7 +61,7 @@ class InstructionRouteDecisionTest {
     @Test
     void shouldNormalizeNullIntentToEmpty() {
         InstructionRouteDecision decision = new InstructionRouteDecision(
-                true, null, 0.9, "", "", "");
+                true, null, 0.9, "", "");
 
         assertEquals("", decision.normalizedIntent());
     }

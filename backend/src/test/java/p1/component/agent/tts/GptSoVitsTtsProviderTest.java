@@ -56,6 +56,8 @@ class GptSoVitsTtsProviderTest {
         assertEquals("这是一段参考文本。", requestBody.get().get("prompt_text").asText());
         assertEquals("zh", requestBody.get().get("prompt_lang").asText());
         assertEquals("cut5", requestBody.get().get("text_split_method").asText());
+        assertEquals(4, requestBody.get().get("batch_size").asInt());
+        assertEquals(0.08, requestBody.get().get("fragment_interval").asDouble(), 0.001);
         assertEquals("wav", requestBody.get().get("media_type").asText());
         assertEquals(0, requestBody.get().get("streaming_mode").asInt());
         assertTrue(requestBody.get().get("parallel_infer").asBoolean());

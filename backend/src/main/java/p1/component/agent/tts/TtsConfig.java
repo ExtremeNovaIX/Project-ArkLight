@@ -22,9 +22,11 @@ public class TtsConfig {
     private boolean enabled = false;
     private String provider = "gpt-sovits-http";
     private long synthesisTimeoutMs = 60_000;
-    private int minChunkChars = 6;
-    private int maxChunkChars = 48;
+    private int firstChunkMinChars = 6;
+    private int firstChunkChars = 12;
+    private int maxChunkChars = 40;
     private List<Character> sentenceEndMarks = List.of('。', '！', '？', '；', '…', '.', '!', '?', ';', '\n');
+    private List<Character> firstChunkEndMarks = List.of('。', '！', '？', '；', '…', '，', '、', '.', '!', '?', ';', ',', ':', '：', '\n');
     private GptSoVitsConfig gptSoVits = new GptSoVitsConfig();
     private VoxCpm2Config voxCpm2 = new VoxCpm2Config();
     private RuntimeConfig runtime = new RuntimeConfig();
@@ -48,21 +50,31 @@ public class TtsConfig {
     }
 
     /**
-     * TTS 分段触发的最小字符数。
+     * TTS 分段的目标字符数，达到后等待最近句末标点切段。
      *
-     * @return 最小字符数
+     * @return 目标字符数
      */
-    public int minChunkChars() {
-        return minChunkChars;
+    public int maxChunkChars() {
+        return Math.max(1, maxChunkChars);
     }
 
     /**
-     * TTS 分段的最大字符数，超过后即使没有标点也会强制切段。
+     * Target visible character count for the first TTS chunk.
      *
-     * @return 最大字符数
+     * @return first chunk target character count
      */
-    public int maxChunkChars() {
-        return maxChunkChars;
+    public int firstChunkChars() {
+        return Math.max(1, firstChunkChars);
+    }
+
+    public int firstChunkMinChars() {
+        return Math.max(1, firstChunkMinChars);
+    }
+
+    public List<Character> firstChunkEndMarks() {
+        return firstChunkEndMarks == null || firstChunkEndMarks.isEmpty()
+                ? List.of('。', '！', '？', '；', '…', '，', '、', '.', '!', '?', ';', ',', ':', '：', '\n')
+                : firstChunkEndMarks;
     }
 
     /**
@@ -123,15 +135,15 @@ public class TtsConfig {
         private String textLang = "zh";
         private String promptLang = "zh";
         private String mediaType = "wav";
-        private String textSplitMethod = "cut5";
+        private String textSplitMethod = "cut0";
         private int topK = 15;
         private double topP = 1.0;
         private double temperature = 1.0;
-        private int batchSize = 1;
+        private int batchSize = 4;
         private double batchThreshold = 0.75;
         private boolean splitBucket = true;
         private double speedFactor = 1.0;
-        private double fragmentInterval = 0.3;
+        private double fragmentInterval = 0.08;
         private int seed = -1;
         private int streamingMode = 0;
         private boolean parallelInfer = true;
@@ -146,12 +158,11 @@ public class TtsConfig {
      * VoxCPM2 HTTP provider 配置。
      * <p>
      * 默认目标是基于 OpenBMB/VoxCPM 官方 Python API 的本地 sidecar。Java 只发送文本、参考音频、
-     * 控制指令和推理参数；模型加载、权重路径和 GPU 管理由外部 VoxCPM2 运行时负责。
+     * 参考音频转写和推理参数；模型加载、权重路径和 GPU 管理由外部 VoxCPM2 运行时负责。
      */
     @Data
     public static class VoxCpm2Config {
         private String baseUrl = "http://127.0.0.1:8810";
-        private String controlInstruction = "";
         private String referenceWavPath = "";
         private String promptText = "";
         private double cfgValue = 2.0;
@@ -159,6 +170,8 @@ public class TtsConfig {
         private boolean normalize = true;
         private boolean denoise = false;
         private String mediaType = "wav";
+        private boolean streamingEnabled = true;
+        private int badcaseRetryAttempts = 1;
         private Map<String, Object> extraBody = Map.of();
         private RuntimeConfig runtime = RuntimeConfig.voxCpm2Defaults();
     }
@@ -199,7 +212,7 @@ public class TtsConfig {
             RuntimeConfig runtime = new RuntimeConfig();
             runtime.setStartupCommand(List.of(
                     ".venv\\Scripts\\python.exe",
-                    "..\\..\\tools\\voxcpm2_tts_server.py",
+                    "..\\..\\..\\tools\\voxcpm2_tts_server.py",
                     "--model-id",
                     "models\\VoxCPM2",
                     "--device",
@@ -207,8 +220,7 @@ public class TtsConfig {
                     "--host",
                     "127.0.0.1",
                     "--port",
-                    "8810",
-                    "--no-optimize"
+                    "8810"
             ));
             runtime.setLauncherCommand(List.of());
             runtime.setPythonExecutable("");

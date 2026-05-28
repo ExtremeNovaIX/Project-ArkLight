@@ -3,8 +3,9 @@ tts:
   # 可选：gpt-sovits-http、voxcpm2-http
   provider: voxcpm2-http
   synthesis-timeout-ms: 60000
-  min-chunk-chars: 6
-  max-chunk-chars: 48
+  first-chunk-min-chars: 6
+  first-chunk-chars: 12
+  max-chunk-chars: 40
   sentence-end-marks:
     - "。"
     - "！"
@@ -30,11 +31,11 @@ tts:
     temperature: 1.0
     seed: -1
     # 以下参数通常使用默认值，如需调整取消注释即可
-    # text-split-method: cut5
-    # batch-size: 1
+    # text-split-method: cut0
+    # batch-size: 4
     # batch-threshold: 0.75
     # split-bucket: true
-    # fragment-interval: 0.3
+    # fragment-interval: 0.08
     # streaming-mode: 0
     # parallel-infer: true
     # repetition-penalty: 1.35
@@ -46,7 +47,6 @@ tts:
 
   vox-cpm2:
     base-url: ${VOXCPM2_BASE_URL:http://127.0.0.1:8810}
-    control-instruction: ${VOXCPM2_CONTROL_INSTRUCTION:}
     reference-wav-path: ${VOXCPM2_REFERENCE_WAV_PATH:}
     prompt-text: ${VOXCPM2_PROMPT_TEXT:}
     cfg-value: 2.0
@@ -54,12 +54,14 @@ tts:
     normalize: true
     denoise: false
     media-type: wav
+    streaming-enabled: true
+    badcase-retry-attempts: 1
     # extra-body: {}
     runtime:
       auto-start-enabled: true
       startup-command:
         - .venv\Scripts\python.exe
-        - ..\..\tools\voxcpm2_tts_server.py
+        - ..\..\..\tools\voxcpm2_tts_server.py
         - --model-id
         - models\VoxCPM2
         - --device
@@ -68,7 +70,6 @@ tts:
         - 127.0.0.1
         - --port
         - "8810"
-        - --no-optimize
       working-directory: tts/runtime/VoxCPM2
       bind-address: 127.0.0.1
       port: 8810

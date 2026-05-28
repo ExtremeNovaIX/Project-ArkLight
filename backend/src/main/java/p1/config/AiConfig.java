@@ -81,7 +81,7 @@ public class AiConfig {
      */
     @Bean(name = "rpStreamingChatModel")
     public StreamingChatModel rpStreamingChatModel() {
-        return chatModelFactory.buildStreamingChatModel(props.activeChatModel(), assistantLoggingListener, 0.8);
+        return chatModelFactory.buildStreamingChatModel(rpChatModelConfig(), assistantLoggingListener, 0.8);
     }
 
     /**
@@ -103,11 +103,14 @@ public class AiConfig {
     public ApplicationRunner aiModeStartupLogger() {
         return args -> {
             AssistantProperties.ChatModelConfig chatModel = props.activeChatModel();
+            AssistantProperties.ChatModelConfig gamerModel = props.activeGamerModel();
             AssistantProperties.EmbeddingModelConfig embeddingModel = props.activeEmbeddingModel();
-            log.info("LLM mode: {} | chat-model: {} @ {} | embedding-model: {} @ {}",
+            log.info("LLM mode: {} | chat-model: {} @ {} | gamer-model: {} @ {} | embedding-model: {} @ {}",
                     props.getMode(),
                     chatModel.getModelName(),
                     chatModel.getBaseUrl(),
+                    gamerModel.getModelName(),
+                    gamerModel.getBaseUrl(),
                     embeddingModel.getModelName(),
                     embeddingModel.getBaseUrl());
         };
@@ -117,11 +120,20 @@ public class AiConfig {
      * 构建 gamer 专用模型配置。
      * <p>
      * gamer 的操作 JSON 从可见响应流解析。thinking 会拖慢首个 ACTION，
-     * 因此这里只在副本上关闭 thinking，不影响 RP 和 TaskSupervisor。
+     * 因此这里只在 gamer-model 副本上关闭 thinking，不影响 RP 和 TaskSupervisor。
      *
      * @return 禁用 thinking 的 gamer 模型配置副本
      */
     private AssistantProperties.ChatModelConfig gamerChatModelConfig() {
+        AssistantProperties.ChatModelConfig copy = copyChatModelConfig(props.activeGamerModel());
+        copy.setReturnThinking(false);
+        copy.setSendThinking(false);
+        copy.setReasoningEffort(null);
+        copy.setThinkingType("disabled");
+        return copy;
+    }
+
+    private AssistantProperties.ChatModelConfig rpChatModelConfig() {
         AssistantProperties.ChatModelConfig copy = copyChatModelConfig(props.activeChatModel());
         copy.setReturnThinking(false);
         copy.setSendThinking(false);

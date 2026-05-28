@@ -1,21 +1,25 @@
 package p1.config;
 
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.Comparator;
+import java.util.UUID;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ExternalConfigBootstrapTest {
 
-    @TempDir
-    Path tempDir;
-
     @Test
-    void copiesAllYamlDefaultsAndRegistersExternalLocation() throws Exception {
+    void copiesUserEditableYamlDefaultsAndRegistersExternalLocation() throws Exception {
+        Path tempDir = Paths.get("target", "external-config-bootstrap-test", UUID.randomUUID().toString())
+                .toAbsolutePath()
+                .normalize();
         String oldConfigDir = System.getProperty("arclight.config.dir");
         String oldConfigUri = System.getProperty("arclight.config.uri");
         String oldAdditionalLocation = System.getProperty("spring.config.additional-location");
@@ -25,18 +29,30 @@ class ExternalConfigBootstrapTest {
 
             ExternalConfigBootstrap.prepare();
 
-            assertTrue(Files.isRegularFile(tempDir.resolve("application.yaml")));
-            assertTrue(Files.isRegularFile(tempDir.resolve("application-mcp.yaml")));
-            assertTrue(Files.isRegularFile(tempDir.resolve("application-benchmark.yaml")));
+            assertTrue(Files.isRegularFile(tempDir.resolve("application-ai.yaml")));
+            assertTrue(Files.isRegularFile(tempDir.resolve("application-tts.yaml")));
             assertTrue(Files.isRegularFile(tempDir.resolve("mcp-catalog.yaml")));
-            assertTrue(Files.readString(tempDir.resolve("application.yaml")).contains("assistant:"));
+            assertTrue(Files.notExists(tempDir.resolve("application.yaml")));
+            assertTrue(Files.notExists(tempDir.resolve("application-mcp.yaml")));
+            assertTrue(Files.notExists(tempDir.resolve("application-benchmark.yaml")));
+            String aiConfig = Files.readString(tempDir.resolve("application-ai.yaml"));
+            String ttsConfig = Files.readString(tempDir.resolve("application-tts.yaml"));
+            assertTrue(aiConfig.contains("gamer-model:"));
+            assertTrue(aiConfig.contains("api-key: ${GAMER_MODEL_API_KEY:}"));
+            assertTrue(ttsConfig.contains("gpt-so-vits:"));
+            assertTrue(ttsConfig.contains("top-k:"));
+            assertTrue(ttsConfig.contains("vox-cpm2:"));
+            assertTrue(ttsConfig.contains("cfg-value:"));
+            assertFalse(ttsConfig.contains("startup-command:"));
             assertEquals(tempDir.toAbsolutePath().normalize().toString(), System.getProperty("arclight.config.dir"));
-            assertEquals(tempDir.toUri().toString(), System.getProperty("arclight.config.uri"));
-            assertTrue(System.getProperty("spring.config.additional-location").contains(tempDir.toUri().toString()));
+            assertSameUri(tempDir.toUri().toString(), System.getProperty("arclight.config.uri"));
+            assertTrue(System.getProperty("spring.config.additional-location")
+                    .contains(System.getProperty("arclight.config.uri")));
         } finally {
             restore("arclight.config.dir", oldConfigDir);
             restore("arclight.config.uri", oldConfigUri);
             restore("spring.config.additional-location", oldAdditionalLocation);
+            deleteRecursively(tempDir);
         }
     }
 
@@ -51,6 +67,27 @@ class ExternalConfigBootstrapTest {
             System.clearProperty(key);
         } else {
             System.setProperty(key, value);
+        }
+    }
+
+    private void assertSameUri(String expected, String actual) {
+        String normalizedExpected = expected.endsWith("/") ? expected.substring(0, expected.length() - 1) : expected;
+        String normalizedActual = actual.endsWith("/") ? actual.substring(0, actual.length() - 1) : actual;
+        assertEquals(normalizedExpected, normalizedActual);
+    }
+
+    private void deleteRecursively(Path directory) throws Exception {
+        if (directory == null || Files.notExists(directory)) {
+            return;
+        }
+        try (Stream<Path> paths = Files.walk(directory)) {
+            paths.sorted(Comparator.reverseOrder())
+                    .forEach(path -> {
+                        try {
+                            Files.deleteIfExists(path);
+                        } catch (Exception ignored) {
+                        }
+                    });
         }
     }
 }

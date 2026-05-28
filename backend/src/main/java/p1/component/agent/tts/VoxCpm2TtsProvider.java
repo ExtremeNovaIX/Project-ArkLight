@@ -1,16 +1,21 @@
 package p1.component.agent.tts;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.Consumer;
@@ -71,6 +76,10 @@ public class VoxCpm2TtsProvider implements TtsProvider {
         }
 
         TtsConfig.VoxCpm2Config vox = config.getVoxCpm2();
+        if (vox.isStreamingEnabled()) {
+            synthesizeStreaming(request, audioConsumer, vox);
+            return;
+        }
         String mediaType = mediaTypeForFormat(vox.getMediaType());
         HttpRequest httpRequest = HttpRequest.newBuilder(resolveTtsUri(vox))
                 .timeout(config.synthesisTimeout())
@@ -96,6 +105,53 @@ public class VoxCpm2TtsProvider implements TtsProvider {
         audioConsumer.accept(new TtsAudioFrame(responseMediaType, 0, audioBytes));
     }
 
+    private void synthesizeStreaming(TtsSynthesisRequest request,
+                                     Consumer<TtsAudioFrame> audioConsumer,
+                                     TtsConfig.VoxCpm2Config vox) throws Exception {
+        HttpRequest httpRequest = HttpRequest.newBuilder(resolveStreamingTtsUri(vox))
+                .timeout(config.synthesisTimeout())
+                .header(CONTENT_TYPE_HEADER, "application/json")
+                .header(ACCEPT_HEADER, "application/x-ndjson")
+                .POST(HttpRequest.BodyPublishers.ofString(buildRequestBody(request, vox), StandardCharsets.UTF_8))
+                .build();
+        HttpResponse<InputStream> response = httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofInputStream());
+        try (InputStream body = response.body()) {
+            if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                throw new IllegalStateException("VoxCPM2 TTS 流式调用失败: status=" + response.statusCode()
+                        + ", body=" + safeBody(body.readAllBytes()));
+            }
+            int frameCount = consumeStreamingBody(body, audioConsumer);
+            if (frameCount == 0) {
+                throw new IllegalStateException("VoxCPM2 TTS 流式返回空音频");
+            }
+        }
+    }
+
+    private int consumeStreamingBody(InputStream body, Consumer<TtsAudioFrame> audioConsumer) throws IOException {
+        int frameCount = 0;
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(body, StandardCharsets.UTF_8))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                if (line.isBlank()) {
+                    continue;
+                }
+                JsonNode node = objectMapper.readTree(line);
+                String audioBase64 = node.path("audio_base64").asText("");
+                if (audioBase64.isBlank()) {
+                    continue;
+                }
+                String mediaType = node.path("media_type").asText(mediaTypeForFormat(config.getVoxCpm2().getMediaType()));
+                int sampleRate = node.path("sample_rate").asInt(0);
+                byte[] audioBytes = Base64.getDecoder().decode(audioBase64);
+                if (audioBytes.length > 0) {
+                    audioConsumer.accept(new TtsAudioFrame(mediaType, sampleRate, audioBytes));
+                    frameCount++;
+                }
+            }
+        }
+        return frameCount;
+    }
+
     /**
      * 构造 VoxCPM2 sidecar 请求体。
      *
@@ -107,16 +163,15 @@ public class VoxCpm2TtsProvider implements TtsProvider {
     private String buildRequestBody(TtsSynthesisRequest request, TtsConfig.VoxCpm2Config vox) throws IOException {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("text", request.text());
-        String controlInstruction = request.controlInstruction().isEmpty()
-                ? vox.getControlInstruction()
-                : request.controlInstruction();
-        putIfHasText(payload, "control_instruction", controlInstruction);
         putIfHasText(payload, "reference_wav_path", vox.getReferenceWavPath());
+        putIfHasText(payload, "prompt_text", vox.getPromptText());
         payload.put("cfg_value", vox.getCfgValue());
         payload.put("inference_timesteps", vox.getInferenceTimesteps());
         payload.put("normalize", vox.isNormalize());
         payload.put("denoise", vox.isDenoise());
         payload.put("media_type", normalizeFormat(vox.getMediaType()));
+        payload.put("streaming", vox.isStreamingEnabled());
+        payload.put("badcase_retry_attempts", vox.getBadcaseRetryAttempts());
         if (vox.getExtraBody() != null && !vox.getExtraBody().isEmpty()) {
             payload.put("extra", vox.getExtraBody());
         }
@@ -131,6 +186,10 @@ public class VoxCpm2TtsProvider implements TtsProvider {
      */
     private URI resolveTtsUri(TtsConfig.VoxCpm2Config vox) {
         return URI.create(vox.getBaseUrl().trim().replaceAll("/+$", "") + "/tts");
+    }
+
+    private URI resolveStreamingTtsUri(TtsConfig.VoxCpm2Config vox) {
+        return URI.create(vox.getBaseUrl().trim().replaceAll("/+$", "") + "/tts-stream");
     }
 
     private static void putIfHasText(Map<String, Object> payload, String key, String value) {
