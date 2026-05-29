@@ -53,6 +53,7 @@ let ttsAudioPlaybackChain: Promise<void> = Promise.resolve();
 const pendingResponseTimers = new Set<ReturnType<typeof setTimeout>>();
 const TTS_AUDIO_START_MARGIN_SECONDS = 0.02;
 const TTS_CHUNK_CROSSFADE_SECONDS = 0.012;
+const TTS_PLAYBACK_TEMPO = 1.1;
 
 const activeTheme = computed(
   () => themeRegistryMap[frontendSettings.value.themeId] ?? themeRegistryMap[defaultThemeId]
@@ -520,7 +521,10 @@ const ensureTtsPcmWorklet = async (audioContext: AudioContext) => {
         const node = new AudioWorkletNode(audioContext, 'tts-pcm-player', {
           numberOfInputs: 0,
           numberOfOutputs: 1,
-          outputChannelCount: [2]
+          outputChannelCount: [2],
+          processorOptions: {
+            tempo: TTS_PLAYBACK_TEMPO
+          }
         });
         node.connect(audioContext.destination);
         ttsPcmWorkletNode = node;
@@ -566,6 +570,63 @@ const resamplePcm = (samples: Float32Array, sourceSampleRate: number, targetSamp
     output[index] = samples[leftIndex] * (1 - fraction) + samples[rightIndex] * fraction;
   }
   return output;
+};
+
+const audioBufferToMonoPcm = (audioBuffer: AudioBuffer) => {
+  const samples = new Float32Array(audioBuffer.length);
+  if (audioBuffer.numberOfChannels <= 1) {
+    audioBuffer.copyFromChannel(samples, 0);
+    return samples;
+  }
+
+  const channelSamples = new Float32Array(audioBuffer.length);
+  for (let channel = 0; channel < audioBuffer.numberOfChannels; channel += 1) {
+    audioBuffer.copyFromChannel(channelSamples, channel);
+    for (let index = 0; index < samples.length; index += 1) {
+      samples[index] += channelSamples[index] / audioBuffer.numberOfChannels;
+    }
+  }
+  return samples;
+};
+
+const pushTtsPcmSamples = async (
+  samples: Float32Array,
+  sourceSampleRate: number,
+  connectionVersion: number
+) => {
+  if (!samples.length || connectionVersion !== ttsAudioConnectionVersion) {
+    return false;
+  }
+
+  const audioContext = await ensureTtsAudioContext();
+  if (!audioContext || connectionVersion !== ttsAudioConnectionVersion) {
+    return false;
+  }
+
+  const workletNode = await ensureTtsPcmWorklet(audioContext);
+  if (!workletNode || connectionVersion !== ttsAudioConnectionVersion) {
+    return false;
+  }
+
+  const outputSamples = resamplePcm(samples, sourceSampleRate || audioContext.sampleRate, audioContext.sampleRate);
+  workletNode.port.postMessage({ type: 'push', samples: outputSamples }, [outputSamples.buffer]);
+  return true;
+};
+
+const flushTtsPcmAudio = async (connectionVersion: number) => {
+  if (connectionVersion !== ttsAudioConnectionVersion) {
+    return;
+  }
+
+  const audioContext = await ensureTtsAudioContext();
+  if (!audioContext || connectionVersion !== ttsAudioConnectionVersion) {
+    return;
+  }
+
+  const workletNode = await ensureTtsPcmWorklet(audioContext);
+  if (workletNode && connectionVersion === ttsAudioConnectionVersion) {
+    workletNode.port.postMessage({ type: 'flush' });
+  }
 };
 
 const calculateTtsFadeDuration = (duration: number) => {
@@ -619,6 +680,9 @@ const playTtsAudio = async (audioBase64: string, connectionVersion: number) => {
   }
 
   const audioBuffer = await audioContext.decodeAudioData(base64ToArrayBuffer(audioBase64));
+  if (await pushTtsPcmSamples(audioBufferToMonoPcm(audioBuffer), audioBuffer.sampleRate, connectionVersion)) {
+    return;
+  }
   await playTtsAudioBuffer(audioBuffer, connectionVersion);
 };
 
@@ -642,13 +706,12 @@ const enqueueTtsPcmAudio = async (
   }
 
   const sourceSampleRate = payload.sampleRate || audioContext.sampleRate;
-  const samples = resamplePcm(decodePcmS16Le(payload.audioBase64), sourceSampleRate, audioContext.sampleRate);
-  const workletNode = await ensureTtsPcmWorklet(audioContext);
-  if (workletNode && connectionVersion === ttsAudioConnectionVersion) {
-    workletNode.port.postMessage({ type: 'push', samples }, [samples.buffer]);
+  const decodedSamples = decodePcmS16Le(payload.audioBase64);
+  if (await pushTtsPcmSamples(decodedSamples, sourceSampleRate, connectionVersion)) {
     return;
   }
 
+  const samples = resamplePcm(decodedSamples, sourceSampleRate, audioContext.sampleRate);
   const audioBuffer = audioContext.createBuffer(1, samples.length, audioContext.sampleRate);
   audioBuffer.copyToChannel(samples, 0);
   await playTtsAudioBuffer(audioBuffer, connectionVersion);
@@ -660,6 +723,12 @@ const queueTtsPcmAudio = (
 ) => {
   ttsAudioPlaybackChain = ttsAudioPlaybackChain
     .then(() => enqueueTtsPcmAudio(payload, connectionVersion))
+    .catch(() => undefined);
+};
+
+const queueTtsPcmFlush = (connectionVersion: number) => {
+  ttsAudioPlaybackChain = ttsAudioPlaybackChain
+    .then(() => flushTtsPcmAudio(connectionVersion))
     .catch(() => undefined);
 };
 
@@ -683,6 +752,7 @@ const connectTtsAudio = () => {
         finalChunk?: boolean;
       };
       if (payload.finalChunk) {
+        queueTtsPcmFlush(connectionVersion);
         return;
       }
       if (isPcmTtsAudio(payload.mediaType)) {
