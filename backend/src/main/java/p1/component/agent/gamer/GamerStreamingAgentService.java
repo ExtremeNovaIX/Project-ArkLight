@@ -38,6 +38,7 @@ public class GamerStreamingAgentService {
     private final GamerStreamingAgent streamingAgent;
     private final GameBridgeService bridgeService;
     private final GamerMCPClientFactory mcpClientFactory;
+    private final GamerPendingQuestionService pendingQuestionService;
     private final GamerProperties gamerProperties;
     private final ReasoningContentRecorder reasoningContentRecorder;
 
@@ -184,6 +185,13 @@ public class GamerStreamingAgentService {
 
             List<StreamingJsonInstruction> instructions = parseInstructions(text, thinking);
             for (StreamingJsonInstruction instruction : instructions) {
+                if (isAskInstruction(instruction.json())) {
+                    dispatchAsk(instruction);
+                    if (closed.get()) {
+                        return;
+                    }
+                    continue;
+                }
                 if (!isActionInstruction(instruction.json())) {
                     continue;
                 }
@@ -215,6 +223,36 @@ public class GamerStreamingAgentService {
             return type.isBlank()
                     || "action".equalsIgnoreCase(type)
                     || "enqueue_operations".equalsIgnoreCase(type);
+        }
+
+        /**
+         * 判断 JSON 是否是 gamer 战术询问。
+         */
+        private boolean isAskInstruction(JsonNode json) {
+            if (json == null || !json.isObject()) {
+                return false;
+            }
+            String type = json.path("type").asText("");
+            return "ask".equalsIgnoreCase(type)
+                    || "question".equalsIgnoreCase(type)
+                    || "tactical_question".equalsIgnoreCase(type);
+        }
+
+        /**
+         * 登记一次战术询问，并结束当前 gamer 流，等待用户或系统超时结果。
+         */
+        private void dispatchAsk(StreamingJsonInstruction instruction) {
+            int currentAction = actionCount.incrementAndGet();
+            recordReasoningSnapshot();
+            appendActionLog(currentAction, "[ASK] " + instruction.rawJson());
+            pendingQuestionService.registerQuestion(gameName, sessionId, instruction.json())
+                    .ifPresentOrElse(
+                            question -> executionResults.append("已向用户发起战术询问：")
+                                    .append(question.question())
+                                    .append("\n"),
+                            () -> executionResults.append("模型输出了 ASK，但缺少可用 question 字段，已忽略。\n"));
+            cancelStream("已向用户发起战术询问");
+            finish();
         }
 
         /**

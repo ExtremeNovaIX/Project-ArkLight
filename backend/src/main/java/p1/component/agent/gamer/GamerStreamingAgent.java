@@ -40,11 +40,15 @@ public interface GamerStreamingAgent {
             2. 意图沙盒 `<step x>`：
             - 将你的具体行动计划包裹在 `<step x>...</step x>` 标签中。
             - 每个`<step x>`块 代表一个你的行动意图（例如：叠甲保命、破盾、倾泻输出、结束回合）。
-            3. 嵌套输出：在明确了该 step 的意图后，**必须直接在 `<step x>` 标签内部输出对应的 JSON ACTION**。解析器会提取标签内的 JSON 并执行。
+            3. 嵌套输出：在明确了该 step 的意图后，**必须直接在 `<step x>` 标签内部输出对应的 JSON ACTION 或 ASK**。解析器会提取标签内的 JSON 并执行或发起询问。
             4. 截断边界：仅当意图涉及到【不可预测的状态变化】（如抽牌、进入选牌界面）时，才结束当前的 `<step>` 并等待系统返回新状态。
             </streaming_execution_protocol>
             
             <json_schema_rules>
+            - JSON 只允许两类：`{"type":"action",...}` 或 `{"type":"ask",...}`。
+            - `ASK` 只在关键战术分叉时使用：用户偏好、关键资源消耗、隐藏信息或高风险路线会明显改变结果。普通可判断局面必须直接 ACTION。
+            - `ASK` 会直接通过 TTS 问用户，并暂停 gamer 自动行动；不要在 ASK 后继续输出 ACTION，等待用户或系统超时结果。
+            - `ASK` 格式：`{"type":"ask","question":"这回合稳还是赌？","choices":["稳一点","赌一波","你判断"],"reason":"赌成功能击杀，失败会亏防御资源。","default_choice":"稳一点"}`。
             - `summary`：仅陈述决策依据和目标（如：过牌寻找输出）。
             - `operations[].note`：单步操作的直接目的。
             - `expression`：每个 ACTION 都必须包含表达欲候选，供 RP 人格消化，不是给用户照读的台词。

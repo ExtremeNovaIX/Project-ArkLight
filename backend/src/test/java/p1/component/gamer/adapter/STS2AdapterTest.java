@@ -7,6 +7,7 @@ import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 import dev.langchain4j.service.tool.ToolProviderResult;
 import org.junit.jupiter.api.Test;
 import p1.component.agent.gamer.adapter.core.GameBridgeException;
+import p1.component.agent.gamer.adapter.core.GameAdapterContext;
 import p1.component.agent.gamer.adapter.core.GameOperation;
 import p1.component.agent.gamer.adapter.core.GameStateSnapshot;
 import p1.component.agent.gamer.adapter.core.QueuedGameOperation;
@@ -16,6 +17,7 @@ import p1.config.mcp.MCPProperties;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -251,7 +253,132 @@ class STS2AdapterTest {
 
         assertTrue(selectTools.contains("deck_select_card"));
         assertFalse(selectTools.contains("combat_play_card"));
+        assertFalse(selectTools.contains("combat_select_card"));
+        assertFalse(selectTools.contains("combat_confirm_selection"));
         assertFalse(selectTools.contains("rewards_pick_card"));
+    }
+
+    @Test
+    void shouldExposeDeckSelectionForMultiplayerCardSelectWithBattle() throws Exception {
+        String cardSelectJson = """
+                {
+                  "game_mode":"multiplayer",
+                  "state_type":"card_select",
+                  "battle":{"turn":"player","is_play_phase":true},
+                  "card_select":{
+                    "screen_type":"simple_select",
+                    "prompt":"选择一张牌放到你的抽牌堆顶。",
+                    "cards":[{"name":"痛击","index":0}]
+                  }
+                }
+                """;
+        ToolProviderResult tools = toolsWithResponses(Map.of(
+                "get_game_state", cardSelectJson,
+                "mp_get_game_state", cardSelectJson,
+                "deck_select_card", "{}",
+                "mp_combat_select_card", "{}",
+                "mp_combat_confirm_selection", "{}",
+                "mp_combat_play_card", "{}",
+                "mp_combat_end_turn", "{}"
+        ));
+        MCPProperties.GameMCPConfig config = new MCPProperties.GameMCPConfig();
+        config.setStateToolName("get_game_state");
+
+        GameStateSnapshot cardSelect = adapter.fetchState(new GameAdapterContext("STS2MCP", "session", tools, config));
+        String availableOperations = adapter.renderAvailableOperations(tools, config, cardSelect);
+
+        assertTrue(availableOperations.contains("- deck_select_card:"));
+        assertFalse(availableOperations.contains("- mp_combat_select_card:"));
+        assertFalse(availableOperations.contains("- mp_combat_confirm_selection:"));
+        assertFalse(availableOperations.contains("- mp_combat_play_card:"));
+        assertFalse(availableOperations.contains("- mp_combat_end_turn:"));
+    }
+
+    @Test
+    void shouldTreatEliteBattleAsCombatPlayWindow() throws Exception {
+        String eliteBattleJson = """
+                {
+                  "game_mode":"multiplayer",
+                  "state_type":"elite",
+                  "battle":{"round":1,"turn":"player","is_play_phase":true},
+                  "player":{"energy":0,"hand":[]}
+                }
+                """;
+        ToolProviderResult tools = toolsWithResponses(Map.of(
+                "get_game_state", eliteBattleJson,
+                "mp_get_game_state", eliteBattleJson,
+                "mp_combat_play_card", "{}",
+                "mp_combat_end_turn", "{}",
+                "mp_event_choose_option", "{}",
+                "mp_map_vote", "{}"
+        ));
+        MCPProperties.GameMCPConfig config = new MCPProperties.GameMCPConfig();
+        config.setStateToolName("get_game_state");
+        GameStateSnapshot eliteBattle = state(eliteBattleJson);
+        QueuedGameOperation endTurn = adapter.prepareOperation(
+                new GameOperation("mp_combat_end_turn", objectMapper.readTree("{}"), "提交结束回合投票"),
+                eliteBattle
+        );
+
+        assertDoesNotThrow(() -> adapter.repairBeforeExecute(endTurn, eliteBattle));
+
+        adapter.fetchState(new GameAdapterContext("STS2MCP", "session", tools, config));
+        String availableOperations = adapter.renderAvailableOperations(tools, config, eliteBattle);
+        assertTrue(availableOperations.contains("- mp_combat_end_turn:"));
+        assertTrue(availableOperations.contains("- mp_combat_play_card:"));
+        assertFalse(availableOperations.contains("- mp_event_choose_option:"));
+        assertFalse(availableOperations.contains("- mp_map_vote:"));
+    }
+
+    @Test
+    void shouldDetectMultiplayerLobbyFromSingleplayerState() throws Exception {
+        ToolProviderResult tools = toolsWithResponses(Map.of(
+                "get_game_state", """
+                        {
+                          "state_type":"menu",
+                          "menu_screen":"character_select",
+                          "lobby":{
+                            "type":"client",
+                            "game_mode":"standard",
+                            "player_count":2,
+                            "all_ready":false,
+                            "players":[{"is_local":true,"character_id":"IRONCLAD"}]
+                          },
+                          "options":[
+                            {"name":"IRONCLAD","enabled":true},
+                            {"name":"embark","enabled":true},
+                            {"name":"unready","enabled":false}
+                          ]
+                        }
+                        """,
+                "mp_get_game_state", "{\"status\":\"error\",\"message\":\"Not in a multiplayer run.\"}",
+                "menu_select", "{}",
+                "event_choose_option", "{}",
+                "mp_event_choose_option", "{}"
+        ));
+        MCPProperties.GameMCPConfig config = new MCPProperties.GameMCPConfig();
+        config.setStateToolName("get_game_state");
+
+        GameStateSnapshot fetched = adapter.fetchState(new GameAdapterContext("STS2MCP", "session", tools, config));
+        String renderedEventTools = adapter.renderAvailableOperations(tools, config, state("{\"state_type\":\"event\"}"));
+
+        assertEquals("menu", fetched.stateType());
+        assertTrue(renderedEventTools.contains("- mp_event_choose_option:"));
+        assertFalse(renderedEventTools.contains("- event_choose_option:"));
+        assertFalse(renderedEventTools.contains("- menu_select:"));
+    }
+
+    @Test
+    void shouldRejectStaleMenuSelectWhenStateAlreadyAdvanced() throws Exception {
+        QueuedGameOperation operation = QueuedGameOperation.from(
+                new GameOperation("menu_select", objectMapper.readTree("{\"option\":\"embark\"}"), "开始游戏"),
+                state("{\"state_type\":\"menu\"}")
+        );
+
+        GameBridgeException ex = assertThrows(GameBridgeException.class,
+                () -> adapter.repairBeforeExecute(operation, state("{\"state_type\":\"event\"}")));
+
+        assertTrue(ex.getMessage().contains("菜单操作已过期"));
     }
 
     @Test
@@ -408,6 +535,19 @@ class STS2AdapterTest {
                     .build();
             builder.add(spec, (request, memoryId) -> "{}");
         }
+        return builder.build();
+    }
+
+    private ToolProviderResult toolsWithResponses(Map<String, String> responses) {
+        ToolProviderResult.Builder builder = ToolProviderResult.builder();
+        responses.forEach((name, response) -> {
+            ToolSpecification spec = ToolSpecification.builder()
+                    .name(name)
+                    .description(name + " description")
+                    .parameters(JsonObjectSchema.builder().build())
+                    .build();
+            builder.add(spec, (request, memoryId) -> response);
+        });
         return builder.build();
     }
 }

@@ -55,9 +55,9 @@ gamer:
     log-summary-max-chars: 6000
   memory:
     # gamer 工作记忆中保留的最近决策条数。
-    recent-decision-limit: 20
+    recent-decision-limit: 48
     # 每累计多少次决策压缩一次阶段摘要。
-    stage-compress-decision-interval: 16
+    stage-compress-decision-interval: 48
     # 每累计多少个阶段摘要压缩一次 run 摘要。
     run-compress-stage-interval: 10
     # 是否写 gamer 行动复盘 markdown。

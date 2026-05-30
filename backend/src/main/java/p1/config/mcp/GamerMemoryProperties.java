@@ -15,12 +15,12 @@ public class GamerMemoryProperties {
     /**
      * 未压缩的近期决策保留数量。
      */
-    private int recentDecisionLimit = 20;
+    private int recentDecisionLimit = 48;
 
     /**
      * 每累计多少次 gamer 决策后，把近期决策压缩进阶段摘要。
      */
-    private int stageCompressDecisionInterval = 16;
+    private int stageCompressDecisionInterval = 48;
 
     /**
      * 每累计多少个阶段摘要后，把阶段摘要压缩进全局 run 摘要。
