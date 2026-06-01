@@ -55,9 +55,7 @@ public interface RpProactiveAgent {
             {{recentContext}}
             </recent_context>
 
-            <current_game_context>
             {{gameContext}}
-            </current_game_context>
 
             现在自然开口一次。
             """)

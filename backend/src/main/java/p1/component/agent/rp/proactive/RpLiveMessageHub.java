@@ -4,7 +4,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
-import p1.component.agent.rp.core.RpReplySegmenter;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -13,6 +12,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
+import static p1.utils.ReplyUtil.segment;
 import static p1.utils.SessionUtil.normalizeSessionId;
 
 /**
@@ -29,7 +29,6 @@ public class RpLiveMessageHub {
     private static final long EMITTER_TIMEOUT_MS = 0L;
 
     private final RpProactiveSessionRegistry sessionRegistry;
-    private final RpReplySegmenter replySegmenter;
     private final ConcurrentMap<String, List<SseEmitter>> emittersBySession = new ConcurrentHashMap<>();
 
     /**
@@ -81,7 +80,7 @@ public class RpLiveMessageHub {
                 normalizedSessionId,
                 source,
                 content.trim(),
-                replySegmenter.segment(content, shortMode),
+                segment(content, shortMode),
                 Instant.now());
         List<SseEmitter> emitters = emittersBySession.getOrDefault(normalizedSessionId, List.of());
         for (SseEmitter emitter : emitters) {

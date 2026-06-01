@@ -6,6 +6,7 @@ import { extractSentenceContent, normalizeEmotionToken, parseEmotionPrefix } fro
 import type { CharacterProfile } from './chara/types';
 import BackendSettingsPanel from './setting/BackendSettingsPanel.vue';
 import FrontendSettingsPanel from './setting/FrontendSettingsPanel.vue';
+import GameSettingsPanel from './setting/GameSettingsPanel.vue';
 import {
   createFrontendSettings,
   applyExternalFrontendDefaults,
@@ -971,9 +972,14 @@ onBeforeUnmount(() => {
             @reset="resetFrontendSettings"
           />
           <BackendSettingsPanel
-            v-else
+            v-else-if="activeSettingsView === 'backend'"
             :base-url="frontendSettings.backendBaseUrl"
             @update:base-url="updateBackendBaseUrl"
+          />
+          <GameSettingsPanel
+            v-else
+            :settings="frontendSettings"
+            @update:settings="updateFrontendSettings"
           />
         </component>
       </div>

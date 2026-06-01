@@ -1,87 +1,53 @@
 assistant:
-  # 当前启用的模型配置组：api 使用远端模型，local 使用本地 OpenAI-compatible 服务。
+  # api 使用远端 OpenAI-compatible 服务，local 使用本地 OpenAI-compatible 服务。
   mode: api
 
   api:
-    chat-model:
-      # 远端对话模型 API Key，默认从环境变量读取。
+    light-model:
       api-key: ${DEEPSEEK_API_KEY:default_value}
-      # 远端对话模型 OpenAI-compatible API 地址。
       base-url: https://api.deepseek.com
-      # 远端对话模型名称。
       model-name: deepseek-v4-flash
-      # 单次对话模型请求超时时间，单位秒。
       timeout-seconds: 300
-      # 是否打印模型原始请求和响应日志。
       log-enabled: false
-      # 是否接收供应商返回的 reasoning_content。
       return-thinking: true
-      # 是否把历史 reasoning_content 回传给模型。
       send-thinking: true
-      # 供应商支持 reasoning_effort 时使用的推理强度；为空则不发送。
       reasoning-effort: ${LLM_REASONING_EFFORT:}
-      # 供应商支持 thinking.type 时使用的思考模式；enabled/disabled 取决于供应商实现。
       thinking-type: ${LLM_THINKING_TYPE:enabled}
-    gamer-model:
-      # Gamer 专用模型 API Key；为空时复用 chat-model。
-      api-key: ${GAMER_MODEL_API_KEY:}
-      # Gamer 专用模型 OpenAI-compatible API 地址；为空时复用 chat-model。
-      base-url: ${GAMER_MODEL_BASE_URL:}
-      # Gamer 专用模型名称；为空时复用 chat-model。
-      model-name: ${GAMER_MODEL_NAME:}
-      # 是否打印 gamer 模型原始请求和响应日志。
+    heavy-model:
+      # 留空字段会从 light-model 继承，用户通常只需要改 model-name。
+      api-key: ${HEAVY_MODEL_API_KEY:}
+      base-url: ${HEAVY_MODEL_BASE_URL:}
+      model-name: ${HEAVY_MODEL_NAME:deepseek-v4-flash}
+      timeout-seconds: 300
       log-enabled: false
-      # Gamer ACTION 从可见响应流解析，默认不接收 thinking。
-      return-thinking: false
-      # Gamer ACTION 从可见响应流解析，默认不回传 thinking。
-      send-thinking: false
-      # Gamer 默认不发送 reasoning_effort。
-      reasoning-effort: ${GAMER_MODEL_REASONING_EFFORT:}
-      # Gamer 默认禁用 thinking.type。
-      thinking-type: ${GAMER_MODEL_THINKING_TYPE:disabled}
+      return-thinking: true
+      send-thinking: true
+      reasoning-effort: ${HEAVY_MODEL_REASONING_EFFORT:}
+      thinking-type: ${HEAVY_MODEL_THINKING_TYPE:enabled}
     embedding-model:
-      # 远端向量模型 API Key，默认从环境变量读取。
       api-key: ${DASHSCOPE_API_KEY:default_value}
-      # 远端向量模型 OpenAI-compatible API 地址。
       base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
-      # 远端向量模型名称。
       model-name: text-embedding-v3
 
   local:
-    chat-model:
-      # 本地对话模型 OpenAI-compatible API 地址。
+    light-model:
       base-url: http://127.0.0.1:1234/v1
-      # 本地对话模型名称。
       model-name: qwen3.6
-      # 本地对话模型请求超时时间，单位秒。
       timeout-seconds: 600
-      # 是否打印本地模型原始请求和响应日志。
       log-enabled: false
-      # 是否接收本地模型返回的 reasoning_content。
       return-thinking: true
-      # 是否把历史 reasoning_content 回传给本地模型。
       send-thinking: true
-      # 本地模型支持 reasoning_effort 时使用的推理强度；为空则不发送。
       reasoning-effort: ${LLM_REASONING_EFFORT:}
-      # 本地模型支持 thinking.type 时使用的思考模式。
       thinking-type: ${LLM_THINKING_TYPE:enabled}
-    gamer-model:
-      # 本地 Gamer 模型 OpenAI-compatible API 地址；为空时复用 chat-model。
-      base-url: ${LOCAL_GAMER_MODEL_BASE_URL:}
-      # 本地 Gamer 模型名称；为空时复用 chat-model。
-      model-name: ${LOCAL_GAMER_MODEL_NAME:}
-      # 是否打印本地 Gamer 模型原始请求和响应日志。
+    heavy-model:
+      base-url: ${LOCAL_HEAVY_MODEL_BASE_URL:}
+      model-name: ${LOCAL_HEAVY_MODEL_NAME:}
+      timeout-seconds: 600
       log-enabled: false
-      # Gamer ACTION 从可见响应流解析，默认不接收 thinking。
-      return-thinking: false
-      # Gamer ACTION 从可见响应流解析，默认不回传 thinking。
-      send-thinking: false
-      # 本地 Gamer 模型默认不发送 reasoning_effort。
-      reasoning-effort: ${LOCAL_GAMER_MODEL_REASONING_EFFORT:}
-      # 本地 Gamer 模型默认禁用 thinking.type。
-      thinking-type: ${LOCAL_GAMER_MODEL_THINKING_TYPE:disabled}
+      return-thinking: true
+      send-thinking: true
+      reasoning-effort: ${LOCAL_HEAVY_MODEL_REASONING_EFFORT:}
+      thinking-type: ${LOCAL_HEAVY_MODEL_THINKING_TYPE:enabled}
     embedding-model:
-      # 本地向量模型 OpenAI-compatible API 地址。
       base-url: http://127.0.0.1:1234/v1
-      # 本地向量模型名称。
       model-name: text-embedding-embedding

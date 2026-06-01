@@ -13,4 +13,7 @@ export interface FrontendSettings {
   shortModeEnabled: boolean;
   moteCount: number;
   backendBaseUrl: string;
+  gameName: string;
+  gameSessionId: string;
+  gameRpSessionId: string;
 }

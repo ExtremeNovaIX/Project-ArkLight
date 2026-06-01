@@ -7,7 +7,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -20,13 +19,12 @@ import java.util.Map;
  */
 public final class ExternalConfigBootstrap {
 
-    private static final String CONFIG_DIR_PROPERTY = "arclight.config.dir";
     private static final String CONFIG_URI_PROPERTY = "arclight.config.uri";
-    private static final String CONFIG_DIR_ENV = "ARCLIGHT_CONFIG_DIR";
-    private static final String DEFAULT_CONFIG_DIR = "../config";
     private static final String SPRING_ADDITIONAL_LOCATION = "spring.config.additional-location";
     private static final List<YamlTemplate> USER_EDITABLE_YAML_FILES = List.of(
             new YamlTemplate("application-ai.yaml", "classpath:config-template/application-ai.yaml"),
+            new YamlTemplate("application-ai-services.yaml", "classpath:config-template/application-ai-services.yaml"),
+            new YamlTemplate("application-frontend.yaml", "classpath:application-frontend.yaml"),
             new YamlTemplate("application-tts.yaml", "classpath:config-template/application-tts.yaml"),
             new YamlTemplate("mcp-catalog.yaml", "classpath:mcp-catalog.yaml")
     );
@@ -50,11 +48,9 @@ public final class ExternalConfigBootstrap {
      * @return 归一化后的外部配置目录
      */
     private static Path resolveConfigDir() {
-        String configured = firstNonBlank(System.getProperty(CONFIG_DIR_PROPERTY), System.getenv(CONFIG_DIR_ENV));
-        String path = configured == null ? DEFAULT_CONFIG_DIR : configured;
-        Path configDir = Paths.get(path).toAbsolutePath().normalize();
+        Path configDir = ExternalConfigDirectories.resolveConfiguredDir();
         // 将最终目录写回系统属性，供 application.yaml 中的 ${arclight.config.uri} import 使用。
-        System.setProperty(CONFIG_DIR_PROPERTY, configDir.toString());
+        System.setProperty(ExternalConfigDirectories.CONFIG_DIR_PROPERTY, configDir.toString());
         System.setProperty(CONFIG_URI_PROPERTY, configDir.toUri().toString());
         return configDir;
     }
@@ -127,24 +123,6 @@ public final class ExternalConfigBootstrap {
         } else if (!existing.contains(externalLocation)) {
             System.setProperty(SPRING_ADDITIONAL_LOCATION, existing + "," + externalLocation);
         }
-    }
-
-    /**
-     * 返回第一个非空字符串。
-     *
-     * @param values 候选值
-     * @return 第一个非空值；没有时返回 null
-     */
-    private static String firstNonBlank(String... values) {
-        if (values == null) {
-            return null;
-        }
-        for (String value : values) {
-            if (value != null && !value.isBlank()) {
-                return value.trim();
-            }
-        }
-        return null;
     }
 
     /**

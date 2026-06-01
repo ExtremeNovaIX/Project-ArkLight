@@ -9,7 +9,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
-import p1.component.agent.gamer.interrupt.GameInterruptService;
 import p1.component.agent.gamer.loop.ActiveGameRegistry;
 import p1.component.agent.gamer.loop.ActiveGameSession;
 import p1.component.agent.gamer.loop.GameLoopObservationBackoffService;
@@ -33,11 +32,11 @@ import java.util.concurrent.TimeUnit;
 import static p1.utils.SessionUtil.normalizeSessionId;
 
 /**
- * Manages short gamer-to-user tactical questions.
+ * Manages short RP-to-user tactical questions.
  * <p>
- * This is a fast path outside the RP generation loop: gamer asks directly,
- * user replies directly, and the result is injected back into the next gamer
- * decision through the existing interrupt channel.
+ * This is a fast path outside the normal user reply loop: RP asks directly,
+ * user replies directly, and the result is injected into the next RP turn
+ * as a compact context block.
  */
 @Service
 @RequiredArgsConstructor
@@ -46,9 +45,10 @@ public class GamerPendingQuestionService {
 
     private static final Duration QUESTION_TIMEOUT = Duration.ofSeconds(15);
     private static final Duration QUESTION_HOLD_TTL = Duration.ofSeconds(20);
+    private static final String USER_ANSWER_MEMORY_NAME = "game_ask_user_answer";
+    private static final String SYSTEM_TIMEOUT_MEMORY_NAME = "system_game_ask_timeout";
 
     private final ActiveGameRegistry activeGameRegistry;
-    private final GameInterruptService interruptService;
     private final InteractionCoordinator interactionCoordinator;
     private final GameLoopObservationBackoffService observationBackoffService;
     private final ChatMemoryProvider chatMemoryProvider;
@@ -60,7 +60,7 @@ public class GamerPendingQuestionService {
     private final Map<String, PendingQuestion> pendingByRpSession = new ConcurrentHashMap<>();
 
     /**
-     * Register a tactical question emitted by gamer.
+     * Register a tactical question emitted by RP game control.
      *
      * @param gameName  game name
      * @param sessionId game session id
@@ -68,6 +68,19 @@ public class GamerPendingQuestionService {
      * @return registered question, or empty when the JSON does not contain a usable question
      */
     public Optional<PendingQuestion> registerQuestion(String gameName, String sessionId, JsonNode json) {
+        return registerQuestion(gameName, sessionId, json, true);
+    }
+
+    /**
+     * Register a tactical question.
+     *
+     * @param gameName   game id
+     * @param sessionId  game session id
+     * @param json       ASK JSON object
+     * @param speak      true 表示由本服务投递 TTS；false 表示 RP 控制块已经说出口
+     * @return registered question, or empty when the JSON does not contain a usable question
+     */
+    public Optional<PendingQuestion> registerQuestion(String gameName, String sessionId, JsonNode json, boolean speak) {
         String question = firstNonBlank(text(json, "question"), text(json, "message"), text(json, "speech"));
         if (question.isBlank()) {
             return Optional.empty();
@@ -93,23 +106,25 @@ public class GamerPendingQuestionService {
         pendingByRpSession.put(rpSessionId, pending);
         interactionCoordinator.beginGameWait(rpSessionId, QUESTION_HOLD_TTL);
         appendAskMemory(pending);
-        speakQuestion(pending);
+        if (speak) {
+            speakQuestion(pending);
+        }
         scheduleTimeout(pending);
         touchSession(pending);
 
-        log.info("[gamer询问] 已登记战术询问: game={}, session={}, rpSession={}, questionId={}, question={}",
+        log.info("[游戏询问] 已登记战术询问: game={}, session={}, rpSession={}, questionId={}, question={}",
                 gameName, sessionId, rpSessionId, pending.questionId(), pending.question());
         return Optional.of(pending);
     }
 
     /**
-     * Try to consume user text as the answer to the active tactical question.
+     * Consume the active tactical question and return a compact context block for RP.
      *
      * @param rpSessionId RP session id
      * @param rawAnswer   user text
-     * @return short acknowledgement for the HTTP chat response when consumed
+     * @return context block injected into the next RP turn
      */
-    public Optional<String> answerPendingQuestion(String rpSessionId, String rawAnswer) {
+    public Optional<String> consumeAnswerForRp(String rpSessionId, String rawAnswer) {
         String normalizedRpSessionId = normalizeSessionId(rpSessionId);
         PendingQuestion pending = pendingByRpSession.remove(normalizedRpSessionId);
         if (pending == null) {
@@ -119,19 +134,23 @@ public class GamerPendingQuestionService {
         String answer = rawAnswer == null ? "" : rawAnswer.trim();
         ResolvedAnswer resolved = resolveAnswer(answer, pending.choices());
         appendUserAnswerMemory(pending, answer, resolved);
-        interruptService.requestInterrupt(
-                pending.gameName(),
-                pending.sessionId(),
-                "user",
-                renderUserAnswerInstruction(pending, answer, resolved));
         resumeGame(pending);
 
-        String acknowledgement = resolved.choice().isPresent()
-                ? "收到，按“" + resolved.choice().get().label() + "”继续。"
-                : "收到，我把你的回答交给 gamer 继续判断。";
-        log.info("[gamer询问] 已消费用户回答: game={}, session={}, rpSession={}, questionId={}, answer={}",
+        log.info("[游戏询问] 已消费用户回答: game={}, session={}, rpSession={}, questionId={}, answer={}",
                 pending.gameName(), pending.sessionId(), pending.rpSessionId(), pending.questionId(), answer);
-        return Optional.of(acknowledgement);
+        return Optional.of("""
+                <game_ask_answer>
+                你刚才向用户提出了战术询问，现在用户已经回答。请基于用户回答和最新游戏状态继续亲自行动，不要重复等待。
+                原问题：%s
+                用户原始回答：%s
+                解析选择：%s
+                默认选择：%s
+                </game_ask_answer>
+                """.formatted(
+                pending.question(),
+                blankToDefault(answer, "空回复"),
+                resolved.choice().map(QuestionChoice::label).orElse("未匹配固定选项，请按原始回答理解"),
+                blankToDefault(pending.defaultChoice(), "无")));
     }
 
     /**
@@ -160,13 +179,8 @@ public class GamerPendingQuestionService {
         }
 
         appendTimeoutMemory(expected);
-        interruptService.requestInterrupt(
-                expected.gameName(),
-                expected.sessionId(),
-                "system",
-                renderTimeoutInstruction(expected));
         resumeGame(expected);
-        log.info("[gamer询问] 询问超时，已把系统提示交回 gamer: game={}, session={}, rpSession={}, questionId={}",
+        log.info("[游戏询问] 询问超时，已解除等待并写入 RP 记忆: game={}, session={}, rpSession={}, questionId={}",
                 expected.gameName(), expected.sessionId(), expected.rpSessionId(), expected.questionId());
     }
 
@@ -189,12 +203,12 @@ public class GamerPendingQuestionService {
 
     private void speakQuestion(PendingQuestion pending) {
         try {
-            TtsSpeechSession speech = ttsSpeechService.open(pending.rpSessionId(), "gamer-ask");
+            TtsSpeechSession speech = ttsSpeechService.open(pending.rpSessionId(), "game-ask");
             speech.accept(pending.spokenText());
             speech.finish();
             sessionRegistry.observeRpSpeech(pending.rpSessionId());
         } catch (Exception e) {
-            log.warn("[gamer询问] 战术询问 TTS 投递失败: rpSession={}, questionId={}, reason={}",
+            log.warn("[游戏询问] 战术询问 TTS 投递失败: rpSession={}, questionId={}, reason={}",
                     pending.rpSessionId(), pending.questionId(), e.getMessage());
         }
     }
@@ -213,7 +227,7 @@ public class GamerPendingQuestionService {
     }
 
     private void appendUserAnswerMemory(PendingQuestion pending, String answer, ResolvedAnswer resolved) {
-        appendUserMemory(pending.rpSessionId(), """
+        appendUserMemory(pending.rpSessionId(), USER_ANSWER_MEMORY_NAME, """
                 【用户回答游戏队友询问】
                 问题：%s
                 用户回答：%s
@@ -225,10 +239,10 @@ public class GamerPendingQuestionService {
     }
 
     private void appendTimeoutMemory(PendingQuestion pending) {
-        appendAiMemory(pending.rpSessionId(), """
+        appendUserMemory(pending.rpSessionId(), SYSTEM_TIMEOUT_MEMORY_NAME, """
                 【游戏队友询问超时】
                 问题：%s
-                系统结果：15 秒内没有收到用户回复，已经要求 gamer 按默认判断继续，不再等待。
+                系统结果：15 秒内没有收到用户回复；你需要基于最新状态和默认判断继续，不再等待。
                 """.formatted(pending.question()));
     }
 
@@ -239,46 +253,19 @@ public class GamerPendingQuestionService {
                 memory.add(AiMessage.from(text.trim()));
             }
         } catch (Exception e) {
-            log.warn("[gamer询问] 写入 RP AI 记忆失败: rpSession={}, reason={}", rpSessionId, e.getMessage());
+            log.warn("[游戏询问] 写入 RP AI 记忆失败: rpSession={}, reason={}", rpSessionId, e.getMessage());
         }
     }
 
-    private void appendUserMemory(String rpSessionId, String text) {
+    private void appendUserMemory(String rpSessionId, String name, String text) {
         try {
             ChatMemory memory = chatMemoryProvider.get(normalizeSessionId(rpSessionId));
             if (memory != null) {
-                memory.add(UserMessage.from(text.trim()));
+                memory.add(UserMessage.from(name, text.trim()));
             }
         } catch (Exception e) {
-            log.warn("[gamer询问] 写入 RP 用户记忆失败: rpSession={}, reason={}", rpSessionId, e.getMessage());
+            log.warn("[游戏询问] 写入 RP 用户记忆失败: rpSession={}, reason={}", rpSessionId, e.getMessage());
         }
-    }
-
-    private String renderUserAnswerInstruction(PendingQuestion pending, String answer, ResolvedAnswer resolved) {
-        return """
-                用户回答了你刚才的战术询问。请不要继续等待，基于用户回答和 latest_game_state 继续决策。
-                原问题：%s
-                用户原始回答：%s
-                解析选择：%s
-                默认选择：%s
-                """.formatted(
-                pending.question(),
-                blankToDefault(answer, "空回复"),
-                resolved.choice().map(QuestionChoice::label).orElse("未匹配固定选项，请按原始回答理解"),
-                blankToDefault(pending.defaultChoice(), "无"));
-    }
-
-    private String renderTimeoutInstruction(PendingQuestion pending) {
-        return """
-                你刚才向用户发起了战术询问，但 15 秒内没有收到任何回复。
-                请不要继续等待，也不要重复提出同一个问题；基于 latest_game_state、默认选择和你的稳妥判断继续行动。
-                原问题：%s
-                默认选择：%s
-                可选项：%s
-                """.formatted(
-                pending.question(),
-                blankToDefault(pending.defaultChoice(), "无；请选择最稳妥路线"),
-                pending.choices().isEmpty() ? "无固定选项" : renderChoices(pending.choices()));
     }
 
     private ResolvedAnswer resolveAnswer(String answer, List<QuestionChoice> choices) {

@@ -46,8 +46,24 @@ const emit = defineEmits<{
           ]"
         >
           <span>
-            <span class="block text-[10px] font-mono uppercase tracking-[0.35em] opacity-60">远程</span>
-            <span class="mt-2 block text-sm font-black uppercase tracking-[0.2em]">后端设置</span>
+            <span class="block text-[10px] font-mono uppercase tracking-[0.35em] opacity-60">Config</span>
+            <span class="mt-2 block text-sm font-black uppercase tracking-[0.2em]">本地配置</span>
+          </span>
+        </button>
+
+        <button
+          type="button"
+          @click="emit('update:view', 'game')"
+          :class="[
+            'flex w-full items-center justify-between border-2 px-4 py-4 text-left transition',
+            props.activeView === 'game'
+              ? 'border-[#1A1A1A] bg-[#1A1A1A] text-white'
+              : 'border-[#1A1A1A]/15 bg-white/50 text-[#1A1A1A] hover:border-[#1A1A1A]'
+          ]"
+        >
+          <span>
+            <span class="block text-[10px] font-mono uppercase tracking-[0.35em] opacity-60">Game</span>
+            <span class="mt-2 block text-sm font-black uppercase tracking-[0.2em]">游戏模式</span>
           </span>
         </button>
       </div>
@@ -57,7 +73,7 @@ const emit = defineEmits<{
       <header class="flex items-center justify-between border-b border-[#1A1A1A]/10 bg-white/50 px-6 py-5">
         <div>
           <p class="text-[10px] font-mono uppercase tracking-[0.4em] text-[#E85D04]">
-            {{ props.activeView === 'frontend' ? '前端设置' : '后端设置' }}
+            {{ props.activeView === 'frontend' ? '前端设置' : props.activeView === 'backend' ? '本地配置' : '游戏模式' }}
           </p>
         </div>
 

@@ -18,6 +18,8 @@ class TtsPcmPlayerProcessor extends AudioWorkletProcessor {
     this.tempo = this.normalizeTempo(options.processorOptions?.tempo);
     this.segmentLength = Math.max(512, Math.round(sampleRate * 0.04));
     this.overlapLength = Math.max(128, Math.round(sampleRate * 0.01));
+    this.minimumFlushFrames = Math.max(128, Math.round(sampleRate * 0.035));
+    this.flushFadeFrames = Math.max(64, Math.round(sampleRate * 0.008));
     this.outputHop = Math.max(1, this.segmentLength - this.overlapLength);
     this.inputHop = this.outputHop * this.tempo;
     this.searchRadius = Math.max(32, Math.round(sampleRate * 0.006));
@@ -81,6 +83,23 @@ class TtsPcmPlayerProcessor extends AudioWorkletProcessor {
     this.bufferedFrames += samples.length;
   }
 
+  enqueueResidual(samples) {
+    if (!samples || samples.length < this.minimumFlushFrames) {
+      return;
+    }
+    const copy = this.copySamples(samples);
+    this.applyFadeOut(copy);
+    this.enqueueOutput(copy);
+  }
+
+  applyFadeOut(samples) {
+    const frames = Math.min(samples.length, this.flushFadeFrames);
+    for (let index = 0; index < frames; index += 1) {
+      const sampleIndex = samples.length - frames + index;
+      samples[sampleIndex] *= 1 - ((index + 1) / (frames + 1));
+    }
+  }
+
   copySamples(samples) {
     const copy = new Float32Array(samples.length);
     copy.set(samples);
@@ -105,7 +124,7 @@ class TtsPcmPlayerProcessor extends AudioWorkletProcessor {
           continue;
         }
         if (forceFlush && this.inputBuffer.length > 0) {
-          this.enqueueOutput(this.copySamples(this.inputBuffer));
+          this.enqueueResidual(this.inputBuffer);
           this.clearStretchState();
         }
         return;
@@ -171,7 +190,7 @@ class TtsPcmPlayerProcessor extends AudioWorkletProcessor {
 
   flushRemainder() {
     if (this.pendingTail && this.pendingTail.length > 0) {
-      this.enqueueOutput(this.pendingTail);
+      this.enqueueResidual(this.pendingTail);
     }
 
     const remainderStart = Math.min(
@@ -179,7 +198,7 @@ class TtsPcmPlayerProcessor extends AudioWorkletProcessor {
       Math.max(this.lastFrameEnd, Math.floor(this.nextInputPosition))
     );
     if (remainderStart < this.inputBuffer.length) {
-      this.enqueueOutput(this.copySamples(this.inputBuffer.subarray(remainderStart)));
+      this.enqueueResidual(this.inputBuffer.subarray(remainderStart));
     }
 
     this.clearStretchState();

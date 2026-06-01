@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Settings2, SlidersHorizontal, X } from 'lucide-vue-next';
+import { Gamepad2, Settings2, SlidersHorizontal, X } from 'lucide-vue-next';
 import type { SettingsView } from './types';
 
 const props = defineProps<{
@@ -58,7 +58,25 @@ const emit = defineEmits<{
             <Settings2 :size="18" />
           </div>
           <div>
-            <p class="text-sm font-semibold">后端设置</p>
+            <p class="text-sm font-semibold">本地配置</p>
+          </div>
+        </button>
+
+        <button
+          type="button"
+          @click="emit('update:view', 'game')"
+          :class="[
+            'flex w-full items-center gap-4 rounded-2xl border px-4 py-4 text-left transition',
+            props.activeView === 'game'
+              ? 'border-sky-200 bg-sky-50 text-sky-900 shadow-sm'
+              : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
+          ]"
+        >
+          <div class="flex h-11 w-11 items-center justify-center rounded-2xl" :class="props.activeView === 'game' ? 'bg-sky-600 text-white' : 'bg-slate-100 text-slate-500'">
+            <Gamepad2 :size="18" />
+          </div>
+          <div>
+            <p class="text-sm font-semibold">游戏模式</p>
           </div>
         </button>
       </div>
@@ -68,7 +86,7 @@ const emit = defineEmits<{
       <header class="flex items-center justify-between border-b border-slate-200/80 px-6 py-5 md:px-8">
         <div>
           <h3 class="mt-2 text-2xl font-semibold text-slate-900">
-            {{ props.activeView === 'frontend' ? '前端设置' : '后端设置' }}
+            {{ props.activeView === 'frontend' ? '前端设置' : props.activeView === 'backend' ? '本地配置' : '游戏模式' }}
           </h3>
         </div>
 

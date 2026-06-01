@@ -3,38 +3,44 @@ package p1.config.prop;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class AssistantPropertiesTest {
 
     @Test
-    void shouldUseChatModelWhenGamerModelIsNotConfigured() {
+    void shouldResolveServiceModelsFromLightAndHeavyMapping() {
         AssistantProperties properties = new AssistantProperties();
         AssistantProperties.ProviderConfig provider = new AssistantProperties.ProviderConfig();
-        AssistantProperties.ChatModelConfig chatModel = chatModel("chat-key", "https://chat.example", "chat-model", 300L);
-        provider.setChatModel(chatModel);
+        provider.setLightModel(chatModel("light-key", "https://light.example", "light-model", 30L));
+        provider.setHeavyModel(chatModel("", "", "heavy-model", null));
         properties.setApi(provider);
 
-        assertSame(chatModel, properties.activeGamerModel());
+        AssistantProperties.ModelServicesConfig services = new AssistantProperties.ModelServicesConfig();
+        services.setRp("heavy");
+        services.setParser("light");
+        services.setChecker("lite");
+        services.setSupervisor("heavy-model");
+        properties.setModelServices(services);
+
+        assertEquals("heavy-model", properties.activeRpModel().getModelName());
+        assertEquals("https://light.example", properties.activeRpModel().getBaseUrl());
+        assertEquals("light-key", properties.activeRpModel().getApiKey());
+        assertEquals(30L, properties.activeRpModel().getTimeoutSeconds());
+
+        assertEquals("light-model", properties.activeParserModel().getModelName());
+        assertEquals("light-model", properties.activeCheckerModel().getModelName());
+        assertEquals("heavy-model", properties.activeSupervisorModel().getModelName());
     }
 
     @Test
-    void shouldOverlayGamerModelOnTopOfChatModel() {
+    void shouldOnlyPrintRpLlmTraceByDefault() {
         AssistantProperties properties = new AssistantProperties();
-        AssistantProperties.ProviderConfig provider = new AssistantProperties.ProviderConfig();
-        provider.setChatModel(chatModel("chat-key", "https://chat.example", "chat-model", 300L));
 
-        AssistantProperties.ChatModelConfig gamerModel = new AssistantProperties.ChatModelConfig();
-        gamerModel.setModelName("gamer-model");
-        provider.setGamerModel(gamerModel);
-        properties.setApi(provider);
-
-        AssistantProperties.ChatModelConfig active = properties.activeGamerModel();
-
-        assertEquals("chat-key", active.getApiKey());
-        assertEquals("https://chat.example", active.getBaseUrl());
-        assertEquals("gamer-model", active.getModelName());
-        assertEquals(300L, active.getTimeoutSeconds());
+        assertTrue(properties.getLlmLogs().consoleEnabled("rp"));
+        assertFalse(properties.getLlmLogs().consoleEnabled("parser"));
+        assertFalse(properties.getLlmLogs().consoleEnabled("checker"));
+        assertFalse(properties.getLlmLogs().consoleEnabled("supervisor"));
     }
 
     private AssistantProperties.ChatModelConfig chatModel(String apiKey, String baseUrl, String modelName, Long timeoutSeconds) {

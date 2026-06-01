@@ -1,7 +1,7 @@
 package p1.component.agent.gamer;
 
 /**
- * 统一生成 gamer agent 的跨游戏会话键。
+ * 统一生成游戏桥接层的跨游戏会话键。
  */
 public final class GameSessionKey {
 

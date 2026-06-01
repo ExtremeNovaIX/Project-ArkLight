@@ -129,6 +129,9 @@ public class STS2OperationToolRenderer {
 
         String name = removeModePrefix(toolName).toLowerCase();
         String stateType = state.stateType() == null ? "" : state.stateType().toLowerCase();
+        if ("hand_select".equals(stateType)) {
+            return isHandSelectTool(name);
+        }
         if ("card_select".equals(stateType)) {
             return isCardSelectTool(name, state.json());
         }
@@ -174,6 +177,14 @@ public class STS2OperationToolRenderer {
         return "combat_play_card".equals(name)
                 || "combat_end_turn".equals(name)
                 || "use_potion".equals(name);
+    }
+
+    /**
+     * hand_select 是战斗内选牌界面，虽然状态里仍带 battle，但不能暴露普通出牌工具。
+     */
+    private boolean isHandSelectTool(String name) {
+        return "combat_select_card".equals(name)
+                || "combat_confirm_selection".equals(name);
     }
 
     /**
@@ -237,7 +248,7 @@ public class STS2OperationToolRenderer {
      * @return true 表示奖励结算工具
      */
     private boolean isRewardClaimTool(String name) {
-        return name.startsWith("rewards_")
+        return name.startsWith("rewards_claim")
                 || name.startsWith("claim_")
                 || name.contains("proceed")
                 || "use_potion".equals(name);

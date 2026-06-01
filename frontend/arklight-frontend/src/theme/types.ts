@@ -6,7 +6,7 @@ export interface ThemeOption {
   description: string;
 }
 
-export type SettingsView = 'frontend' | 'backend';
+export type SettingsView = 'frontend' | 'backend' | 'game';
 
 export interface ThemeText {
   bootLoadingLabel: string;

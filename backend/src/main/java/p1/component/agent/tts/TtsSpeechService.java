@@ -98,8 +98,12 @@ public class TtsSpeechService {
         private boolean styleBoundaryAllowed = true;
         private final StringBuilder pending = new StringBuilder();
         private final AtomicLong sequence = new AtomicLong();
+        private final AtomicLong activeSequence = new AtomicLong();
+        private final AtomicLong completedSequence = new AtomicLong();
+        private final AtomicLong stopAfterSequence = new AtomicLong(Long.MAX_VALUE);
         private final AtomicBoolean closed = new AtomicBoolean(false);
         private final AtomicBoolean cancelled = new AtomicBoolean(false);
+        private final AtomicBoolean stopAfterCurrentChunk = new AtomicBoolean(false);
         private CompletableFuture<Void> chain = CompletableFuture.completedFuture(null);
 
         private StreamingTtsSpeechSession(String sessionId, String source, TtsProvider provider) {
@@ -248,6 +252,31 @@ public class TtsSpeechService {
         }
 
         /**
+         * 在音频 chunk 边界停止：刷新当前文本为一个 chunk，允许当前或下一个 chunk 播完，
+         * 后续已排队 chunk 直接跳过，避免错误发生时切断正在播放的音频帧。
+         *
+         * @param reason 停止原因
+         */
+        @Override
+        public void stopAfterCurrentChunk(String reason) {
+            if (!closed.compareAndSet(false, true)) {
+                return;
+            }
+            stopAfterCurrentChunk.set(true);
+            stopAfterSequence.set(resolveStopAfterSequence());
+            long finalSequence = sequence.incrementAndGet();
+            synchronized (this) {
+                chain = chain.thenRunAsync(() -> {
+                    if (!cancelled.get()) {
+                        audioHub.publishFinal(sessionId, source, finalSequence);
+                    }
+                }, executor);
+            }
+            log.debug("[TTS] 将在当前音频片段后停止: session={}, source={}, stopAfter={}, reason={}",
+                    sessionId, source, stopAfterSequence.get(), reason);
+        }
+
+        /**
          * 将多个文本段按顺序加入合成队列。
          *
          * @param chunks 文本段列表
@@ -293,20 +322,41 @@ public class TtsSpeechService {
          * @param text            待合成文本
          */
         private void synthesizeAndPublish(long currentSequence, String text) {
-            if (cancelled.get()) {
+            if (cancelled.get() || shouldSkipSequence(currentSequence)) {
                 return;
             }
+            activeSequence.set(currentSequence);
             try {
                 provider.synthesize(
                         new TtsSynthesisRequest(sessionId, source, currentSequence, text),
                         frame -> {
-                            if (!cancelled.get()) {
+                            if (!cancelled.get() && !shouldSkipSequence(currentSequence)) {
                                 audioHub.publishAudio(sessionId, source, currentSequence, text, frame);
                             }
                         });
             } catch (Exception e) {
                 throw new IllegalStateException(e);
+            } finally {
+                completedSequence.updateAndGet(previous -> Math.max(previous, currentSequence));
+                activeSequence.compareAndSet(currentSequence, 0);
             }
+        }
+
+        private long resolveStopAfterSequence() {
+            long active = activeSequence.get();
+            if (active > 0) {
+                return active;
+            }
+            long enqueued = sequence.get();
+            long completed = completedSequence.get();
+            if (enqueued <= completed) {
+                return completed;
+            }
+            return completed + 1;
+        }
+
+        private boolean shouldSkipSequence(long currentSequence) {
+            return stopAfterCurrentChunk.get() && currentSequence > stopAfterSequence.get();
         }
     }
 

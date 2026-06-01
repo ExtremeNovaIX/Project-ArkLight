@@ -31,7 +31,7 @@ import java.util.stream.Stream;
  * 4. application-mcp.yaml     - 用户显式配置或 installPath 引用目录模板
  * 5. config/mcp-registry.json - REST API 持久化的运行时注册条目 (最终覆盖)
  * <p>
- * 所有启用的条目最终写入 MCPProperties.games, 供 GamerMCPClientFactory 使用.
+ * 所有启用的条目最终写入 MCPProperties.games, 供游戏 MCP 客户端工厂使用。
  */
 @Component
 @RequiredArgsConstructor

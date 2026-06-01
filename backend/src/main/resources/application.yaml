@@ -9,11 +9,15 @@ spring:
       - optional:classpath:application-ai.yaml
       # 外部模型配置优先于 resources 默认值。
       - optional:${arclight.config.uri}application-ai.yaml
+      # LLM 服务到轻/重模型的映射。
+      - optional:classpath:application-ai-services.yaml
+      # 外部服务映射优先于 resources 默认值。
+      - optional:${arclight.config.uri}application-ai-services.yaml
       # 对话记忆、向量索引和 markdown 存储默认配置。
       - optional:classpath:application-memory.yaml
       # 外部记忆配置优先于 resources 默认值。
       - optional:${arclight.config.uri}application-memory.yaml
-      # RP 主动表达和表达欲默认配置。
+      # RP 主动发言默认配置。
       - optional:classpath:application-rp.yaml
       # 外部 RP 配置优先于 resources 默认值。
       - optional:${arclight.config.uri}application-rp.yaml
@@ -25,7 +29,7 @@ spring:
       - optional:classpath:application-frontend.yaml
       # 外部前端配置优先于 resources 默认值。
       - optional:${arclight.config.uri}application-frontend.yaml
-      # MCP 与 gamer 默认配置。
+      # MCP 与游戏自动行动默认配置。
       - optional:classpath:application-mcp.yaml
       # 外部 MCP 配置优先于 resources 默认值。
       - optional:${arclight.config.uri}application-mcp.yaml

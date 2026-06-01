@@ -12,7 +12,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * 游戏循环慢观察退避服务。
  * <p>
  * 该组件只处理“当前会话连续没有有效动作时，下次什么时候再探测”的节流状态，
- * 不参与游戏生命周期、MCP 调用或 agent 决策。
+ * 不参与游戏生命周期、MCP 调用或 RP 决策。
  */
 @Component
 @Slf4j
@@ -64,7 +64,7 @@ public class GameLoopObservationBackoffService {
                     : Math.min(maxMs, state.currentDelayMs + stepMs);
             state.nextObserveAt = Instant.now().plusMillis(state.currentDelayMs);
             state.lastReason = reason == null ? "" : reason;
-            log.debug("[Gamer Agent循环] 进入慢观察: game={}, session={}, delayMs={}, noEffective={}, reason={}",
+            log.debug("[RP游戏循环] 进入慢观察: game={}, session={}, delayMs={}, noEffective={}, reason={}",
                     session.getGameName(), session.getSessionId(), state.currentDelayMs,
                     state.noEffectiveCount, state.lastReason);
         }

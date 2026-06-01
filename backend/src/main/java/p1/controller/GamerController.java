@@ -4,18 +4,14 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import p1.component.agent.gamer.GamerAgentService;
 import p1.component.agent.gamer.GamerRequestResolver;
 import p1.component.agent.gamer.loop.ActiveGameSession;
-import p1.component.agent.gamer.loop.GamerGameLoopService;
+import p1.component.agent.gamer.loop.RpGameDriver;
 
 import java.util.Map;
 
 /**
- * 通过 gamer agent 进行游戏操作的 REST 控制器。
- * <p>
- * 游戏指令：
- * POST /api/gamer/play   — 向 gamer agent 发送指令
+ * 游戏循环 REST 控制器。
  * <p>
  * 游戏循环控制：
  * POST /api/gamer/loop/start  — 启动自动游戏循环
@@ -31,32 +27,8 @@ import java.util.Map;
 @Slf4j
 public class GamerController {
 
-    private final GamerAgentService gamerAgentService;
-    private final GamerGameLoopService gameLoopService;
+    private final RpGameDriver gameLoopService;
     private final GamerRequestResolver requestResolver;
-
-    @PostMapping("/play")
-    public ResponseEntity<?> play(@RequestBody GamerPlayRequest request) {
-        if (request == null) return ResponseEntity.badRequest().body(Map.of("error", "请求体不能为空"));
-
-        String gameName = requestResolver.resolveGameName(request.gameName);
-        String sessionId = requestResolver.resolveSessionId(request.sessionId);
-        String message = request.message;
-
-        if (message == null || message.isBlank()) {
-            return ResponseEntity.badRequest().body(Map.of("error", "message 不能为空"));
-        }
-
-        log.info("[游戏控制器] 收到游戏指令: game={}, session={}, message={}", gameName, sessionId, message);
-
-        String response = gamerAgentService.play(gameName, sessionId, message);
-
-        return ResponseEntity.ok(Map.of(
-                "gameName", gameName,
-                "sessionId", sessionId,
-                "response", response
-        ));
-    }
 
     // ── 游戏循环控制 ──
 
@@ -194,12 +166,6 @@ public class GamerController {
                 "lastActivityAt", s.getLastActivityAt().toString(),
                 "totalStepCount", s.getTotalStepCount()
         );
-    }
-
-    public static class GamerPlayRequest {
-        public String gameName;
-        public String sessionId;
-        public String message;
     }
 
     public static class GamerLoopRequest {

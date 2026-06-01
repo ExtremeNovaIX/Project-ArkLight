@@ -4,11 +4,16 @@ import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
+
 @Data
 @Component
 @ConfigurationProperties(prefix = "assistant")
 public class AssistantProperties {
     private Mode mode = Mode.API;
+    private ModelServicesConfig modelServices = new ModelServicesConfig();
+    private LlmLogsConfig llmLogs = new LlmLogsConfig();
     private ProviderConfig api;
     private ProviderConfig local;
     private EmbeddingStoreConfig embeddingStore;
@@ -19,12 +24,23 @@ public class AssistantProperties {
     private EventTreeConfig eventTree = new EventTreeConfig();
 
     public ChatModelConfig activeChatModel() {
-        return activeProvider().getChatModel();
+        return activeRpModel();
     }
 
-    public ChatModelConfig activeGamerModel() {
-        ProviderConfig provider = activeProvider();
-        return mergedChatModel(provider.getChatModel(), provider.getGamerModel());
+    public ChatModelConfig activeRpModel() {
+        return activeServiceModel(modelServices.getRp());
+    }
+
+    public ChatModelConfig activeParserModel() {
+        return activeServiceModel(modelServices.getParser());
+    }
+
+    public ChatModelConfig activeCheckerModel() {
+        return activeServiceModel(modelServices.getChecker());
+    }
+
+    public ChatModelConfig activeSupervisorModel() {
+        return activeServiceModel(modelServices.getSupervisor());
     }
 
     public EmbeddingModelConfig activeEmbeddingModel() {
@@ -41,10 +57,80 @@ public class AssistantProperties {
     }
 
     @Data
+    public static class LlmLogsConfig {
+        /**
+         * 应用侧 LLM 调用跟踪的控制台开关。
+         * <p>
+         * 该配置只控制可读诊断日志是否输出到控制台；token 统计始终记录。
+         * 底层模型客户端原生日志由 {@link ChatModelConfig#logEnabled} 控制。
+         */
+        private Map<String, Boolean> console = defaultConsoleConfig();
+
+        public boolean consoleEnabled(String serviceName) {
+            if (serviceName == null || serviceName.isBlank()) {
+                return false;
+            }
+            return console.getOrDefault(serviceName.trim().toLowerCase(), false);
+        }
+
+        private static Map<String, Boolean> defaultConsoleConfig() {
+            Map<String, Boolean> defaults = new LinkedHashMap<>();
+            defaults.put("rp", true);
+            defaults.put("parser", false);
+            defaults.put("checker", false);
+            defaults.put("supervisor", false);
+            return defaults;
+        }
+    }
+
+    @Data
     public static class ProviderConfig {
-        private ChatModelConfig chatModel;
-        private ChatModelConfig gamerModel;
+        private ChatModelConfig lightModel;
+        private ChatModelConfig heavyModel;
         private EmbeddingModelConfig embeddingModel;
+    }
+
+    @Data
+    public static class ModelServicesConfig {
+        private String rp = "heavy";
+        private String parser = "light";
+        private String checker = "light";
+        private String supervisor = "heavy";
+    }
+
+    private ChatModelConfig activeServiceModel(String target) {
+        String normalized = normalizeModelTarget(target);
+        if ("heavy".equals(normalized)) {
+            return activeHeavyModel();
+        }
+        return activeLightModel();
+    }
+
+    private ChatModelConfig activeLightModel() {
+        ProviderConfig provider = activeProvider();
+        if (provider.getLightModel() != null) {
+            return provider.getLightModel();
+        }
+        return provider.getHeavyModel();
+    }
+
+    private ChatModelConfig activeHeavyModel() {
+        ProviderConfig provider = activeProvider();
+        return mergedChatModel(provider.getLightModel(), provider.getHeavyModel());
+    }
+
+    private String normalizeModelTarget(String target) {
+        if (target == null || target.isBlank()) {
+            return "";
+        }
+        String normalized = target.trim().toLowerCase().replace('_', '-');
+        if (normalized.endsWith("-model")) {
+            normalized = normalized.substring(0, normalized.length() - "-model".length());
+        }
+        if ("lite".equals(normalized)) {
+            return "light";
+        }
+        return normalized;
     }
 
     private ChatModelConfig mergedChatModel(ChatModelConfig base, ChatModelConfig override) {
@@ -119,10 +205,6 @@ public class AssistantProperties {
          * RP 主动发言配置。
          */
         private ProactiveConfig proactive = new ProactiveConfig();
-        /**
-         * 游戏行动表达候选的评分和暂存配置。
-         */
-        private ExpressionConfig expression = new ExpressionConfig();
     }
 
     @Data
@@ -148,10 +230,6 @@ public class AssistantProperties {
          */
         private long gameSpeechCooldownMs = 120000;
         /**
-         * 游戏模式下表达欲触发主动发言的最小间隔。
-         */
-        private long gameExpressionSpeechCooldownMs = 0;
-        /**
          * 游戏模式主动发言频率预算的滑动窗口时长。
          */
         private long gameProactiveRateWindowMs = 10000;
@@ -176,49 +254,13 @@ public class AssistantProperties {
     }
 
     @Data
-    public static class ExpressionConfig {
-        /**
-         * 进入 RP 主动表达队列的最低修正分。
-         */
-        private int pendingThreshold = 55;
-        /**
-         * 只保留到行动记忆、不触发主动发言的最低修正分。
-         */
-        private int storeOnlyThreshold = 30;
-        /**
-         * 表达候选的统一分数偏置，用来调整系统整体表达欲强弱。
-         */
-        private int scoreBias = 8;
-        /**
-         * 同一 RP 会话连续接收游戏表达候选的最小间隔。
-         */
-        private long pendingCooldownMs = 3000;
-        /**
-         * 暂存表达候选超过该时间后可被新候选替换。
-         */
-        private long pendingStaleMs = 90000;
-        /**
-         * 新候选至少高出旧候选多少分才可在冷却内替换。
-         */
-        private int replaceBonus = 15;
-        /**
-         * 低于主动表达阈值的候选累计到该压力值后，也允许触发一次 RP 表达。
-         */
-        private int desireThreshold = 100;
-        /**
-         * 单次低分候选按最终分数的多少百分比计入表达压力。
-         */
-        private int desireScoreWeightPercent = 60;
-    }
-
-    @Data
     public static class InteractionConfig {
         /**
          * 一次用户文本请求持有交互窗口的兜底超时，单位毫秒。
          */
         private long userTurnTtlMs = 180000;
         /**
-         * 前端 typing 或未来语音 VAD 心跳暂停 gamer 的用户活动窗口，输入停止后按该时长恢复，单位毫秒。
+         * 前端 typing 或未来语音 VAD 心跳暂停游戏自动行动的用户活动窗口，输入停止后按该时长恢复，单位毫秒。
          */
         private long userActivityTtlMs = 3000;
         /**

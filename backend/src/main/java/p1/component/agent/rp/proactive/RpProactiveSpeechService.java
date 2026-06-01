@@ -15,8 +15,6 @@ import p1.component.agent.interaction.InteractionCoordinator;
 import p1.component.agent.rp.context.SummaryCacheManager;
 import p1.component.agent.rp.core.CharacterPromptRegistry;
 import p1.component.agent.rp.core.RpSpeechTurnService;
-import p1.component.agent.rp.expression.PendingRpExpression;
-import p1.component.agent.rp.expression.RpExpressionOutbox;
 import p1.config.prop.AssistantProperties;
 import p1.infrastructure.mdc.ChatSessionMetrics;
 import p1.utils.ChatMessageUtil;
@@ -33,7 +31,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 /**
  * RP 主动发言调度服务。
  * <p>
- * 表达欲触发和空闲触发都会落到该服务：先确认前端在线和冷却窗口，再异步调用
+ * 空闲触发会落到该服务：先确认前端在线和冷却窗口，再异步调用
  * 主动发言生成器，最后只把真实说出的 AI 文本写回 RP 记忆并实时投递给前端。
  */
 @Service
@@ -49,7 +47,6 @@ public class RpProactiveSpeechService {
     private final ChatMemoryProvider chatMemoryProvider;
     private final RpProactiveSessionRegistry sessionRegistry;
     private final RpLiveMessageHub messageHub;
-    private final RpExpressionOutbox expressionOutbox;
     private final ActiveGameRegistry activeGameRegistry;
     private final AssistantProperties assistantProperties;
     private final ChatSessionMetrics chatSessionMetrics;
@@ -61,15 +58,6 @@ public class RpProactiveSpeechService {
     private final ConcurrentMap<String, AtomicBoolean> speakingBySession = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, Instant> lastAttemptAtBySession = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, GameSpeechBudget> gameSpeechBudgetBySession = new ConcurrentHashMap<>();
-
-    /**
-     * 收到高分表达欲后异步申请一次 RP 主动发言。
-     *
-     * @param rpSessionId RP 会话 id
-     */
-    public void requestExpressionSpeech(String rpSessionId) {
-        asyncTaskExecutor.execute(() -> speakFromExpression(rpSessionId));
-    }
 
     /**
      * 定时为长期沉默的在线 RP 会话申请闲置发言。
@@ -87,40 +75,6 @@ public class RpProactiveSpeechService {
                 requestIdleSpeech(session);
             }
         }
-    }
-
-    /**
-     * 消费一条表达冲动并生成主动发言。
-     *
-     * @param rpSessionId RP 会话 id
-     */
-    private void speakFromExpression(String rpSessionId) {
-        Optional<RpProactiveSessionRegistry.SessionSnapshot> onlineSession = sessionRegistry.findOnline(rpSessionId);
-        if (onlineSession.isEmpty()) {
-            log.debug("[RP主动发言] 表达欲触发时没有在线前端，跳过: session={}", rpSessionId);
-            return;
-        }
-        PendingRpExpression expression = expressionOutbox.consume(rpSessionId).orElse(null);
-        if (expression == null) {
-            return;
-        }
-        String triggerContext = """
-                你刚才亲自完成了一段游戏行动，并产生了想开口的冲动。
-                下列行动和念头都属于你自己，不属于用户。
-                type=%s
-                urgency=%s
-                score=%d
-                source_action=%s
-                inner_thought=%s
-                请结合最近对话和你刚才已经写入历史的游戏行动自然开口；
-                可以只挑最有感觉的一点表达，不要逐条复述行动流水账。
-                """.formatted(
-                expression.type(),
-                expression.urgency(),
-                expression.score(),
-                expression.sourceAction(),
-                expression.innerThought()).trim();
-        speak(onlineSession.get(), "expression", triggerContext, expression.gameName());
     }
 
     /**
@@ -152,7 +106,7 @@ public class RpProactiveSpeechService {
      * @param session        在线 RP 会话
      * @param source         触发来源
      * @param triggerContext 触发说明
-     * @param preferredGame  表达欲所属游戏；空闲触发时为空
+     * @param preferredGame  指定游戏；空闲触发时为空
      */
     private void speak(RpProactiveSessionRegistry.SessionSnapshot session,
                        String source,
@@ -205,7 +159,6 @@ public class RpProactiveSpeechService {
                 sessionRegistry.observeRpSpeech(session.sessionId());
             }
             messageHub.publish(session.sessionId(), source, speech, session.shortMode());
-            expressionOutbox.clearDesireAfterSpeech(session.sessionId());
             log.info("[RP主动发言] 已投递主动消息: session={}, source={}", session.sessionId(), source);
         } catch (Exception e) {
             log.warn("[RP主动发言] 生成主动消息失败: session={}, source={}, reason={}",
@@ -230,11 +183,11 @@ public class RpProactiveSpeechService {
     }
 
     /**
-     * 构建当前游戏上下文。
+     * 构建主动发言用的游戏上下文块。
      *
      * @param rpSessionId   RP 会话 id
-     * @param preferredGame 表达欲所属游戏
-     * @return 当前游戏状态文本；非游戏上下文时为空
+     * @param preferredGame 指定游戏
+     * @return 当前游戏上下文块；非游戏上下文时为空
      */
     private String gameContext(String rpSessionId, String preferredGame) {
         Optional<ActiveGameSession> activeSession = activeGameRegistry.findBySessionId(rpSessionId);
@@ -246,12 +199,14 @@ public class RpProactiveSpeechService {
             return "";
         }
         return """
+                <current_game_context>
                 <game_mode>
                 你当前正在亲自玩游戏。
                 game=%s
                 loop_state=%s
                 本次主动发言只需要根据触发内容和最近对话自然开口，不需要读取当前局势做战术判断。
                 </game_mode>
+                </current_game_context>
                 """.formatted(session.getGameName(), session.getState()).trim();
     }
 
@@ -271,7 +226,7 @@ public class RpProactiveSpeechService {
 
         Instant now = Instant.now();
         Instant lastAttempt = lastAttemptAtBySession.get(sessionId);
-        Duration cooldown = speechCooldown(gameMode, source);
+        Duration cooldown = speechCooldown(gameMode);
         if (lastAttempt != null && Duration.between(lastAttempt, now).compareTo(cooldown) < 0) {
             speaking.set(false);
             return false;
@@ -323,12 +278,10 @@ public class RpProactiveSpeechService {
      * @param gameMode true 表示当前处于游戏模式
      * @return 主动发言最小间隔
      */
-    private Duration speechCooldown(boolean gameMode, String source) {
+    private Duration speechCooldown(boolean gameMode) {
         long cooldownMs;
         if (!gameMode) {
             cooldownMs = proactiveProperties().getSpeechCooldownMs();
-        } else if ("expression".equals(source)) {
-            cooldownMs = proactiveProperties().getGameExpressionSpeechCooldownMs();
         } else {
             cooldownMs = proactiveProperties().getGameSpeechCooldownMs();
         }

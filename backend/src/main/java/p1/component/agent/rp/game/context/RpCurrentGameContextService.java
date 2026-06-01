@@ -10,7 +10,10 @@ import org.springframework.stereotype.Service;
 import p1.component.agent.gamer.GameSessionKey;
 import p1.component.agent.gamer.GamerMCPClientFactory;
 import p1.component.agent.gamer.adapter.GameAdapter;
-import p1.component.agent.gamer.adapter.core.*;
+import p1.component.agent.gamer.adapter.core.GameAdapterContext;
+import p1.component.agent.gamer.adapter.core.GameAdapterRegistry;
+import p1.component.agent.gamer.adapter.core.GameStateJsonSanitizer;
+import p1.component.agent.gamer.adapter.core.GameStateSnapshot;
 import p1.config.mcp.MCPProperties;
 
 /**
@@ -48,8 +51,8 @@ public class RpCurrentGameContextService {
 
             // RP 只读取当前局面。上一批队列结果含有校验、中断和工具细节，不进入人格侧上下文。
             GameStateSnapshot state = adapter.fetchState(new GameAdapterContext(gameName, memoryId, tools, config));
-            GameActionability actionability = adapter.evaluateActionability(state);
-            return render(adapter, state, actionability);
+            String actionSummary = adapter.renderAvailableOperationSummary(tools, config, state);
+            return render(state, actionSummary);
         } catch (Exception e) {
             log.warn("[RP游戏状态] 获取当前游戏状态失败: game={}, session={}, reason={}",
                     gameName, sessionId, e.getMessage());
@@ -60,25 +63,25 @@ public class RpCurrentGameContextService {
     /**
      * 渲染 RP 侧游戏状态文本。
      *
-     * @param adapter          当前游戏适配器
-     * @param state            最新游戏状态
-     * @param actionability    当前行动窗口判断
+     * @param state         最新游戏状态
+     * @param actionSummary RP 可见的中文动作摘要
      * @return RP 状态上下文
      */
-    private String render(GameAdapter adapter,
-                          GameStateSnapshot state,
-                          GameActionability actionability) {
+    private String render(GameStateSnapshot state, String actionSummary) {
         StringBuilder sb = new StringBuilder();
         sb.append("<current_game_state>\n")
-                .append("actionability=").append(actionability.status()).append("\n")
-                .append("actionability_reason=")
-                .append(actionability.reason() == null ? "" : actionability.reason())
-                .append("\n")
-                .append("<latest_game_state>\n")
-                .append(adapter.renderStateForAgent(state))
-                .append("\n</latest_game_state>\n");
+                .append("<current_game_state_json>\n")
+                .append(rawStateJson(state))
+                .append("\n</current_game_state_json>\n")
+                .append("<available_actions>\n")
+                .append(actionSummary == null || actionSummary.isBlank() ? "(没有可用动作)" : actionSummary)
+                .append("\n</available_actions>\n");
         sb.append("</current_game_state>");
         return sb.toString();
+    }
+
+    private String rawStateJson(GameStateSnapshot state) {
+        return GameStateJsonSanitizer.sanitizeToString(state);
     }
 
     /**

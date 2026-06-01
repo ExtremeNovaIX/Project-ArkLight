@@ -21,6 +21,47 @@ import static org.mockito.Mockito.*;
 class ArchivableChatMemoryTest {
 
     @Test
+    void shouldSuppressUserMessageOnlyWhenUpstreamDeclaresTransientScope() {
+        MemoryAsyncCompressor compressor = mock(MemoryAsyncCompressor.class);
+        ChatMemoryAppender chatMemoryAppender = mock(ChatMemoryAppender.class);
+        RawMdService rawMdService = mock(RawMdService.class);
+        ChatLogRepository chatLogRepository = mock(ChatLogRepository.class);
+        ChatMemoryWritePolicy writePolicy = new ChatMemoryWritePolicy();
+
+        AssistantProperties assistantProperties = new AssistantProperties();
+        AssistantProperties.ChatMemoryConfig chatMemoryConfig = new AssistantProperties.ChatMemoryConfig();
+        chatMemoryConfig.setTriggerCompressThreshold(99);
+        chatMemoryConfig.setCompressCount(99);
+        assistantProperties.setChatMemory(chatMemoryConfig);
+        LockProperties lockProperties = new LockProperties();
+        lockProperties.setCompressionLeaseTimeoutMs(60_000);
+
+        ArchivableChatMemory chatMemory = new ArchivableChatMemory(
+                "default",
+                compressor,
+                chatMemoryAppender,
+                rawMdService,
+                assistantProperties,
+                lockProperties,
+                chatLogRepository,
+                writePolicy
+        );
+
+        writePolicy.suppressUserMessage("default", "transient_runtime", () -> {
+            chatMemory.add(UserMessage.from("transient_runtime", "运行时触发。"));
+            return null;
+        });
+        chatMemory.add(UserMessage.from("transient_runtime", "没有 scope 时仍按普通消息处理。"));
+        chatMemory.add(UserMessage.from("game_runtime_event", "RP 动作解析失败，未执行动作。"));
+
+        org.junit.jupiter.api.Assertions.assertEquals(2, chatMemory.messages().size());
+        org.junit.jupiter.api.Assertions.assertTrue(
+                chatMemory.messages().getFirst() instanceof UserMessage kept && "transient_runtime".equals(kept.name()));
+        verify(chatLogRepository, times(2)).save(any());
+        verify(chatMemoryAppender, times(2)).appendToRaw(eq("default"), any());
+    }
+
+    @Test
     void shouldKeepContextWindowMessagesUntimedForFrontendAssistant() {
         MemoryAsyncCompressor compressor = mock(MemoryAsyncCompressor.class);
         ChatMemoryAppender chatMemoryAppender = mock(ChatMemoryAppender.class);
@@ -51,7 +92,47 @@ class ArchivableChatMemoryTest {
         org.junit.jupiter.api.Assertions.assertEquals(1, messages.size());
         org.junit.jupiter.api.Assertions.assertEquals("hello there", ChatMessageUtil.extractText(messages.getFirst()));
         verify(chatMemoryAppender).appendToRaw(eq("default"), argThat(message ->
-                message != null && ChatMessageUtil.extractText(message).startsWith("[")
+                message != null && "hello there".equals(ChatMessageUtil.extractText(message))
+        ));
+    }
+
+    @Test
+    void shouldKeepRawRpControlOutputInMemory() {
+        MemoryAsyncCompressor compressor = mock(MemoryAsyncCompressor.class);
+        ChatMemoryAppender chatMemoryAppender = mock(ChatMemoryAppender.class);
+        RawMdService rawMdService = mock(RawMdService.class);
+        ChatLogRepository chatLogRepository = mock(ChatLogRepository.class);
+
+        AssistantProperties assistantProperties = new AssistantProperties();
+        AssistantProperties.ChatMemoryConfig chatMemoryConfig = new AssistantProperties.ChatMemoryConfig();
+        chatMemoryConfig.setTriggerCompressThreshold(99);
+        chatMemoryConfig.setCompressCount(99);
+        assistantProperties.setChatMemory(chatMemoryConfig);
+        LockProperties lockProperties = new LockProperties();
+        lockProperties.setCompressionLeaseTimeoutMs(60_000);
+
+        ArchivableChatMemory chatMemory = new ArchivableChatMemory(
+                "default",
+                compressor,
+                chatMemoryAppender,
+                rawMdService,
+                assistantProperties,
+                lockProperties,
+                chatLogRepository
+        );
+        String raw = """
+                <turn>
+                <step 1>
+                {"mode":"action","say":"先挡一下。","do":"打出防御"}
+                </step 1>
+                </turn>
+                """.trim();
+
+        chatMemory.add(AiMessage.from(raw));
+
+        org.junit.jupiter.api.Assertions.assertEquals(raw, ChatMessageUtil.extractText(chatMemory.messages().getFirst()));
+        verify(chatMemoryAppender).appendToRaw(eq("default"), argThat(message ->
+                message != null && raw.equals(ChatMessageUtil.extractText(message))
         ));
     }
 

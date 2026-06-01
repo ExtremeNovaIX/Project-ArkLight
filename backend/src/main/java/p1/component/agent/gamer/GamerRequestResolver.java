@@ -3,7 +3,7 @@ package p1.component.agent.gamer;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
-import p1.config.mcp.GamerProperties;
+import p1.config.mcp.GameProperties;
 import p1.config.mcp.MCPProperties;
 
 import java.util.List;
@@ -16,15 +16,15 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class GamerRequestResolver {
 
-    private final GamerProperties gamerProperties;
+    private final GameProperties gameProperties;
     private final MCPProperties mcpProperties;
 
     public String resolveGameName(String requestedGameName) {
         if (StringUtils.hasText(requestedGameName)) {
             return requestedGameName.trim();
         }
-        if (StringUtils.hasText(gamerProperties.getDefaultGameName())) {
-            return gamerProperties.getDefaultGameName().trim();
+        if (StringUtils.hasText(gameProperties.getDefaultGameName())) {
+            return gameProperties.getDefaultGameName().trim();
         }
 
         List<String> enabledGames = mcpProperties.getGames().entrySet().stream()
@@ -47,8 +47,8 @@ public class GamerRequestResolver {
         if (StringUtils.hasText(requestedSessionId)) {
             return requestedSessionId.trim();
         }
-        if (StringUtils.hasText(gamerProperties.getDefaultSessionId())) {
-            return gamerProperties.getDefaultSessionId().trim();
+        if (StringUtils.hasText(gameProperties.getDefaultSessionId())) {
+            return gameProperties.getDefaultSessionId().trim();
         }
         return "default";
     }

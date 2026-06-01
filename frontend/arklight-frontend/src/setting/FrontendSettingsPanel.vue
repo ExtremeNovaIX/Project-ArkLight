@@ -27,27 +27,12 @@ const updateSetting = <K extends keyof FrontendSettings>(
   });
 };
 
-const updateNumberSetting = (
-  key: 'bootDurationMs' | 'responseDelayMs' | 'moteCount',
-  value: string
-) => {
-  updateSetting(key, Number(value) as FrontendSettings[typeof key]);
-};
-
 const handleTextInput = (
-  key: 'workspaceName' | 'operatorName' | 'backendBaseUrl' | 'sessionId',
+  key: 'backendBaseUrl' | 'sessionId',
   event: Event
 ) => {
   const target = event.target as HTMLInputElement | null;
   updateSetting(key, (target?.value ?? '') as FrontendSettings[typeof key]);
-};
-
-const handleNumberInput = (
-  key: 'bootDurationMs' | 'responseDelayMs' | 'moteCount',
-  event: Event
-) => {
-  const target = event.target as HTMLInputElement | null;
-  updateNumberSetting(key, target?.value ?? '0');
 };
 
 const handleBootAnimationChange = (event: Event) => {
@@ -96,7 +81,7 @@ const getCharacterPrimaryImage = (character: CharacterProfile) =>
     <div class="flex items-start justify-between gap-6 border-b border-[#1A1A1A]/10 pb-6">
       <div class="space-y-2">
         <p class="text-[11px] font-mono uppercase tracking-[0.4em] text-[#4D908E]">前端设置</p>
-        <h3 class="text-3xl font-black uppercase tracking-[0.12em] text-[#1A1A1A]">本地配置</h3>
+        <h3 class="text-3xl font-black uppercase tracking-[0.12em] text-[#1A1A1A]">当前会话</h3>
       </div>
 
       <button
@@ -149,76 +134,14 @@ const getCharacterPrimaryImage = (character: CharacterProfile) =>
       </label>
 
       <label class="space-y-3 rounded-none border-2 border-[#1A1A1A] bg-white/70 p-5">
-        <span class="block text-[11px] font-black uppercase tracking-[0.3em] text-[#1A1A1A]">工作区名称</span>
-        <input
-          :value="props.settings.workspaceName"
-          type="text"
-          class="w-full border border-[#1A1A1A]/20 bg-[#F8F5EC] px-4 py-3 text-sm outline-none transition focus:border-[#E85D04]"
-          @input="handleTextInput('workspaceName', $event)"
-        />
-      </label>
-
-      <label class="space-y-3 rounded-none border-2 border-[#1A1A1A] bg-white/70 p-5">
-        <span class="block text-[11px] font-black uppercase tracking-[0.3em] text-[#1A1A1A]">操作员名称</span>
-        <input
-          :value="props.settings.operatorName"
-          type="text"
-          class="w-full border border-[#1A1A1A]/20 bg-[#F8F5EC] px-4 py-3 text-sm outline-none transition focus:border-[#E85D04]"
-          @input="handleTextInput('operatorName', $event)"
-        />
-      </label>
-
-      <label class="space-y-3 rounded-none border-2 border-[#1A1A1A] bg-white/70 p-5">
-        <span class="block text-[11px] font-black uppercase tracking-[0.3em] text-[#1A1A1A]">启动时长</span>
-        <input
-          :value="props.settings.bootDurationMs"
-          type="number"
-          min="12"
-          max="10000"
-          step="100"
-          class="w-full border border-[#1A1A1A]/20 bg-[#F8F5EC] px-4 py-3 text-sm outline-none transition focus:border-[#E85D04]"
-          @input="handleNumberInput('bootDurationMs', $event)"
-        />
-        <p class="text-xs text-[#1A1A1A]/55">单位：毫秒</p>
-      </label>
-
-      <label class="space-y-3 rounded-none border-2 border-[#1A1A1A] bg-white/70 p-5">
-        <span class="block text-[11px] font-black uppercase tracking-[0.3em] text-[#1A1A1A]">回复延迟</span>
-        <input
-          :value="props.settings.responseDelayMs"
-          type="number"
-          min="0"
-          max="10000"
-          step="100"
-          class="w-full border border-[#1A1A1A]/20 bg-[#F8F5EC] px-4 py-3 text-sm outline-none transition focus:border-[#E85D04]"
-          @input="handleNumberInput('responseDelayMs', $event)"
-        />
-        <p class="text-xs text-[#1A1A1A]/55">单位：毫秒</p>
-      </label>
-
-      <label class="space-y-3 rounded-none border-2 border-[#1A1A1A] bg-white/70 p-5">
-        <span class="block text-[11px] font-black uppercase tracking-[0.3em] text-[#1A1A1A]">粒子数量</span>
-        <input
-          :value="props.settings.moteCount"
-          type="number"
-          min="0"
-          max="120"
-          step="1"
-          class="w-full border border-[#1A1A1A]/20 bg-[#F8F5EC] px-4 py-3 text-sm outline-none transition focus:border-[#E85D04]"
-          @input="handleNumberInput('moteCount', $event)"
-        />
-        <p class="text-xs text-[#1A1A1A]/55">控制背景粒子效果</p>
-      </label>
-
-      <label class="space-y-3 rounded-none border-2 border-[#1A1A1A] bg-white/70 p-5">
-        <span class="block text-[11px] font-black uppercase tracking-[0.3em] text-[#1A1A1A]">后端地址</span>
+        <span class="block text-[11px] font-black uppercase tracking-[0.3em] text-[#1A1A1A]">当前后端地址</span>
         <input
           :value="props.settings.backendBaseUrl"
           type="text"
           class="w-full border border-[#1A1A1A]/20 bg-[#F8F5EC] px-4 py-3 text-sm outline-none transition focus:border-[#E85D04]"
           @input="handleTextInput('backendBaseUrl', $event)"
         />
-        <p class="text-xs text-[#1A1A1A]/55">默认：<span class="font-mono">http://localhost:8080</span></p>
+        <p class="text-xs text-[#1A1A1A]/55">只影响当前浏览器保存的连接地址；默认值在“本地配置”里修改。</p>
       </label>
 
       <label class="space-y-3 rounded-none border-2 border-[#1A1A1A] bg-white/70 p-5">

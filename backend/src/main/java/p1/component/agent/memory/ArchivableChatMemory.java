@@ -30,6 +30,7 @@ public class ArchivableChatMemory implements ChatMemory {
     private final ChatMemoryAppender chatMemoryAppender;
     private final RawMdService rawMdService;
     private final ChatLogRepository chatLogRepository;
+    private final ChatMemoryWritePolicy writePolicy;
 
     private final int triggerThreshold;
     private final int compressCount;
@@ -42,10 +43,23 @@ public class ArchivableChatMemory implements ChatMemory {
                                 AssistantProperties assistantProperties,
                                 LockProperties lockProperties,
                                 ChatLogRepository chatLogRepository) {
+        this(sessionId, compressor, chatMemoryAppender, rawMdService, assistantProperties,
+                lockProperties, chatLogRepository, new ChatMemoryWritePolicy());
+    }
+
+    public ArchivableChatMemory(String sessionId,
+                                MemoryAsyncCompressor compressor,
+                                ChatMemoryAppender chatMemoryAppender,
+                                RawMdService rawMdService,
+                                AssistantProperties assistantProperties,
+                                LockProperties lockProperties,
+                                ChatLogRepository chatLogRepository,
+                                ChatMemoryWritePolicy writePolicy) {
         this.sessionId = sessionId;
         this.compressor = compressor;
         this.chatMemoryAppender = chatMemoryAppender;
         this.rawMdService = rawMdService;
+        this.writePolicy = writePolicy;
         this.triggerThreshold = assistantProperties.getChatMemory().getTriggerCompressThreshold();
         this.compressCount = assistantProperties.getChatMemory().getCompressCount();
         this.compressionLeaseTimeout = Duration.ofMillis(lockProperties.getCompressionLeaseTimeoutMs());
@@ -59,6 +73,13 @@ public class ArchivableChatMemory implements ChatMemory {
 
     @Override
     public void add(ChatMessage message) {
+        if (message == null) {
+            return;
+        }
+        if (writePolicy.shouldSuppress(sessionId, message)) {
+            log.debug("[RP记忆] 忽略运行时上下文消息: sessionId={}, type={}", sessionId, message.type());
+            return;
+        }
         log.debug("消息队列新增: {}", message);
         // 保存消息到日志库
         ChatLogEntity entity = new ChatLogEntity(message, sessionId);

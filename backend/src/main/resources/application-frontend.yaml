@@ -24,6 +24,12 @@ frontend:
       short-mode-enabled: true
       # Web 前端背景粒子数量。
       mote-count: 42
+      # Web 前端默认游戏名。
+      game-name: STS2MCP
+      # Web 前端默认游戏 session；为空时使用聊天 session。
+      game-session-id: ""
+      # Web 前端默认绑定的 RP session；为空时使用聊天 session。
+      game-rp-session-id: ""
   qt:
     settings:
       # Qt 前端默认语言 id。

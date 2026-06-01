@@ -38,7 +38,7 @@ mvn test -Dtest=RpTtsPipelineTest#fullPipeline
 |------|------|
 | `application-ai.yaml` | LLM 供应商（DeepSeek API / 本地模型）+ Embedding |
 | `application-tts.yaml` | TTS 引擎（VoxCPM2 / GPT-SoVITS）及运行时自动拉起 |
-| `application-rp.yaml` | RP 主动表达、表达欲参数 |
+| `application-rp.yaml` | RP 主动发言参数 |
 | `application-memory.yaml` | 对话记忆、Lucene 向量索引 |
 | `application-infrastructure.yaml` | 数据库（H2）、日志级别 |
 | `application-mcp.yaml` | MCP 工具 + Gamer（游戏交互） |
@@ -90,7 +90,6 @@ RP Agent（streaming）→ TtsSpeechService.accept(text)
 - `bridge/` — 状态/结果/队列的桥接
 - `interrupt/` — 中断处理
 - `loop/` — 游戏主循环
-- `memory/` — 游戏状态记忆
 - `trace/` — 执行追踪
 
 ### Memory 系统
@@ -116,3 +115,11 @@ Router 启动命令参考 `InstructionRouterModelConfig.runtimeCommand()`，TTS 
 - `@PostConstruct` 用于注册 task（如 `TtsStyleExtractor.registerTask()`）
 - 使用 `InstructionRouteRequest.byTask()` 走 task registry 的专项任务；`byPrompt()` 兼容旧调用方式
 - `normalizedIntent()` 返回 `.toUpperCase()` 后的 intent 字符串
+
+## 注释规范
+
+- 注释面向未来维护者，说明长期稳定的职责、约束、边界或不明显的风险。
+- 不在注释里记录“本次改了什么”、临时背景、修复过程或提交理由。
+- 避免“我们自己的”“这次”“上次”“刚刚”等会随时间失效的表述。
+- 配置注释说明字段语义、默认行为和影响范围；相似开关并存时说明各自职责边界。
+- 代码注释使用中文，专有名词、协议字段、API 名称按原名保留。

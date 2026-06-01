@@ -31,7 +31,15 @@ public class ActiveGameSession {
     private final Instant startedAt;
     private volatile Instant lastActivityAt;
     /**
-     * 循环层唤醒 agent 的总次数。
+     * 游戏循环已消费到的最近用户发言时间。
+     */
+    private volatile Instant lastConsumedUserSpeechAt;
+    /**
+     * RP 已经对外发言、但当前状态尚未变化时记录的状态指纹。
+     */
+    private volatile String waitingUserOrStateFingerprint;
+    /**
+     * 循环层唤醒 RP 游戏回合的总次数。
      */
     private final AtomicInteger totalStepCount = new AtomicInteger(0);
     /**
@@ -82,6 +90,48 @@ public class ActiveGameSession {
     }
 
     /**
+     * 消费最新用户发言时间，并返回本轮是否出现了新的用户输入。
+     *
+     * @param lastUserSpeechAt RP 会话最近用户发言时间
+     * @return true 表示相对上一轮游戏循环已有新的用户发言
+     */
+    public boolean consumeUserSpeechTick(Instant lastUserSpeechAt) {
+        if (lastUserSpeechAt == null) {
+            return false;
+        }
+        Instant previous = lastConsumedUserSpeechAt;
+        lastConsumedUserSpeechAt = lastUserSpeechAt;
+        return previous != null && lastUserSpeechAt.isAfter(previous);
+    }
+
+    /**
+     * 记录 RP 已经在某个状态下发言，后续应等待用户或状态变化。
+     *
+     * @param stateFingerprint 当前游戏状态指纹
+     */
+    public void waitForUserOrStateChange(String stateFingerprint) {
+        waitingUserOrStateFingerprint = normalizeFingerprint(stateFingerprint);
+    }
+
+    /**
+     * 判断当前是否仍处于 RP 发言后的同状态等待。
+     *
+     * @param stateFingerprint 当前游戏状态指纹
+     * @return true 表示没有新的可决策变化
+     */
+    public boolean isWaitingForUserOrStateChange(String stateFingerprint) {
+        String waitingFingerprint = waitingUserOrStateFingerprint;
+        return waitingFingerprint != null && waitingFingerprint.equals(normalizeFingerprint(stateFingerprint));
+    }
+
+    /**
+     * 清除 RP 发言后的同状态等待。
+     */
+    public void clearUserOrStateWait() {
+        waitingUserOrStateFingerprint = null;
+    }
+
+    /**
      * 获取连续失败次数。
      *
      * @return 连续失败次数
@@ -104,5 +154,9 @@ public class ActiveGameSession {
      */
     public void resetFailures() {
         consecutiveFailures.set(0);
+    }
+
+    private String normalizeFingerprint(String value) {
+        return value == null ? "" : value.trim();
     }
 }

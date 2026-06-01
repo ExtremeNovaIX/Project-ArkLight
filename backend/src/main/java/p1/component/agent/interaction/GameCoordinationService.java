@@ -167,7 +167,7 @@ public class GameCoordinationService {
                 waiting=true
                 reason=%s
                 ask_at=%s
-                rule=系统已经登记等待，本轮不要重复调用 WAIT，只需自然回应用户正在等待；如果用户表示“好了/继续/可以了”，调用 game_coordination READY；如果用户给出新动作，调用 APPLY_INSTRUCTION。
+                rule=系统已经登记等待；本轮不要重复等待。用户表示继续或给出新动作时，直接用 RP 控制块输出下一步 action/ask/chat/wait。
                 </game_wait>
                 """.formatted(state.reason, state.askAt).trim();
     }

@@ -60,7 +60,7 @@ class AiConnectivityTest {
         assertFalse(reply.isBlank(), "LLM reply is blank");
 
         System.out.printf(
-                "AI mode=%s | chat-model=%s | llm-reply=%s%n",
+                "AI mode=%s | rp-model=%s | llm-reply=%s%n",
                 assistantProperties.getMode(),
                 assistantProperties.activeChatModel().getModelName(),
                 reply

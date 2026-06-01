@@ -10,13 +10,11 @@ import java.util.UUID;
  * 已进入桥接队列的游戏操作。
  *
  * @param request          即将调用底层 MCP 的工具请求
- * @param note             agent 对该操作的简短说明
  * @param plannedStateJson 入队时 agent 看到的原始状态 JSON
  * @param metadata         适配器附加的修复元数据
  */
 public record QueuedGameOperation(
         ToolExecutionRequest request,
-        String note,
         String plannedStateJson,
         Map<String, Object> metadata
 ) {
@@ -37,7 +35,6 @@ public record QueuedGameOperation(
                 .build();
         return new QueuedGameOperation(
                 request,
-                operation.note(),
                 plannedState.rawJson(),
                 new HashMap<>()
         );
@@ -50,6 +47,6 @@ public record QueuedGameOperation(
      * @return 替换 request 后的新排队操作
      */
     public QueuedGameOperation withRequest(ToolExecutionRequest request) {
-        return new QueuedGameOperation(request, note, plannedStateJson, metadata);
+        return new QueuedGameOperation(request, plannedStateJson, metadata);
     }
 }

@@ -2,7 +2,7 @@ package p1.component.gamer;
 
 import org.junit.jupiter.api.Test;
 import p1.component.agent.gamer.GamerRequestResolver;
-import p1.config.mcp.GamerProperties;
+import p1.config.mcp.GameProperties;
 import p1.config.mcp.MCPProperties;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -19,10 +19,10 @@ class GamerRequestResolverTest {
     @Test
     void shouldUseConfiguredDefaultGameName() {
         MCPProperties mcpProperties = mcpPropertiesWithGames("game-a", "game-b");
-        GamerProperties gamerProperties = new GamerProperties();
-        gamerProperties.setDefaultGameName("game-b");
+        GameProperties gameProperties = new GameProperties();
+        gameProperties.setDefaultGameName("game-b");
 
-        GamerRequestResolver resolver = new GamerRequestResolver(gamerProperties, mcpProperties);
+        GamerRequestResolver resolver = new GamerRequestResolver(gameProperties, mcpProperties);
 
         assertEquals("game-b", resolver.resolveGameName(null));
     }
@@ -44,7 +44,7 @@ class GamerRequestResolverTest {
     }
 
     private GamerRequestResolver resolverWithGames(String... gameNames) {
-        return new GamerRequestResolver(new GamerProperties(), mcpPropertiesWithGames(gameNames));
+        return new GamerRequestResolver(new GameProperties(), mcpPropertiesWithGames(gameNames));
     }
 
     private MCPProperties mcpPropertiesWithGames(String... gameNames) {

@@ -24,8 +24,8 @@ public class InstructionRouterConfig {
 
     private final InstructionRouterModelConfig modelConfig;
     private final InstructionRouterTaskRegistry taskRegistry;
-    @Qualifier("backendChatModel")
-    private final ChatModel backendChatModel;
+    @Qualifier("checkerChatModel")
+    private final ChatModel checkerChatModel;
 
     /**
      * 根据本地 LLM 目录是否可用，选择路由器实现。
@@ -39,7 +39,7 @@ public class InstructionRouterConfig {
             return new LocalModelInstructionRouter(modelConfig, taskRegistry);
         }
         log.info("[指令路由] 未检测到本地模型文件，降级使用 ChatModelInstructionRouter");
-        return new ChatModelInstructionRouter(backendChatModel, taskRegistry);
+        return new ChatModelInstructionRouter(checkerChatModel, taskRegistry);
     }
 
     /**

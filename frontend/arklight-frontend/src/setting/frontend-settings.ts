@@ -44,7 +44,10 @@ export const normalizeFrontendSettings = (
     responseDelayMs: clamp(Number(value?.responseDelayMs ?? themeDefaults.responseDelayMs), 0, 10000),
     shortModeEnabled: value?.shortModeEnabled ?? themeDefaults.shortModeEnabled,
     moteCount: clamp(normalizedMoteCount <= 0 ? themeDefaults.moteCount : normalizedMoteCount, 12, 120),
-    backendBaseUrl: value?.backendBaseUrl?.trim() || themeDefaults.backendBaseUrl
+    backendBaseUrl: value?.backendBaseUrl?.trim() || themeDefaults.backendBaseUrl,
+    gameName: value?.gameName?.trim() || themeDefaults.gameName,
+    gameSessionId: value?.gameSessionId?.trim() || themeDefaults.gameSessionId,
+    gameRpSessionId: value?.gameRpSessionId?.trim() || themeDefaults.gameRpSessionId
   };
 };
 

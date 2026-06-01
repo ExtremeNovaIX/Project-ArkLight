@@ -12,9 +12,9 @@ import org.springframework.util.StringUtils;
 import java.util.List;
 
 /**
- * 基于 {@code backendChatModel} 的指令路由器实现。
+ * 基于 checker 轻量模型的指令路由器降级实现。
  * <p>
- * 当本地 LLM sidecar 不可用时降级使用此实现，通过已有的后台对话模型完成意图分类。
+     * 当本地 LLM sidecar 不可用时降级使用此实现，通过 checker 轻量模型完成意图分类。
  * 提示词组装和 JSON 解析逻辑与 {@link LocalModelInstructionRouter} 保持一致。
  */
 @Slf4j
@@ -27,7 +27,7 @@ public class ChatModelInstructionRouter implements InstructionRouter {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public ChatModelInstructionRouter(
-            @Qualifier("backendChatModel") ChatModel chatModel,
+            @Qualifier("checkerChatModel") ChatModel chatModel,
             InstructionRouterTaskRegistry taskRegistry) {
         this.chatModel = chatModel;
         this.taskRegistry = taskRegistry;

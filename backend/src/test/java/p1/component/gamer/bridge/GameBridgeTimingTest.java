@@ -10,15 +10,13 @@ import dev.langchain4j.service.tool.ToolProvider;
 import dev.langchain4j.service.tool.ToolProviderRequest;
 import dev.langchain4j.service.tool.ToolProviderResult;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import p1.component.agent.gamer.adapter.core.GameAdapterContext;
 import p1.component.agent.gamer.adapter.core.GameStateSnapshot;
 import p1.component.agent.gamer.adapter.STS2Adapter;
 import p1.component.agent.gamer.adapter.core.SchemaNormalizingMcpTransport;
 import p1.component.agent.gamer.bridge.queue.GameOperationQueueProcessor;
-import p1.component.agent.gamer.memory.GamerMemoryCompressorAiService;
-import p1.component.agent.gamer.memory.GamerWorkingMemoryService;
-import p1.config.mcp.GamerMemoryProperties;
 import p1.config.mcp.MCPProperties;
 
 import java.time.Duration;
@@ -30,39 +28,19 @@ import java.util.List;
  * 连接真实的 STS2 MCP server（Python stdio），测量完整链路的耗时分布。
  * 需要游戏 + MCP mod 正在运行，否则状态查询会返回错误文本。
  */
+@Tag("manual")
 class GameBridgeTimingTest {
 
     private static final String STS2_SERVER_DIR =
             "..\\mcp-servers\\STS2MCP\\mcp";
 
     private static final STS2Adapter adapter = new STS2Adapter();
-    private static final GameOperationQueueProcessor processor = new GameOperationQueueProcessor(testWorkingMemoryService());
+    private static final GameOperationQueueProcessor processor = new GameOperationQueueProcessor();
 
     private static ToolProviderResult tools;
     private static ToolProvider mcpToolProvider;
     private static McpClient mcpClient;
     private static MCPProperties.GameMCPConfig config;
-
-    /**
-     * 构建计时测试专用的轻量工作记忆服务。
-     *
-     * @return 不调用真实模型的工作记忆服务
-     */
-    private static GamerWorkingMemoryService testWorkingMemoryService() {
-        // 计时测试关注 MCP 真实路径耗时，压缩器使用固定返回，避免引入额外模型调用。
-        GamerMemoryCompressorAiService compressor = new GamerMemoryCompressorAiService() {
-            @Override
-            public String compressStage(String previousSummary, String trigger, String decisions) {
-                return previousSummary + "\n" + trigger + "\n" + decisions;
-            }
-
-            @Override
-            public String compressRun(String previousRunSummary, String stageSummary) {
-                return previousRunSummary + "\n" + stageSummary;
-            }
-        };
-        return new GamerWorkingMemoryService(new GamerMemoryProperties(), compressor);
-    }
 
     @BeforeAll
     static void setUpMCP() throws Exception {
@@ -147,8 +125,6 @@ class GameBridgeTimingTest {
                 : state.rawJson();
         System.out.printf("  状态预览:  %s%n", rawPreview);
 
-        processor.rememberPlanningState(memoryId, state);
-
         // 从游戏状态中取第一个敌人的 entity_id 作为 target
         String target = extractFirstEnemy(state);
         System.out.printf("  目标敌人:  %s%n", target);
@@ -161,9 +137,9 @@ class GameBridgeTimingTest {
                   "status":"CONTINUE",
                   "summary":"真实路径计时测试 — 打出3张牌",
                   "operations":[
-                    {"tool":"combat_play_card","args":{"card_index":0,"target":"%1$s"},"note":"出牌1"},
-                    {"tool":"combat_play_card","args":{"card_index":0,"target":"%1$s"},"note":"出牌2"},
-                    {"tool":"combat_play_card","args":{"card_index":0,"target":"%1$s"},"note":"出牌3"}
+                    {"tool":"combat_play_card","args":{"card_index":0,"target":"%1$s"}},
+                    {"tool":"combat_play_card","args":{"card_index":0,"target":"%1$s"}},
+                    {"tool":"combat_play_card","args":{"card_index":0,"target":"%1$s"}}
                   ]
                 }
                 """, target);

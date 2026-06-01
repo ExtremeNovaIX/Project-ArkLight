@@ -62,6 +62,55 @@ class TtsSpeechServiceChunkingTest {
         }
     }
 
+    @Test
+    void shouldStopAfterCurrentChunkWithoutHardCancel() throws Exception {
+        TtsConfig config = new TtsConfig();
+        config.setEnabled(true);
+        config.setProvider("voxcpm2-http");
+        config.setFirstChunkChars(1);
+        config.setMaxChunkChars(5);
+        config.getRuntime().setAutoStartEnabled(false);
+        config.getVoxCpm2().getRuntime().setAutoStartEnabled(false);
+
+        BlockingTtsProvider provider = new BlockingTtsProvider("voxcpm2-http");
+        TtsProviderRegistry providerRegistry = new TtsProviderRegistry(config, List.of(provider));
+        RecordingAudioHub audioHub = new RecordingAudioHub();
+        TtsSpeechService service = new TtsSpeechService(
+                config,
+                providerRegistry,
+                new TtsRuntimeManager(config),
+                new TtsTextNormalizer(),
+                audioHub);
+        try {
+            TtsSpeechSession session = service.open("session-a", "rp");
+            session.accept("first.");
+            session.accept("second.");
+
+            assertTrue(provider.awaitFirstStarted(), "Timed out waiting for first TTS request");
+            session.stopAfterCurrentChunk("game action failed");
+            provider.releaseFirst();
+
+            assertTrue(audioHub.awaitFinal(), "Timed out waiting for final TTS event");
+            assertEquals(List.of("first."), provider.texts());
+        } finally {
+            service.shutdown();
+        }
+    }
+
+    @Test
+    void shouldDiscardUnsynthesizedTailWhenStoppingAfterCurrentChunk() throws Exception {
+        try (Harness harness = harness("voxcpm2-http", 1, 1, 10)) {
+            harness.session.accept("first.");
+            assertTrue(harness.provider.awaitRequests(), "Timed out waiting for first TTS request");
+
+            harness.session.accept("x");
+            harness.session.stopAfterCurrentChunk("game action failed");
+
+            assertTrue(harness.audioHub.awaitFinal(), "Timed out waiting for final TTS event");
+            assertEquals(List.of("first."), harness.provider.texts());
+        }
+    }
+
     private Harness harness(String providerName, int expectedRequests, int firstChunkChars, int maxChunkChars) {
         TtsConfig config = new TtsConfig();
         config.setEnabled(true);
@@ -133,6 +182,55 @@ class TtsSpeechServiceChunkingTest {
 
         private List<TtsSynthesisRequest> requests() {
             return requests;
+        }
+
+        private List<String> texts() {
+            return requests.stream()
+                    .map(TtsSynthesisRequest::text)
+                    .toList();
+        }
+    }
+
+    private static final class BlockingTtsProvider implements TtsProvider {
+        private final String providerName;
+        private final CountDownLatch firstStarted = new CountDownLatch(1);
+        private final CountDownLatch releaseFirst = new CountDownLatch(1);
+        private final List<TtsSynthesisRequest> requests = new CopyOnWriteArrayList<>();
+
+        private BlockingTtsProvider(String providerName) {
+            this.providerName = providerName;
+        }
+
+        @Override
+        public String providerName() {
+            return providerName;
+        }
+
+        @Override
+        public boolean isAvailable() {
+            return true;
+        }
+
+        @Override
+        public void synthesize(TtsSynthesisRequest request, Consumer<TtsAudioFrame> audioConsumer) {
+            requests.add(request);
+            if (requests.size() == 1) {
+                firstStarted.countDown();
+                try {
+                    releaseFirst.await(2, TimeUnit.SECONDS);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+            audioConsumer.accept(new TtsAudioFrame("audio/wav", 0, new byte[]{1}));
+        }
+
+        private boolean awaitFirstStarted() throws InterruptedException {
+            return firstStarted.await(2, TimeUnit.SECONDS);
+        }
+
+        private void releaseFirst() {
+            releaseFirst.countDown();
         }
 
         private List<String> texts() {

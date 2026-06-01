@@ -89,7 +89,7 @@ public class MCPProperties {
          */
         private String adapter = "default";
         /**
-         * MCP 状态查询工具名。该工具由 bridge 内部调用，不直接暴露给 gamer agent。
+         * MCP 状态查询工具名。该工具由 bridge 内部调用，不直接暴露给 RP/parser。
          */
         private String stateToolName = "get_state";
         /**

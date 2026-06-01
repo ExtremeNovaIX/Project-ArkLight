@@ -103,7 +103,7 @@ public interface GameAdapter {
     }
 
     /**
-     * 根据已经获取到的游戏状态判断是否需要 agent 行动。
+     * 根据已经获取到的游戏状态判断是否需要 RP 行动。
      * <p>
      * 默认返回可行动，以保持通用适配器的旧行为；具体游戏可覆写为更精确的判断。
      *
@@ -115,37 +115,13 @@ public interface GameAdapter {
     }
 
     /**
-     * 将游戏状态渲染为注入给 agent 的文本。
+     * 将游戏状态渲染为注入给 RP 的文本。
      *
      * @param state 游戏状态快照
      * @return 适合放入 prompt 的状态文本
      */
     default String renderStateForAgent(GameStateSnapshot state) {
         return state.rawJson();
-    }
-
-    /**
-     * 将两份状态快照渲染成面向 agent 的操作结果差异。
-     * <p>
-     * 通用默认实现只比较 state_type；具体游戏适配器可以覆写为更有语义的白名单 diff。
-     *
-     * @param before 操作队列执行前状态
-     * @param after  操作队列执行后状态
-     * @return 适合放入 prompt 和复盘日志的状态差异文本
-     */
-    default String renderStateDiffForAgent(GameStateSnapshot before, GameStateSnapshot after) {
-        String beforeType = before == null ? "" : before.stateType();
-        String afterType = after == null ? "" : after.stateType();
-        if (beforeType == null || beforeType.isBlank()) {
-            beforeType = "(未知)";
-        }
-        if (afterType == null || afterType.isBlank()) {
-            afterType = "(未知)";
-        }
-        if (beforeType.equals(afterType)) {
-            return "- state_type: 无变化 (" + afterType + ")";
-        }
-        return "- state_type: " + beforeType + " -> " + afterType;
     }
 
     // ── 操作队列钩子（含合理默认实现） ──
@@ -180,13 +156,38 @@ public interface GameAdapter {
     /**
      * 判断操作队列真正开始执行前是否需要重新读取一次游戏状态。
      * <p>
-     * 默认复用 agent 决策时的状态以减少通用桥接层开销；对状态可能在模型思考期间自行推进的游戏，
+     * 默认复用 RP 决策时的状态以减少通用桥接层开销；对状态可能在模型思考期间自行推进的游戏，
      * 适配器应返回 true，让第一条 MCP 操作也基于执行前的最新状态做修复和校验。
      *
      * @return true 表示队列执行前需要从 MCP 重读状态
      */
     default boolean shouldRefreshStateBeforeDrain() {
         return false;
+    }
+
+    /**
+     * 返回当前状态对应的本地行动窗口签名。
+     * <p>
+     * 默认不启用窗口校验；具体游戏可只纳入会影响本地操作合法性的字段，
+     * 避免完整 JSON hash 造成无关状态变化误中断。
+     *
+     * @param state 当前游戏状态
+     * @return 行动窗口签名
+     */
+    default GameActionWindowSignature actionWindowSignature(GameStateSnapshot state) {
+        return GameActionWindowSignature.unchecked();
+    }
+
+    /**
+     * 检查单条操作在当前状态下是否仍满足执行前置条件。
+     *
+     * @param operation    即将执行的排队操作
+     * @param currentState 执行前最新状态
+     * @return 前置条件检查结果
+     */
+    default GameOperationPrecondition checkOperationPrecondition(QueuedGameOperation operation,
+                                                                 GameStateSnapshot currentState) {
+        return GameOperationPrecondition.passed();
     }
 
     /**
@@ -201,21 +202,19 @@ public interface GameAdapter {
     }
 
     /**
-     * 在操作执行后判断剩余队列是否仍然可靠。
-     * 默认不做任何操作（继续执行剩余队列）。
+     * 在操作执行后判断状态是否仍然可靠。
+     * 默认不做任何操作；具体游戏适配器可以在这里拦截脏状态。
      *
      * @param operation   已执行的操作
      * @param beforeState 执行前状态
      * @param afterState  执行后状态
      * @param toolResult  MCP 工具返回文本
-     * @param hasRemainingOperations true 表示当前队列后面还有未执行操作
-     * @throws GameBridgeException 剩余队列不可靠，应当丢弃
+     * @throws GameBridgeException 状态不可靠，应当中断当前动作链路
      */
     default void monitorAfterExecute(QueuedGameOperation operation,
                                      GameStateSnapshot beforeState,
                                      GameStateSnapshot afterState,
-                                     String toolResult,
-                                     boolean hasRemainingOperations) {
+                                     String toolResult) {
     }
 
     /**
@@ -240,24 +239,6 @@ public interface GameAdapter {
             // 非 JSON 返回值不是可恢复业务错误，由调用方按硬错误处理。
         }
         return null;
-    }
-
-    /**
-     * 判断单条操作失败后是否可以丢弃该操作并继续执行队列。
-     * <p>
-     * 默认保守返回 false；具体游戏可基于最新状态判断当前行动窗口是否仍可靠。
-     *
-     * @param operation   失败的操作
-     * @param beforeState 失败前状态
-     * @param afterState  失败后重新获取到的最新状态
-     * @param reason      失败原因
-     * @return true 表示记录软错误并继续后续操作
-     */
-    default boolean shouldContinueAfterOperationFailure(QueuedGameOperation operation,
-                                                       GameStateSnapshot beforeState,
-                                                       GameStateSnapshot afterState,
-                                                       String reason) {
-        return false;
     }
 
     /**
@@ -305,5 +286,33 @@ public interface GameAdapter {
                         .append(spec.description() == null ? "" : spec.description())
                         .append("\n"));
         return sb.isEmpty() ? "(没有可用操作工具)" : sb.toString();
+    }
+
+    /**
+     * 渲染给 RP 看的操作工具摘要。
+     * <p>
+     * RP 只需要知道“现在有哪几类手可以用”，具体参数规则留给 parser 和桥接层处理。
+     *
+     * @param tools  MCP 工具集合
+     * @param config 游戏 MCP 配置
+     * @param state  最新游戏状态
+     * @return 扁平工具名列表
+     */
+    default String renderAvailableOperationSummary(ToolProviderResult tools,
+                                                   MCPProperties.GameMCPConfig config,
+                                                   GameStateSnapshot state) {
+        String rendered = renderAvailableOperations(tools, config, state);
+        String summary = rendered.lines()
+                .map(String::trim)
+                .filter(line -> line.startsWith("- "))
+                .map(line -> line.substring(2))
+                .map(line -> {
+                    int colon = line.indexOf(':');
+                    return colon >= 0 ? line.substring(0, colon).trim() : line.trim();
+                })
+                .filter(name -> !name.isBlank())
+                .map(name -> "- " + name)
+                .collect(Collectors.joining("\n"));
+        return summary.isBlank() ? "(没有可用操作工具)" : summary;
     }
 }

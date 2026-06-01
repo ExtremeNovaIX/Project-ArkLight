@@ -105,14 +105,20 @@ public class InteractionCoordinator {
      * @return 允许结果；被占用时携带阻塞原因
      */
     public GameTurnPermission canGameActForRpSession(String rpSessionId) {
+        return canGameActForRpSessionIgnoring(rpSessionId, null);
+    }
+
+    private GameTurnPermission canGameActForRpSessionIgnoring(String rpSessionId, HoldKind ignoredKind) {
         String normalizedSessionId = normalizeSessionId(rpSessionId);
         SessionHolds holds = holdsByRpSession.get(normalizedSessionId);
         if (holds == null) {
             return GameTurnPermission.allow();
         }
-        Optional<HoldKind> blocker = holds.firstActiveBlocker(Instant.now());
+        Optional<HoldKind> blocker = holds.firstActiveBlocker(Instant.now(), ignoredKind);
         if (blocker.isEmpty()) {
-            holdsByRpSession.remove(normalizedSessionId, holds);
+            if (holds.empty()) {
+                holdsByRpSession.remove(normalizedSessionId, holds);
+            }
             return GameTurnPermission.allow();
         }
         return GameTurnPermission.block(blocker.get().description());
@@ -144,6 +150,14 @@ public class InteractionCoordinator {
             return GameTurnPermission.allow();
         }
         return canGameActForRpSession(session.getRpSessionId());
+    }
+
+    public GameTurnPermission canGameActForGamerIgnoringRpSpeech(String gameName, String gamerMemoryId) {
+        ActiveGameSession session = activeGameRegistry.get(gameName, gameSessionId(gameName, gamerMemoryId));
+        if (session == null || session.getState() == ActiveGameSession.State.STOPPED) {
+            return GameTurnPermission.allow();
+        }
+        return canGameActForRpSessionIgnoring(session.getRpSessionId(), HoldKind.RP_SPEAKING);
     }
 
     /**
@@ -361,9 +375,14 @@ public class InteractionCoordinator {
         }
 
         private Optional<HoldKind> firstActiveBlocker(Instant now) {
+            return firstActiveBlocker(now, null);
+        }
+
+        private Optional<HoldKind> firstActiveBlocker(Instant now, HoldKind ignoredKind) {
             holds.entrySet().removeIf(entry -> !entry.getValue().expiresAt().isAfter(now));
             return holds.values().stream()
                     .map(Hold::kind)
+                    .filter(kind -> ignoredKind == null || kind != ignoredKind)
                     .findFirst();
         }
     }

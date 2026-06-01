@@ -7,7 +7,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import p1.component.agent.interaction.InteractionCoordinator;
-import p1.component.agent.rp.core.RpReplySegmenter;
 import p1.infrastructure.mdc.ChatSessionMetrics;
 import p1.model.dto.ChatRequestDTO;
 import p1.service.ChatService;
@@ -15,6 +14,7 @@ import p1.service.ChatService;
 import java.util.List;
 import java.util.Map;
 
+import static p1.utils.ReplyUtil.segment;
 import static p1.utils.SessionUtil.normalizeSessionId;
 
 @RestController
@@ -26,7 +26,6 @@ public class ChatController {
 
     private final ChatService chatService;
     private final ChatSessionMetrics chatSessionMetrics;
-    private final RpReplySegmenter replySegmenter;
     private final InteractionCoordinator interactionCoordinator;
 
     @PostMapping("/send")
@@ -40,7 +39,7 @@ public class ChatController {
         try {
             String rawReply = chatService.sendMsgToRpAgent(request);
             rawReply = rawReply == null ? "" : rawReply;
-            List<String> replyList = replySegmenter.segment(rawReply, request.isShortMode());
+            List<String> replyList = segment(rawReply, request.isShortMode());
             return ResponseEntity.ok(replyList);
         } catch (Exception e) {
             log.warn("Chat request failed, sessionId={}, reason={}", sessionId, e.toString());

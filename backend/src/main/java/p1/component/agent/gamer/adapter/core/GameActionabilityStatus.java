@@ -1,16 +1,16 @@
 package p1.component.agent.gamer.adapter.core;
 
 /**
- * 游戏当前是否需要 gamer agent 行动的判断状态。
+ * 游戏当前是否需要 RP 游戏控制链路行动的判断状态。
  */
 public enum GameActionabilityStatus {
     /**
-     * 当前状态需要或允许 agent 做决策。
+     * 当前状态需要或允许 RP 做决策。
      */
     ACTIONABLE,
 
     /**
-     * 当前状态有效，但还不到 agent 行动窗口。
+     * 当前状态有效，但还不到 RP 行动窗口。
      */
     WAITING,
 

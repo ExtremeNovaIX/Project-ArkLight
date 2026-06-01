@@ -7,11 +7,9 @@ import com.fasterxml.jackson.databind.JsonNode;
  *
  * @param toolName 底层 MCP 工具名
  * @param args     透传给 MCP 工具的参数
- * @param note     agent 对该操作的简短意图说明
  */
 public record GameOperation(
         String toolName,
-        JsonNode args,
-        String note
+        JsonNode args
 ) {
 }

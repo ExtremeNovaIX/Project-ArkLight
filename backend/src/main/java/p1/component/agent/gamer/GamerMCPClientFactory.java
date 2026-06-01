@@ -13,7 +13,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import p1.component.agent.gamer.adapter.core.SchemaNormalizingMcpTransport;
-import p1.config.mcp.GamerProperties;
+import p1.config.mcp.GameProperties;
 import p1.config.mcp.MCPProperties;
 
 import java.time.Duration;
@@ -32,7 +32,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class GamerMCPClientFactory {
 
     private final MCPProperties mcpProperties;
-    private final GamerProperties gamerProperties;
+    private final GameProperties gameProperties;
     private final Map<String, McpClient> clientCache = new ConcurrentHashMap<>();
     private final Map<String, ToolProvider> providerCache = new ConcurrentHashMap<>();
 
@@ -65,8 +65,8 @@ public class GamerMCPClientFactory {
             try {
                 McpClient client = new DefaultMcpClient.Builder()
                         .transport(transport)
-                        .clientName(gamerProperties.getClientName())
-                        .clientVersion(gamerProperties.getClientVersion())
+                        .clientName(gameProperties.getClientName())
+                        .clientVersion(gameProperties.getClientVersion())
                         .toolExecutionTimeout(Duration.ofSeconds(
                                 mcpProperties.getClient().getToolTimeoutSeconds()))
                         .logHandler(new DefaultMcpLogMessageHandler())

@@ -26,6 +26,17 @@ public interface TtsSpeechSession extends AutoCloseable {
      */
     void cancel(String reason);
 
+    /**
+     * 在当前音频片段边界停止本次发言。
+     * <p>
+     * 默认退化为取消；支持流式播放的实现会让已经开始或即将开始的一个 chunk 自然结束。
+     *
+     * @param reason 停止原因
+     */
+    default void stopAfterCurrentChunk(String reason) {
+        cancel(reason);
+    }
+
     @Override
     default void close() {
         finish();

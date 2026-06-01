@@ -1,11 +1,11 @@
 assistant:
   chat-memory:
     # RP 短期记忆消息数达到该阈值后触发一次压缩。
-    trigger-compress-threshold: 30
+    trigger-compress-threshold: 60
     # 每次压缩时从窗口中折叠的消息数量。
-    compress-count: 26
+    compress-count: 40
     # 构造上下文时最多回填多少条历史摘要。
-    context-max-summary-count: 3
+    context-max-summary-count: 5
 
   lock:
     # 获取 session 锁的最长等待时间，单位毫秒。

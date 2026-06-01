@@ -44,6 +44,25 @@ class InteractionCoordinatorTest {
     }
 
     @Test
+    void shouldIgnoreOnlyRpSpeechForRpControlledActions() {
+        ActiveGameRegistry registry = new ActiveGameRegistry();
+        registry.register("STS2MCP", "game-session", "rp-session");
+        InteractionCoordinator coordinator = new InteractionCoordinator(registry, new AssistantProperties());
+
+        try (InteractionCoordinator.InteractionLease ignored = coordinator.beginRpSpeech("rp-session")) {
+            assertTrue(coordinator.canGameActForGamerIgnoringRpSpeech(
+                    "STS2MCP", GameSessionKey.of("STS2MCP", "game-session")).allowed());
+            assertFalse(coordinator.canGameActForGamer(
+                    "STS2MCP", GameSessionKey.of("STS2MCP", "game-session")).allowed());
+
+            try (InteractionCoordinator.InteractionLease userTurn = coordinator.beginUserTurn("rp-session")) {
+                assertFalse(coordinator.canGameActForGamerIgnoringRpSpeech(
+                        "STS2MCP", GameSessionKey.of("STS2MCP", "game-session")).allowed());
+            }
+        }
+    }
+
+    @Test
     void shouldBlockGameAfterTypingActivityHeartbeat() {
         ActiveGameRegistry registry = new ActiveGameRegistry();
         registry.register("STS2MCP", "game-session", "rp-session");

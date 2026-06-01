@@ -2,7 +2,7 @@ import type { FrontendSettings } from './types';
 
 type ScalarConfig = Record<string, string>;
 
-const CONFIG_URL = '/config/application.yaml';
+const CONFIG_URL = '/config/application-frontend.yaml';
 
 const normalizeKey = (value: string) => value.trim().replace(/_/g, '-').toLowerCase();
 
@@ -142,6 +142,18 @@ export const buildFrontendSettingsFromConfig = (
     backendBaseUrl: readString(config, [
       'frontend.web.settings.backend-base-url',
       'frontend.settings.backend-base-url'
+    ]),
+    gameName: readString(config, [
+      'frontend.web.settings.game-name',
+      'frontend.settings.game-name'
+    ]),
+    gameSessionId: readString(config, [
+      'frontend.web.settings.game-session-id',
+      'frontend.settings.game-session-id'
+    ]),
+    gameRpSessionId: readString(config, [
+      'frontend.web.settings.game-rp-session-id',
+      'frontend.settings.game-rp-session-id'
     ])
   };
 };

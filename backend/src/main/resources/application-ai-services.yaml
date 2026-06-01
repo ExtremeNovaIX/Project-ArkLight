@@ -1,0 +1,14 @@
+assistant:
+  model-services:
+    # router 不在这里配置；它优先使用本地 instruction-router sidecar，失败时降级到 checker 轻模型。
+    rp: heavy
+    parser: light
+    checker: light
+    supervisor: heavy
+  llm-logs:
+    # 应用侧 LLM 调用跟踪是否写入控制台；token 统计始终记录。
+    console:
+      rp: true
+      parser: false
+      checker: false
+      supervisor: false

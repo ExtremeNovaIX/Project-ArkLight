@@ -30,15 +30,22 @@ class ExternalConfigBootstrapTest {
             ExternalConfigBootstrap.prepare();
 
             assertTrue(Files.isRegularFile(tempDir.resolve("application-ai.yaml")));
+            assertTrue(Files.isRegularFile(tempDir.resolve("application-ai-services.yaml")));
+            assertTrue(Files.isRegularFile(tempDir.resolve("application-frontend.yaml")));
             assertTrue(Files.isRegularFile(tempDir.resolve("application-tts.yaml")));
             assertTrue(Files.isRegularFile(tempDir.resolve("mcp-catalog.yaml")));
             assertTrue(Files.notExists(tempDir.resolve("application.yaml")));
             assertTrue(Files.notExists(tempDir.resolve("application-mcp.yaml")));
             assertTrue(Files.notExists(tempDir.resolve("application-benchmark.yaml")));
             String aiConfig = Files.readString(tempDir.resolve("application-ai.yaml"));
+            String aiServicesConfig = Files.readString(tempDir.resolve("application-ai-services.yaml"));
+            String frontendConfig = Files.readString(tempDir.resolve("application-frontend.yaml"));
             String ttsConfig = Files.readString(tempDir.resolve("application-tts.yaml"));
-            assertTrue(aiConfig.contains("gamer-model:"));
-            assertTrue(aiConfig.contains("api-key: ${GAMER_MODEL_API_KEY:}"));
+            assertTrue(aiConfig.contains("light-model:"));
+            assertTrue(aiConfig.contains("heavy-model:"));
+            assertTrue(aiServicesConfig.contains("parser: light"));
+            assertTrue(aiServicesConfig.contains("supervisor: heavy"));
+            assertTrue(frontendConfig.contains("game-name: STS2MCP"));
             assertTrue(ttsConfig.contains("gpt-so-vits:"));
             assertTrue(ttsConfig.contains("top-k:"));
             assertTrue(ttsConfig.contains("vox-cpm2:"));

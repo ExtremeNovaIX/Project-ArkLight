@@ -3,9 +3,9 @@ package p1.component.agent.gamer;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.data.message.ChatMessage;
+import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.memory.ChatMemory;
 import org.junit.jupiter.api.Test;
-import p1.component.agent.gamer.interrupt.GameInterruptService;
 import p1.component.agent.gamer.loop.ActiveGameRegistry;
 import p1.component.agent.gamer.loop.GameLoopObservationBackoffService;
 import p1.component.agent.interaction.InteractionCoordinator;
@@ -28,16 +28,15 @@ class GamerPendingQuestionServiceTest {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Test
-    void shouldSpeakQuestionAndRouteUserAnswerBackToGamer() throws Exception {
+    void shouldSpeakQuestionAndReturnUserAnswerContextToRp() throws Exception {
         ActiveGameRegistry registry = new ActiveGameRegistry();
         registry.register("STS2MCP", "game-session", "rp-session");
-        GameInterruptService interruptService = new GameInterruptService();
         InteractionCoordinator coordinator = new InteractionCoordinator(registry, new AssistantProperties());
         RecordingMemory memory = new RecordingMemory("rp-session");
         TtsSpeechService ttsSpeechService = mock(TtsSpeechService.class);
         TtsSpeechSession ttsSession = mock(TtsSpeechSession.class);
-        when(ttsSpeechService.open(eq("rp-session"), eq("gamer-ask"))).thenReturn(ttsSession);
-        GamerPendingQuestionService service = service(registry, interruptService, coordinator, memory, ttsSpeechService);
+        when(ttsSpeechService.open(eq("rp-session"), eq("game-ask"))).thenReturn(ttsSession);
+        GamerPendingQuestionService service = service(registry, coordinator, memory, ttsSpeechService);
 
         GamerPendingQuestionService.PendingQuestion question = service.registerQuestion(
                 "STS2MCP",
@@ -50,25 +49,24 @@ class GamerPendingQuestionServiceTest {
         verify(ttsSession).finish();
         assertTrue(memory.text().contains("游戏队友询问"));
 
-        String acknowledgement = service.answerPendingQuestion("rp-session", "赌").orElseThrow();
+        String answerContext = service.consumeAnswerForRp("rp-session", "赌").orElseThrow();
 
-        assertTrue(acknowledgement.contains("赌一波"));
+        assertTrue(answerContext.contains("<game_ask_answer>"));
+        assertTrue(answerContext.contains("赌一波"));
         assertTrue(coordinator.canGameActForRpSession("rp-session").allowed());
-        assertTrue(interruptService.peek("STS2MCP-game-session").orElseThrow().instruction().contains("用户回答"));
-        assertTrue(interruptService.peek("STS2MCP-game-session").orElseThrow().instruction().contains("赌一波"));
         assertTrue(memory.text().contains("用户回答游戏队友询问"));
+        assertTrue(memory.userMessageNames().contains("game_ask_user_answer"));
     }
 
     @Test
-    void shouldReturnSystemInstructionWhenQuestionTimesOut() throws Exception {
+    void shouldRecordTimeoutAndResumeRpControlWhenQuestionTimesOut() throws Exception {
         ActiveGameRegistry registry = new ActiveGameRegistry();
         registry.register("STS2MCP", "game-session", "rp-session");
-        GameInterruptService interruptService = new GameInterruptService();
         InteractionCoordinator coordinator = new InteractionCoordinator(registry, new AssistantProperties());
         RecordingMemory memory = new RecordingMemory("rp-session");
         TtsSpeechService ttsSpeechService = mock(TtsSpeechService.class);
-        when(ttsSpeechService.open(eq("rp-session"), eq("gamer-ask"))).thenReturn(mock(TtsSpeechSession.class));
-        GamerPendingQuestionService service = service(registry, interruptService, coordinator, memory, ttsSpeechService);
+        when(ttsSpeechService.open(eq("rp-session"), eq("game-ask"))).thenReturn(mock(TtsSpeechSession.class));
+        GamerPendingQuestionService service = service(registry, coordinator, memory, ttsSpeechService);
 
         GamerPendingQuestionService.PendingQuestion question = service.registerQuestion(
                 "STS2MCP",
@@ -83,19 +81,16 @@ class GamerPendingQuestionServiceTest {
 
         assertFalse(service.hasPendingQuestion("rp-session"));
         assertTrue(coordinator.canGameActForRpSession("rp-session").allowed());
-        assertTrue(interruptService.peek("STS2MCP-game-session").orElseThrow().source().contains("system"));
-        assertTrue(interruptService.peek("STS2MCP-game-session").orElseThrow().instruction().contains("15 秒内没有收到任何回复"));
         assertTrue(memory.text().contains("游戏队友询问超时"));
+        assertTrue(memory.userMessageNames().contains("system_game_ask_timeout"));
     }
 
     private GamerPendingQuestionService service(ActiveGameRegistry registry,
-                                                GameInterruptService interruptService,
                                                 InteractionCoordinator coordinator,
                                                 RecordingMemory memory,
                                                 TtsSpeechService ttsSpeechService) {
         return new GamerPendingQuestionService(
                 registry,
-                interruptService,
                 coordinator,
                 new GameLoopObservationBackoffService(),
                 ignored -> memory,
@@ -148,6 +143,14 @@ class GamerPendingQuestionServiceTest {
             return messages.stream()
                     .map(ChatMessageUtil::extractText)
                     .reduce("", (left, right) -> left + "\n" + right);
+        }
+
+        private List<String> userMessageNames() {
+            return messages.stream()
+                    .filter(UserMessage.class::isInstance)
+                    .map(UserMessage.class::cast)
+                    .map(UserMessage::name)
+                    .toList();
         }
     }
 }

@@ -2,24 +2,24 @@ assistant:
   mode: api
 
   api:
-    chat-model:
-      # 主对话 / RP / 后台任务模型。
+    light-model:
+      # 轻模型用于 parser/checker 等短 JSON 或低复杂度任务。
       api-key: ${DEEPSEEK_API_KEY:}
       base-url: https://api.deepseek.com
       model-name: deepseek-v4-flash
-    gamer-model:
-      # Gamer 可单独换 key / 地址 / 模型；留空的字段会从 chat-model 继承。
-      api-key: ${GAMER_MODEL_API_KEY:}
-      base-url: ${GAMER_MODEL_BASE_URL:}
-      model-name: ${GAMER_MODEL_NAME:}
+    heavy-model:
+      # 重模型用于 RP/supervisor；留空字段会从 light-model 继承。
+      api-key: ${HEAVY_MODEL_API_KEY:}
+      base-url: ${HEAVY_MODEL_BASE_URL:}
+      model-name: ${HEAVY_MODEL_NAME:deepseek-v4-pro}
     embedding-model:
       api-key: ${DASHSCOPE_API_KEY:}
 
   # 切到本地模型时，把 mode 改成 local，并按需取消下面几项注释。
   # local:
-  #   chat-model:
+  #   light-model:
   #     base-url: http://127.0.0.1:1234/v1
   #     model-name: qwen3.6
-  #   gamer-model:
+  #   heavy-model:
   #     base-url: http://127.0.0.1:1234/v1
   #     model-name: qwen3.6

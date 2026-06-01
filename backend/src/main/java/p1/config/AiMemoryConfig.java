@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import p1.component.agent.memory.ArchivableChatMemory;
+import p1.component.agent.memory.ChatMemoryWritePolicy;
 import p1.component.agent.memory.ChatMemoryAppender;
 import p1.component.agent.memory.MemoryAsyncCompressor;
 import p1.config.prop.AssistantProperties;
@@ -41,12 +42,14 @@ public class AiMemoryConfig {
                                                  ChatMemoryAppender dbAppender,
                                                  RawMdService rawMdService,
                                                  LockProperties lockProperties,
-                                                 ChatLogRepository chatLogRepository) {
+                                                 ChatLogRepository chatLogRepository,
+                                                 ChatMemoryWritePolicy writePolicy) {
         return memoryId -> {
             String sessionId = SessionUtil.normalizeSessionId(memoryId.toString());
             return memoryCache.computeIfAbsent(sessionId,
                     id -> new ArchivableChatMemory(
-                            id, compressor, dbAppender, rawMdService, props, lockProperties, chatLogRepository));
+                            id, compressor, dbAppender, rawMdService, props, lockProperties, chatLogRepository,
+                            writePolicy));
         };
     }
 }
