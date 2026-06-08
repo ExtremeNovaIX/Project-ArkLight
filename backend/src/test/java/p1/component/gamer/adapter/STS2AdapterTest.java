@@ -867,6 +867,53 @@ class STS2AdapterTest {
     }
 
     @Test
+    void shouldAcceptRestSiteOptionIndexFromRestSiteOptions() throws Exception {
+        GameStateSnapshot restSite = state("""
+                {
+                  "state_type":"rest_site",
+                  "rest_site":{
+                    "options":[
+                      {"index":0,"name":"HEAL","label":"休息","enabled":true},
+                      {"index":1,"name":"SMITH","label":"锻造","enabled":true}
+                    ]
+                  }
+                }
+                """);
+        GameOperation operation = new GameOperation("rest_choose_option", objectMapper.readTree("{\"option_index\":0}"));
+        QueuedGameOperation queued = adapter.prepareOperation(operation, restSite);
+
+        GameOperationPrecondition precondition = adapter.checkOperationPrecondition(queued, restSite);
+        ToolExecutionRequest repaired = adapter.repairBeforeExecute(queued, restSite);
+
+        assertTrue(precondition.satisfied(), precondition.reason());
+        assertEquals(
+                objectMapper.readTree("{\"option_index\":0}"),
+                objectMapper.readTree(repaired.arguments())
+        );
+    }
+
+    @Test
+    void shouldNarrowAvailableOperationsForRestSite() throws Exception {
+        ToolProviderResult tools = tools(
+                "get_game_state",
+                "combat_play_card",
+                "event_choose_option",
+                "rest_choose_option",
+                "proceed_to_map"
+        );
+        MCPProperties.GameMCPConfig config = new MCPProperties.GameMCPConfig();
+        config.setStateToolName("get_game_state");
+
+        String rendered = adapter.renderAvailableOperations(
+                tools, config, state("{\"state_type\":\"rest_site\"}"));
+
+        assertTrue(rendered.contains("rest_choose_option"));
+        assertTrue(rendered.contains("proceed_to_map"));
+        assertFalse(rendered.contains("combat_play_card"));
+        assertFalse(rendered.contains("event_choose_option"));
+    }
+
+    @Test
     void shouldRepairRewardPickIndexByPlannedCardNameAfterReorder() throws Exception {
         GameStateSnapshot planned = state("""
                 {

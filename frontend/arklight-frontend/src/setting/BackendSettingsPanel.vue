@@ -16,7 +16,7 @@ interface EditableConfigField {
   path: string;
   label: string;
   description: string;
-  type: 'text' | 'password' | 'number' | 'boolean' | 'select' | 'textarea' | 'list';
+  type: 'text' | 'number' | 'boolean' | 'select' | 'textarea' | 'list';
   value: string;
   options: string[];
   sensitive: boolean;
@@ -41,7 +41,7 @@ interface ConfigCatalogSnapshot {
 type FieldValue = string | boolean;
 
 const CONFIG_HISTORY_STORAGE_KEY = 'arklight.config.field.history.v1';
-const MAX_HISTORY_ITEMS = 8;
+const MAX_HISTORY_ITEMS = 3;
 
 const loading = ref(false);
 const saving = ref(false);
@@ -54,6 +54,8 @@ const catalog = ref<ConfigCatalogSnapshot | null>(null);
 const activeFileName = ref('');
 const fieldValues = ref<Record<string, FieldValue>>({});
 const fieldHistories = ref<Record<string, string[]>>({});
+const activeHistoryKey = ref('');
+let historyCloseTimer: number | undefined;
 
 const normalizedBaseUrl = computed(() => {
   const candidate = props.baseUrl.trim() || defaultFrontendSettings.backendBaseUrl;
@@ -97,7 +99,7 @@ const saveHistories = () => {
 
 const rememberHistory = (page: EditableConfigPage) => {
   for (const field of page.fields) {
-    if (field.type === 'boolean' || field.sensitive) {
+    if (!fieldSupportsHistory(field)) {
       continue;
     }
     const key = fieldStorageKey(page, field);
@@ -185,14 +187,39 @@ const handleBooleanInput = (page: EditableConfigPage | null, field: EditableConf
   updateField(page, field, Boolean(target?.checked));
 };
 
-const applyHistory = (page: EditableConfigPage | null, field: EditableConfigField, event: Event) => {
-  const target = event.target as HTMLSelectElement | null;
-  const value = target?.value ?? '';
+const fieldSupportsHistory = (field: EditableConfigField) =>
+  field.type !== 'boolean' && field.type !== 'select';
+
+const openHistory = (page: EditableConfigPage | null, field: EditableConfigField) => {
+  if (!page || !fieldSupportsHistory(field)) {
+    return;
+  }
+  if (historyCloseTimer !== undefined) {
+    window.clearTimeout(historyCloseTimer);
+    historyCloseTimer = undefined;
+  }
+  activeHistoryKey.value = fieldStorageKey(page, field);
+};
+
+const scheduleHistoryClose = () => {
+  if (historyCloseTimer !== undefined) {
+    window.clearTimeout(historyCloseTimer);
+  }
+  historyCloseTimer = window.setTimeout(() => {
+    activeHistoryKey.value = '';
+    historyCloseTimer = undefined;
+  }, 120);
+};
+
+const inputTypeFor = (field: EditableConfigField) =>
+  field.type === 'number' ? 'number' : 'text';
+
+const applyHistory = (page: EditableConfigPage | null, field: EditableConfigField, value: string) => {
   if (!page || !value) {
     return;
   }
   updateField(page, field, value);
-  target.value = '';
+  activeHistoryKey.value = '';
 };
 
 const saveCurrentConfig = async () => {
@@ -279,7 +306,14 @@ const restartBackend = async () => {
 const valueFor = (page: EditableConfigPage | null, field: EditableConfigField) =>
   page ? fieldValues.value[fieldStorageKey(page, field)] ?? fallbackFieldValue(field) : fallbackFieldValue(field);
 const historyFor = (page: EditableConfigPage | null, field: EditableConfigField) =>
-  page ? fieldHistories.value[fieldStorageKey(page, field)] ?? [] : [];
+  page ? (fieldHistories.value[fieldStorageKey(page, field)] ?? []).slice(0, MAX_HISTORY_ITEMS) : [];
+const shouldShowHistory = (page: EditableConfigPage | null, field: EditableConfigField) => {
+  if (!page) {
+    return false;
+  }
+  return activeHistoryKey.value === fieldStorageKey(page, field)
+    && historyFor(page, field).length > 0;
+};
 
 onMounted(() => {
   fieldHistories.value = loadHistories();
@@ -382,76 +416,110 @@ onMounted(() => {
           </div>
         </div>
 
-        <div class="grid gap-3 xl:grid-cols-2 2xl:grid-cols-3">
+        <div class="grid gap-3">
           <label
             v-for="field in activePage.fields"
             :key="field.key"
-            class="relative space-y-3 border border-[#1A1A1A]/15 bg-white/80 p-4 transition hover:border-[#1A1A1A]"
+            class="relative grid gap-3 border border-[#1A1A1A]/15 bg-white/80 p-4 transition hover:border-[#1A1A1A] lg:grid-cols-[minmax(220px,300px)_minmax(0,1fr)] lg:items-start"
           >
-            <div class="space-y-1">
+            <div class="space-y-2">
               <span class="block text-xs font-semibold text-[#1A1A1A]">{{ field.label }}</span>
               <span v-if="field.description" class="block text-[11px] leading-5 text-[#1A1A1A]/48">
                 {{ field.description }}
               </span>
+              <span class="block break-all font-mono text-[11px] text-[#1A1A1A]/40">{{ field.path }}</span>
             </div>
 
-            <select
-              v-if="field.type === 'select'"
-              :value="valueFor(activePage, field)"
-              class="w-full border border-[#1A1A1A]/20 bg-[#F8F5EC] px-3 py-2 text-sm outline-none transition focus:border-[#E85D04]"
-              @change="handleFieldInput(activePage, field, $event)"
-            >
-              <option value="" disabled>请选择</option>
-              <option
-                v-for="option in field.options"
-                :key="option"
-                :value="option"
+            <div class="min-w-0">
+              <select
+                v-if="field.type === 'select'"
+                :value="valueFor(activePage, field)"
+                class="w-full border border-[#1A1A1A]/20 bg-[#F8F5EC] px-3 py-2 text-sm outline-none transition focus:border-[#E85D04]"
+                @change="handleFieldInput(activePage, field, $event)"
               >
-                {{ option }}
-              </option>
-            </select>
+                <option value="" disabled>请选择</option>
+                <option
+                  v-for="option in field.options"
+                  :key="option"
+                  :value="option"
+                >
+                  {{ option }}
+                </option>
+              </select>
 
-            <label
-              v-else-if="field.type === 'boolean'"
-              class="flex items-center justify-between gap-4 border border-[#1A1A1A]/10 bg-[#1A1A1A] px-3 py-2 text-white"
-            >
-              <span class="text-sm">{{ valueFor(activePage, field) ? '已开启' : '已关闭' }}</span>
-              <input
-                :checked="Boolean(valueFor(activePage, field))"
-                type="checkbox"
-                class="h-5 w-5 accent-[#E85D04]"
-                @change="handleBooleanInput(activePage, field, $event)"
-              />
-            </label>
+              <label
+                v-else-if="field.type === 'boolean'"
+                class="flex items-center justify-between gap-4 border border-[#1A1A1A]/10 bg-[#1A1A1A] px-3 py-2 text-white"
+              >
+                <span class="text-sm">{{ valueFor(activePage, field) ? '已开启' : '已关闭' }}</span>
+                <input
+                  :checked="Boolean(valueFor(activePage, field))"
+                  type="checkbox"
+                  class="h-5 w-5 accent-[#E85D04]"
+                  @change="handleBooleanInput(activePage, field, $event)"
+                />
+              </label>
 
-            <textarea
-              v-else-if="field.type === 'textarea' || field.type === 'list'"
-              :value="valueFor(activePage, field)"
-              :rows="field.type === 'list' ? 5 : 4"
-              :placeholder="field.type === 'list' ? '每行一条' : field.placeholder"
-              class="w-full resize-y border border-[#1A1A1A]/20 bg-[#F8F5EC] px-3 py-2 text-sm leading-6 outline-none transition focus:border-[#E85D04]"
-              @input="handleFieldInput(activePage, field, $event)"
-            />
+              <div
+                v-else-if="field.type === 'textarea' || field.type === 'list'"
+                class="relative"
+              >
+                <textarea
+                  :value="valueFor(activePage, field)"
+                  :rows="field.type === 'list' ? 5 : 4"
+                  :placeholder="field.type === 'list' ? '每行一条' : field.placeholder"
+                  class="w-full resize-y border border-[#1A1A1A]/20 bg-[#F8F5EC] px-3 py-2 text-sm leading-6 outline-none transition focus:border-[#E85D04]"
+                  @focus="openHistory(activePage, field)"
+                  @click="openHistory(activePage, field)"
+                  @blur="scheduleHistoryClose"
+                  @input="handleFieldInput(activePage, field, $event)"
+                />
+                <div
+                  v-if="shouldShowHistory(activePage, field)"
+                  class="absolute left-0 right-0 top-[calc(100%+4px)] z-30 border border-[#1A1A1A]/20 bg-[#FFFDF8] p-1 shadow-[0_8px_20px_rgba(26,26,26,0.12)]"
+                >
+                  <button
+                    v-for="item in historyFor(activePage, field)"
+                    :key="item"
+                    type="button"
+                    class="block w-full truncate px-3 py-2 text-left font-mono text-[11px] text-[#1A1A1A]/75 transition hover:bg-[#F8F5EC] hover:text-[#1A1A1A]"
+                    @mousedown.prevent="applyHistory(activePage, field, item)"
+                  >
+                    {{ item }}
+                  </button>
+                </div>
+              </div>
 
-            <input
-              v-else
-              :value="valueFor(activePage, field)"
-              :type="field.type === 'password' ? 'password' : field.type === 'number' ? 'number' : 'text'"
-              :placeholder="field.placeholder"
-              class="w-full border border-[#1A1A1A]/20 bg-[#F8F5EC] px-3 py-2 text-sm outline-none transition focus:border-[#E85D04]"
-              @input="handleFieldInput(activePage, field, $event)"
-            />
-
-            <select
-              v-if="field.type !== 'boolean' && !field.sensitive && historyFor(activePage, field).length"
-              class="w-full border border-[#1A1A1A]/15 bg-white px-3 py-2 text-xs text-[#1A1A1A]/70 outline-none transition focus:border-[#4D908E]"
-              @change="applyHistory(activePage, field, $event)"
-            >
-              <option value="">历史填入</option>
-              <option v-for="item in historyFor(activePage, field)" :key="item" :value="item">{{ item }}</option>
-            </select>
-
-            <p class="break-all font-mono text-[11px] text-[#1A1A1A]/40">{{ field.path }}</p>
+              <div
+                v-else
+                class="relative"
+              >
+                <input
+                  :value="valueFor(activePage, field)"
+                  :type="inputTypeFor(field)"
+                  :placeholder="field.placeholder"
+                  class="w-full border border-[#1A1A1A]/20 bg-[#F8F5EC] px-3 py-2 text-sm outline-none transition focus:border-[#E85D04]"
+                  @focus="openHistory(activePage, field)"
+                  @click="openHistory(activePage, field)"
+                  @blur="scheduleHistoryClose"
+                  @input="handleFieldInput(activePage, field, $event)"
+                />
+                <div
+                  v-if="shouldShowHistory(activePage, field)"
+                  class="absolute left-0 right-0 top-[calc(100%+4px)] z-30 border border-[#1A1A1A]/20 bg-[#FFFDF8] p-1 shadow-[0_8px_20px_rgba(26,26,26,0.12)]"
+                >
+                  <button
+                    v-for="item in historyFor(activePage, field)"
+                    :key="item"
+                    type="button"
+                    class="block w-full truncate px-3 py-2 text-left font-mono text-[11px] text-[#1A1A1A]/75 transition hover:bg-[#F8F5EC] hover:text-[#1A1A1A]"
+                    @mousedown.prevent="applyHistory(activePage, field, item)"
+                  >
+                    {{ item }}
+                  </button>
+                </div>
+              </div>
+            </div>
           </label>
         </div>
       </section>

@@ -99,6 +99,15 @@ class LocalConfigServiceTest {
             assertFieldValue(aiPage, "assistant.api.embedding-model.base-url", "https://embedding.example.test/v1");
             assertFieldValue(aiPage, "assistant.api.embedding-model.model-name", "embedding-model");
 
+            service.saveConfig("application-ai.yaml", new LocalConfigService.ConfigUpdateRequest(Map.of(
+                    "assistant.api.light-model.api-key", "next-light-key",
+                    "assistant.api.embedding-model.base-url", "https://embedding.next.test/v1"
+            )));
+            String ai = Files.readString(tempDir.resolve("application-ai.yaml"));
+            assertEquals(1, countRootKey(ai, "assistant"));
+            assertTrue(ai.contains("api-key: next-light-key"));
+            assertTrue(ai.contains("base-url: https://embedding.next.test/v1"));
+
             LocalConfigService.EditableConfigPage aiServicesPage = snapshot.configs().stream()
                     .filter(page -> page.fileName().equals("application-ai-services.yaml"))
                     .findFirst()
@@ -142,6 +151,35 @@ class LocalConfigServiceTest {
     }
 
     @Test
+    void shouldRejectDuplicateYamlKeysBeforeSaving() throws Exception {
+        Path tempDir = Paths.get("target", "local-config-service-test", UUID.randomUUID().toString())
+                .toAbsolutePath()
+                .normalize();
+        String oldConfigDir = System.getProperty("arclight.config.dir");
+        try {
+            System.setProperty("arclight.config.dir", tempDir.toString());
+            Files.createDirectories(tempDir);
+            Files.writeString(tempDir.resolve("application-ai.yaml"), """
+                    assistant:
+                      mode: api
+                    assistant:
+                      mode: local
+                    """);
+            LocalConfigService service = new LocalConfigService(null);
+
+            IllegalStateException ex = assertThrows(IllegalStateException.class,
+                    () -> service.saveConfig("application-ai.yaml", new LocalConfigService.ConfigUpdateRequest(Map.of(
+                            "assistant.mode", "api"
+                    ))));
+
+            assertTrue(ex.getMessage().contains("重复 YAML key"));
+        } finally {
+            restore("arclight.config.dir", oldConfigDir);
+            deleteRecursively(tempDir);
+        }
+    }
+
+    @Test
     void shouldRejectUnsupportedConfigFile() throws Exception {
         Path tempDir = Paths.get("target", "local-config-service-test", UUID.randomUUID().toString())
                 .toAbsolutePath()
@@ -174,6 +212,12 @@ class LocalConfigServiceTest {
                 .findFirst()
                 .orElseThrow();
         assertEquals(expectedValue, actualValue);
+    }
+
+    private long countRootKey(String yaml, String key) {
+        return yaml.lines()
+                .filter(line -> line.equals(key + ":"))
+                .count();
     }
 
     private void deleteRecursively(Path directory) throws Exception {

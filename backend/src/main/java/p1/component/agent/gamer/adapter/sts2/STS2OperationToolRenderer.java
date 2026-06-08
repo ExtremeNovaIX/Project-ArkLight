@@ -148,7 +148,7 @@ public class STS2OperationToolRenderer {
             case "map" -> isMapTool(name);
             case "event" -> isEventTool(name);
             case "shop" -> isShopTool(name);
-            case "rest", "campfire" -> isRestTool(name);
+            case "rest", "rest_site", "campfire" -> isRestTool(name);
             case "chest", "treasure" -> isChestTool(name);
             default -> true;
         };

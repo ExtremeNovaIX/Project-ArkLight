@@ -175,6 +175,7 @@ public class LocalConfigService {
                     ? upsertList(lines, field.path(), normalizeList(value))
                     : upsertScalar(lines, field.path(), value);
         }
+        assertNoDuplicateMappingKeys(lines, file);
         try {
             Files.write(file, lines, StandardCharsets.UTF_8, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.CREATE);
         } catch (IOException e) {
@@ -296,6 +297,44 @@ public class LocalConfigService {
             }
         }
         return nodes;
+    }
+
+    private void assertNoDuplicateMappingKeys(List<String> lines, Path file) {
+        Map<String, Set<String>> keysByParent = new HashMap<>();
+        List<YamlStackEntry> stack = new ArrayList<>();
+        for (int lineIndex = 0; lineIndex < lines.size(); lineIndex++) {
+            String line = lines.get(lineIndex);
+            Matcher listMatcher = YAML_LIST_ITEM_PATTERN.matcher(line);
+            if (listMatcher.matches() && !line.trim().startsWith("#")) {
+                int indent = listMatcher.group(1).length();
+                while (!stack.isEmpty() && stack.getLast().indent() >= indent) {
+                    stack.removeLast();
+                }
+                String parentPath = stack.isEmpty() ? "" : stack.getLast().path();
+                stack.add(new YamlStackEntry(indent, parentPath + "[]#" + lineIndex));
+                continue;
+            }
+            Matcher matcher = YAML_SCALAR_PATTERN.matcher(line);
+            if (!matcher.matches() || line.trim().startsWith("#")) {
+                continue;
+            }
+            int indent = matcher.group(1).length();
+            String key = normalizeKey(matcher.group(2));
+            while (!stack.isEmpty() && stack.getLast().indent() >= indent) {
+                stack.removeLast();
+            }
+            String parentPath = stack.isEmpty() ? "" : stack.getLast().path();
+            Set<String> siblingKeys = keysByParent.computeIfAbsent(parentPath, ignored -> new HashSet<>());
+            if (!siblingKeys.add(key)) {
+                String duplicatePath = parentPath.isBlank() ? key : parentPath + "." + key;
+                throw new IllegalStateException("配置文件包含重复 YAML key: " + duplicatePath + "，请先修复文件: " + file);
+            }
+            String rawValue = matcher.group(3) == null ? "" : matcher.group(3);
+            if (rawValue.isBlank()) {
+                String path = parentPath.isBlank() ? key : parentPath + "." + key;
+                stack.add(new YamlStackEntry(indent, path));
+            }
+        }
     }
 
     private Path resolveConfigDir() {
@@ -531,13 +570,13 @@ public class LocalConfigService {
                 "config-template/application-ai.yaml",
                 List.of(
                         select("assistant.mode", "assistant.mode", "运行模式", "api 使用远程 API；local 使用本地模型配置。", List.of("api", "local")),
-                        password("assistant.api.light-model.api-key", "assistant.api.light-model.api-key", "轻模型 API Key", "parser、checker 等低延迟任务使用的模型密钥。"),
+                        text("assistant.api.light-model.api-key", "assistant.api.light-model.api-key", "轻模型 API Key", "parser、checker 等低延迟任务使用的模型密钥。"),
                         text("assistant.api.light-model.base-url", "assistant.api.light-model.base-url", "轻模型地址", "轻模型 OpenAI 兼容接口地址。"),
                         text("assistant.api.light-model.model-name", "assistant.api.light-model.model-name", "轻模型名称", "轻量任务实际请求的模型名。"),
-                        password("assistant.api.heavy-model.api-key", "assistant.api.heavy-model.api-key", "重模型 API Key", "RP、supervisor 等复杂任务使用的模型密钥。"),
+                        text("assistant.api.heavy-model.api-key", "assistant.api.heavy-model.api-key", "重模型 API Key", "RP、supervisor 等复杂任务使用的模型密钥。"),
                         text("assistant.api.heavy-model.base-url", "assistant.api.heavy-model.base-url", "重模型地址", "重模型 OpenAI 兼容接口地址；留空时由配置绑定逻辑继承轻模型。"),
                         text("assistant.api.heavy-model.model-name", "assistant.api.heavy-model.model-name", "重模型名称", "复杂任务实际请求的模型名。"),
-                        password("assistant.api.embedding-model.api-key", "assistant.api.embedding-model.api-key", "Embedding API Key", "长期记忆向量化使用的密钥。"),
+                        text("assistant.api.embedding-model.api-key", "assistant.api.embedding-model.api-key", "Embedding API Key", "长期记忆向量化使用的密钥。"),
                         text("assistant.api.embedding-model.base-url", "assistant.api.embedding-model.base-url", "Embedding 地址", "Embedding OpenAI 兼容接口地址。"),
                         text("assistant.api.embedding-model.model-name", "assistant.api.embedding-model.model-name", "Embedding 模型", "长期记忆向量化使用的模型名。")
                 )));
@@ -636,10 +675,6 @@ public class LocalConfigService {
         return new FieldDefinition(key, path, label, description, FieldType.TEXT, List.of(), false, "");
     }
 
-    private FieldDefinition password(String key, String path, String label, String description) {
-        return new FieldDefinition(key, path, label, description, FieldType.PASSWORD, List.of(), true, "");
-    }
-
     private FieldDefinition textarea(String key, String label, String description) {
         return new FieldDefinition(key, key, label, description, FieldType.TEXTAREA, List.of(), false, "");
     }
@@ -666,7 +701,6 @@ public class LocalConfigService {
 
     private enum FieldType {
         TEXT("text"),
-        PASSWORD("password"),
         NUMBER("number"),
         BOOLEAN("boolean"),
         SELECT("select"),

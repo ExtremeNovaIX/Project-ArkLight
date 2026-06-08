@@ -423,6 +423,7 @@ public class STS2OperationRepairer {
         collectOptionCandidates(candidates, root.path("event").path("options"));
         collectOptionCandidates(candidates, root.path("screen").path("options"));
         collectOptionCandidates(candidates, root.path("rest").path("options"));
+        collectOptionCandidates(candidates, root.path("rest_site").path("options"));
         collectOptionCandidates(candidates, root.path("campfire").path("options"));
         return candidates;
     }
