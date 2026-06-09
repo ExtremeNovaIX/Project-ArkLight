@@ -392,7 +392,8 @@ class GameOperationQueueProcessorTest {
                 new GameOperationBatchParser(),
                 new GameQueueDrainService(null, coordinator),
                 renderer,
-                new GameQueueResultRecorder(null, null));
+                new GameQueueResultRecorder(null, null),
+                null);
         GameStateSnapshot playState = state("{\"state_type\":\"monster\",\"battle\":{\"turn\":\"player\",\"is_play_phase\":true}}");
         String memoryId = "test-game-rp-session";
 

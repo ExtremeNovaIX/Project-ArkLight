@@ -8,6 +8,7 @@ import dev.langchain4j.rag.content.Content;
 import dev.langchain4j.service.TokenStream;
 import dev.langchain4j.service.tool.ToolExecution;
 import org.junit.jupiter.api.Test;
+import p1.component.agent.gamer.trace.GamerDecisionTraceService;
 import p1.component.agent.interaction.InteractionCoordinator;
 import p1.component.agent.rp.game.control.RpControlBlock;
 import p1.component.agent.rp.game.control.RpGameControlBlockExecutor;
@@ -54,7 +55,8 @@ class RpSpeechTurnServiceTest {
                 ttsSpeechService,
                 controlBlockExecutor,
                 mock(RpGameInterruptionService.class),
-                new RpGameControlTurnLockService());
+                new RpGameControlTurnLockService(),
+                mock(GamerDecisionTraceService.class));
 
         String text = service.collect("rp-session", "game-loop", new ChunkTokenStream("""
                 <turn>
@@ -91,7 +93,8 @@ class RpSpeechTurnServiceTest {
                 ttsSpeechService,
                 controlBlockExecutor,
                 mock(RpGameInterruptionService.class),
-                new RpGameControlTurnLockService());
+                new RpGameControlTurnLockService(),
+                mock(GamerDecisionTraceService.class));
         ChunkTokenStream stream = new ChunkTokenStream("""
                 <event 1>{"type":"voice","kind":"ask","say":"这里要不要先拿药水？"}</event 1>
                 <event 2>{"type":"act","do":"结束回合","check":"合法","progress":"","next":"","commit":true}</event 2>
@@ -116,7 +119,8 @@ class RpSpeechTurnServiceTest {
                 mock(TtsSpeechService.class),
                 controlBlockExecutor,
                 mock(RpGameInterruptionService.class),
-                new RpGameControlTurnLockService());
+                new RpGameControlTurnLockService(),
+                mock(GamerDecisionTraceService.class));
 
         CountDownLatch firstStarted = new CountDownLatch(1);
         CountDownLatch releaseFirst = new CountDownLatch(1);
@@ -155,7 +159,8 @@ class RpSpeechTurnServiceTest {
                 mock(TtsSpeechService.class),
                 controlBlockExecutor,
                 interruptionService,
-                new RpGameControlTurnLockService());
+                new RpGameControlTurnLockService(),
+                mock(GamerDecisionTraceService.class));
 
         org.junit.jupiter.api.Assertions.assertThrows(
                 RuntimeException.class,

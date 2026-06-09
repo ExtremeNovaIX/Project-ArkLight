@@ -10,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import p1.component.agent.interaction.InteractionCoordinator;
+import p1.component.agent.gamer.trace.GamerDecisionTraceService;
 import p1.component.agent.rp.game.control.RpControlBlock;
 import p1.component.agent.rp.game.control.RpGameControlTurnLockService;
 import p1.component.agent.rp.game.control.RpGameActionExecutionException;
@@ -45,14 +46,24 @@ public class RpSpeechTurnService {
     private final RpGameControlBlockExecutor gameControlBlockExecutor;
     private final RpGameInterruptionService gameInterruptionService;
     private final RpGameControlTurnLockService gameControlTurnLockService;
+    private final GamerDecisionTraceService traceService;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final Map<String, Long> lastGameActionSpeechAt = new ConcurrentHashMap<>();
 
     public String collect(String rpSessionId, String source, TokenStream stream) {
+        return collect(rpSessionId, source, stream, null, null);
+    }
+
+    /**
+     * @param gameName  游戏名（game mode 时传入，供 plan 块捕获）
+     * @param sessionId 游戏会话 id（game mode 时传入，供 plan 块捕获）
+     */
+    public String collect(String rpSessionId, String source, TokenStream stream,
+                          String gameName, String sessionId) {
         if (stream == null) {
             return "";
         }
-        SpeechCollector collector = new SpeechCollector(rpSessionId, source);
+        SpeechCollector collector = new SpeechCollector(rpSessionId, source, gameName, sessionId);
         if (collector.requiresGameControlLock()) {
             return gameControlTurnLockService.withLock(
                     rpSessionId,
@@ -89,10 +100,20 @@ public class RpSpeechTurnService {
         private volatile boolean askRegistered;
         private final AtomicBoolean interruptionRecorded = new AtomicBoolean(false);
 
-        private SpeechCollector(String rpSessionId, String source) {
+        private final String gameName;
+        private final String sessionId;
+
+        // plan 块流式解析
+        private final StringBuilder planBuffer = new StringBuilder();
+        private boolean inPlan;
+        private boolean planClosed;
+
+        private SpeechCollector(String rpSessionId, String source, String gameName, String sessionId) {
             this.rpSessionId = rpSessionId;
             this.source = source == null || source.isBlank() ? "unknown" : source.trim();
             this.gameMode = gameControlBlockExecutor.hasActiveGame(rpSessionId);
+            this.gameName = gameName;
+            this.sessionId = sessionId;
         }
 
         private boolean requiresGameControlLock() {
@@ -120,12 +141,59 @@ public class RpSpeechTurnService {
             if (askRegistered) {
                 return;
             }
+            // 流式捕获 <plan>...</plan> 块
+            if (!planClosed && gameName != null && sessionId != null) {
+                detectPlanTags(text);
+            }
             List<StreamingJsonInstruction> instructions = controlParser.accept(text);
             for (StreamingJsonInstruction instruction : instructions) {
                 if (closed.get()) {
                     return;
                 }
                 RpControlBlock.from(instruction.json()).ifPresent(this::handleControlBlock);
+            }
+        }
+
+        /**
+         * 在流式文本中检测 {@code <plan>} 开始和结束，提取内容并提交给 trace service。
+         * <p>
+         * 标签可能跨 chunk，因此使用 stateful 解析。
+         */
+        private void detectPlanTags(String chunk) {
+            if (planClosed) {
+                return;
+            }
+            if (!inPlan) {
+                int start = chunk.indexOf("<plan>");
+                if (start < 0) {
+                    return;
+                }
+                inPlan = true;
+                // 从 <plan> 之后开始累加
+                planBuffer.append(chunk.substring(start + 6));
+            }
+            if (inPlan) {
+                int end = planBuffer.indexOf("</plan>");
+                if (end >= 0) {
+                    String planText = planBuffer.substring(0, end).trim();
+                    planClosed = true;
+                    planBuffer.setLength(0);
+                    if (!planText.isBlank()) {
+                        traceService.recordTurnPlan(gameName, sessionId, planText);
+                    }
+                    return;
+                }
+                // 可能新 chunk 中也包含闭合标签
+                planBuffer.append(chunk);
+                end = planBuffer.indexOf("</plan>");
+                if (end >= 0) {
+                    String planText = planBuffer.substring(0, end).trim();
+                    planClosed = true;
+                    planBuffer.setLength(0);
+                    if (!planText.isBlank()) {
+                        traceService.recordTurnPlan(gameName, sessionId, planText);
+                    }
+                }
             }
         }
 

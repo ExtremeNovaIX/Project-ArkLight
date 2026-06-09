@@ -35,6 +35,7 @@ public class GameOperationQueueProcessor {
     private final GameQueueDrainService drainService;
     private final GameQueueResultRenderer resultRenderer;
     private final GameQueueResultRecorder resultRecorder;
+    private final GamerDecisionTraceService traceService;
 
     public GameOperationQueueProcessor() {
         this(null, null, null);
@@ -52,17 +53,20 @@ public class GameOperationQueueProcessor {
         this.drainService = new GameQueueDrainService(interruptService, null);
         this.resultRenderer = new GameQueueResultRenderer();
         this.resultRecorder = new GameQueueResultRecorder(traceService, reasoningContentRecorder);
+        this.traceService = traceService;
     }
 
     @Autowired
     public GameOperationQueueProcessor(GameOperationBatchParser batchParser,
                                        GameQueueDrainService drainService,
                                        GameQueueResultRenderer resultRenderer,
-                                       GameQueueResultRecorder resultRecorder) {
+                                       GameQueueResultRecorder resultRecorder,
+                                       GamerDecisionTraceService traceService) {
         this.batchParser = batchParser;
         this.drainService = drainService;
         this.resultRenderer = resultRenderer;
         this.resultRecorder = resultRecorder;
+        this.traceService = traceService;
     }
 
     public String enqueueAndDrain(String gameName,
@@ -133,6 +137,15 @@ public class GameOperationQueueProcessor {
                                String result,
                                String interruptReason,
                                GameQueueExecutionTrace executionTrace) {
+        // 消费暂存的 plan 和 act 上下文
+        String planText = traceService != null ? traceService.consumePendingPlan(gameName, key) : "";
+        GamerDecisionTraceService.ActBlockContext actCtx =
+                traceService != null ? traceService.consumePendingActContext(gameName, key) : null;
+        String check = actCtx != null ? actCtx.check() : "";
+        String progress = actCtx != null ? actCtx.progress() : "";
+        String next = actCtx != null ? actCtx.next() : "";
+        boolean commit = actCtx != null && actCtx.commit();
+
         resultRecorder.record(
                 gameName,
                 key,
@@ -145,7 +158,12 @@ public class GameOperationQueueProcessor {
                 operations,
                 result,
                 interruptReason,
-                executionTrace);
+                executionTrace,
+                planText,
+                check,
+                progress,
+                next,
+                commit);
     }
 
     private String rpDo(ParsedGameOperationBatch batch) {

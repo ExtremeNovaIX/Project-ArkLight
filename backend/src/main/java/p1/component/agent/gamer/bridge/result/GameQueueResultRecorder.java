@@ -39,7 +39,12 @@ public class GameQueueResultRecorder {
                        List<GameOperation> operations,
                        String result,
                        String interruptReason,
-                       GameQueueExecutionTrace executionTrace) {
+                       GameQueueExecutionTrace executionTrace,
+                       String planText,
+                       String check,
+                       String progress,
+                       String next,
+                       boolean commit) {
         if (traceService != null) {
             traceService.appendQueueTrace(
                     gameName,
@@ -53,7 +58,12 @@ public class GameQueueResultRecorder {
                     operations,
                     result,
                     interruptReason,
-                    executionTrace);
+                    executionTrace,
+                    planText,
+                    check,
+                    progress,
+                    next,
+                    commit);
         }
     }
 }

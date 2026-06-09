@@ -5,7 +5,6 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import p1.component.agent.gamer.GameSessionKey;
 import p1.component.agent.gamer.GamerPendingQuestionService;
 import p1.component.agent.gamer.loop.ActiveGameRegistry;
 import p1.component.agent.gamer.loop.ActiveGameSession;
@@ -51,7 +50,7 @@ public class RpGameControlBlockExecutor {
         ActiveGameSession session = active.get();
         traceService.appendRpControlBlockTrace(
                 session.getGameName(),
-                GameSessionKey.of(session.getGameName(), session.getSessionId()),
+                session.getSessionId(),
                 block);
         if (block.isAsk()) {
             return registerAsk(session, block);

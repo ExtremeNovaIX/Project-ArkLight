@@ -98,3 +98,4 @@ backend/benchmark/halumem/*.jsonl
 !/mcp-servers/.gitkeep
 .idea/workspace.xml
 /config
+.mcp.json

@@ -13,6 +13,7 @@ import org.springframework.web.socket.handler.TextWebSocketHandler;
 import java.nio.ByteBuffer;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Consumer;
 
 /**
  * 处理来自 Qt 前端的 STT 音频流 WebSocket 连接。
@@ -28,17 +29,33 @@ import java.util.concurrent.ConcurrentHashMap;
 @Slf4j
 public class SttStreamHandler extends TextWebSocketHandler {
 
+    /** 可注入的 proxy 工厂，用于测试中替换 sherpa-onnx 连接。 */
+    @FunctionalInterface
+    public interface ProxyFactory {
+        SttWebSocketProxy create(int port, ObjectMapper mapper,
+                                 Consumer<String> onResult, Consumer<String> onPartial,
+                                 Runnable onEnd, Consumer<Throwable> onError) throws Exception;
+    }
+
     private final SttConfig config;
     private final SttResultDispatcher resultDispatcher;
     private final ObjectMapper objectMapper;
+    private final ProxyFactory proxyFactory;
     private final Map<String, SttWebSocketProxy> sessions = new ConcurrentHashMap<>();
     private final Map<String, String> rpSessionIds = new ConcurrentHashMap<>();
     private final Map<String, String> characterNames = new ConcurrentHashMap<>();
 
     public SttStreamHandler(SttConfig config, SttResultDispatcher resultDispatcher, ObjectMapper objectMapper) {
+        this(config, resultDispatcher, objectMapper, SttWebSocketProxy::new);
+    }
+
+    /** 供测试使用，注入自定义 proxy 工厂。 */
+    SttStreamHandler(SttConfig config, SttResultDispatcher resultDispatcher, ObjectMapper objectMapper,
+                     ProxyFactory proxyFactory) {
         this.config = config;
         this.resultDispatcher = resultDispatcher;
         this.objectMapper = objectMapper;
+        this.proxyFactory = proxyFactory;
     }
 
     @Override
@@ -94,7 +111,7 @@ public class SttStreamHandler extends TextWebSocketHandler {
     private void initProxy(WebSocketSession session) {
         String sessionId = session.getId();
         try {
-            SttWebSocketProxy proxy = new SttWebSocketProxy(
+            SttWebSocketProxy proxy = proxyFactory.create(
                     config.serverPort(),
                     objectMapper,
                     finalText -> onFinalResult(session, finalText),

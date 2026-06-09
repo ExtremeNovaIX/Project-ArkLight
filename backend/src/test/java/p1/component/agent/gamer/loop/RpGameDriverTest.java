@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 import p1.component.agent.gamer.adapter.core.GameActionability;
 import p1.component.agent.gamer.bridge.GameBridgeService;
 import p1.component.agent.gamer.bridge.GameStateProbe;
+import p1.component.agent.gamer.trace.GamerDecisionTraceService;
 import p1.component.agent.interaction.InteractionCoordinator;
 import p1.component.agent.rp.game.control.RpGameActionExecutionException;
 import p1.component.agent.rp.game.control.RpGameTurnService;
@@ -60,7 +61,8 @@ class RpGameDriverTest {
                 new GameLoopProperties(),
                 new InteractionCoordinator(registry, new AssistantProperties()),
                 new GameLoopObservationBackoffService(),
-                new RpProactiveSessionRegistry());
+                new RpProactiveSessionRegistry(),
+                mock(GamerDecisionTraceService.class));
 
         try {
             driver.pollTick();
@@ -90,7 +92,8 @@ class RpGameDriverTest {
                 new GameLoopProperties(),
                 new InteractionCoordinator(registry, new AssistantProperties()),
                 new GameLoopObservationBackoffService(),
-                new RpProactiveSessionRegistry());
+                new RpProactiveSessionRegistry(),
+                mock(GamerDecisionTraceService.class));
 
         driver.pollTick();
         driver.pollTick();
@@ -120,7 +123,8 @@ class RpGameDriverTest {
                 new GameLoopProperties(),
                 new InteractionCoordinator(registry, new AssistantProperties()),
                 new GameLoopObservationBackoffService(),
-                new RpProactiveSessionRegistry());
+                new RpProactiveSessionRegistry(),
+                mock(GamerDecisionTraceService.class));
 
         driver.pollTick();
         driver.pollTick();
@@ -150,7 +154,8 @@ class RpGameDriverTest {
                 new GameLoopProperties(),
                 new InteractionCoordinator(registry, new AssistantProperties()),
                 new GameLoopObservationBackoffService(),
-                proactiveSessionRegistry);
+                proactiveSessionRegistry,
+                mock(GamerDecisionTraceService.class));
 
         driver.pollTick();
         proactiveSessionRegistry.observeUserSpeech("rp-session", "Nova", false);

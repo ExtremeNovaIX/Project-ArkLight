@@ -20,7 +20,7 @@ public class SttConfig {
 
     /** sherpa-onnx 可执行文件路径（相对于项目根目录） */
     public String executablePath() {
-        return "llm/sherpa-onnx/bin/sherpa-onnx-online-websocket-server.exe";
+        return "llm/sherpa-onnx/bin/stt_websocket_server.py";
     }
 
     /** tokens.txt 路径 */

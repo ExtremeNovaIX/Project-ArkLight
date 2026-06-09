@@ -71,7 +71,9 @@ public class RpGameTurnService {
                         rpSpeechTurnService.collect(
                                 session.getRpSessionId(),
                                 source,
-                                rpAgent.chatWithName(session.getRpSessionId(), messageName, userMessage, systemPrompt))));
+                                rpAgent.chatWithName(session.getRpSessionId(), messageName, userMessage, systemPrompt),
+                                session.getGameName(),
+                                session.getSessionId())));
         if (speech != null && !speech.isBlank()) {
             sessionRegistry.observeRpSpeech(session.getRpSessionId());
             liveMessageHub.publish(session.getRpSessionId(), source, speech, snapshot.shortMode());

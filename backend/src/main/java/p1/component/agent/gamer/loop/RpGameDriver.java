@@ -9,6 +9,7 @@ import p1.component.agent.gamer.adapter.core.GameActionability;
 import p1.component.agent.gamer.adapter.core.GameActionabilityStatus;
 import p1.component.agent.gamer.bridge.GameBridgeService;
 import p1.component.agent.gamer.bridge.GameStateProbe;
+import p1.component.agent.gamer.trace.GamerDecisionTraceService;
 import p1.component.agent.interaction.InteractionCoordinator;
 import p1.component.agent.rp.game.control.RpGameActionExecutionException;
 import p1.component.agent.rp.game.control.RpGameTurnService;
@@ -40,6 +41,7 @@ public class RpGameDriver {
     private final InteractionCoordinator interactionCoordinator;
     private final GameLoopObservationBackoffService observationBackoffService;
     private final RpProactiveSessionRegistry proactiveSessionRegistry;
+    private final GamerDecisionTraceService traceService;
     private final Map<String, ReentrantLock> sessionLocks = new ConcurrentHashMap<>();
     private final Map<String, SameStateObservation> sameStateObservations = new ConcurrentHashMap<>();
 
@@ -264,6 +266,7 @@ public class RpGameDriver {
         }
         ActiveGameSession session = registry.register(gameName, sessionId, rpSessionId);
         observationBackoffService.reset(session);
+        traceService.initSession(gameName, sessionId);
         return session;
     }
 
@@ -272,6 +275,7 @@ public class RpGameDriver {
         if (session != null) {
             clearSameStateObservation(session);
         }
+        traceService.writeSummary(gameName, sessionId);
         registry.unregister(gameName, sessionId);
     }
 
