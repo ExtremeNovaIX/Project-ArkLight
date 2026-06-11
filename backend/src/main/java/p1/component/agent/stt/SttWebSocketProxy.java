@@ -34,6 +34,7 @@ public class SttWebSocketProxy implements AutoCloseable {
     private final Consumer<String> onPartialResult;
     private final Runnable onStreamEnd;
     private final Consumer<Throwable> onError;
+    private volatile boolean endRequested;
 
     SttWebSocketProxy(int sttPort,
                       ObjectMapper objectMapper,
@@ -69,6 +70,7 @@ public class SttWebSocketProxy implements AutoCloseable {
 
     /** 通知流结束。 */
     public void endStream() {
+        endRequested = true;
         downstream.sendText("Done", true);
     }
 
@@ -83,7 +85,7 @@ public class SttWebSocketProxy implements AutoCloseable {
     private class DownstreamListener implements WebSocket.Listener {
 
         private final ObjectMapper objectMapper;
-        private final StringBuilder partialBuffer = new StringBuilder();
+        private String partialHypothesis = "";
 
         DownstreamListener(ObjectMapper objectMapper) {
             this.objectMapper = objectMapper;
@@ -102,17 +104,19 @@ public class SttWebSocketProxy implements AutoCloseable {
                 String text = node.path("text").asText("");
                 boolean isFinal = node.path("final").asBoolean(false);
 
-                if (!text.isEmpty()) {
-                    if (isFinal) {
-                        String accumulated = partialBuffer.isEmpty()
-                                ? text
-                                : partialBuffer + text;
-                        partialBuffer.setLength(0);
+                if (isFinal) {
+                    String accumulated = SttTranscriptAccumulator.completeTranscript(partialHypothesis, text);
+                    partialHypothesis = "";
+                    if (!accumulated.isBlank()) {
                         onResult.accept(accumulated);
-                    } else {
-                        partialBuffer.append(text);
-                        onPartialResult.accept(text);
                     }
+                    if (endRequested) {
+                        endRequested = false;
+                        onStreamEnd.run();
+                    }
+                } else if (!text.isEmpty()) {
+                    partialHypothesis = SttTranscriptAccumulator.normalizePartialHypothesis(text);
+                    onPartialResult.accept(partialHypothesis);
                 }
             } catch (Exception e) {
                 log.debug("[STT] 解析识别结果失败: {}", e.getMessage());

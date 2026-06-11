@@ -23,6 +23,19 @@ public class SttConfig {
         return "llm/sherpa-onnx/bin/stt_websocket_server.py";
     }
 
+    /** 运行 sherpa-onnx Python 脚本的解释器。 */
+    public String pythonExecutable() {
+        String fromProperty = System.getProperty("stt.python.executable");
+        if (fromProperty != null && !fromProperty.isBlank()) {
+            return fromProperty.trim();
+        }
+        String fromEnv = System.getenv("STT_PYTHON_EXECUTABLE");
+        if (fromEnv != null && !fromEnv.isBlank()) {
+            return fromEnv.trim();
+        }
+        return "python";
+    }
+
     /** tokens.txt 路径 */
     public String tokensPath() {
         return "llm/sherpa-onnx/models/zipformer-zh/tokens.txt";
@@ -71,6 +84,7 @@ public class SttConfig {
     /** 启动命令 */
     public List<String> runtimeCommand() {
         return List.of(
+                pythonExecutable(),
                 executablePath(),
                 "--port=" + serverPort(),
                 "--tokens=" + tokensPath(),

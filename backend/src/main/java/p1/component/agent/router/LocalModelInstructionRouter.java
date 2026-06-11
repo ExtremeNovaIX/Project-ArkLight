@@ -50,8 +50,9 @@ public class LocalModelInstructionRouter implements InstructionRouter {
         }
 
         try {
-            String responseBody = execute(request);
-            InstructionRouteDecision decision = parseDecision(responseBody, request.allowedIntents());
+            InstructionRouterTask task = resolveTask(request);
+            String responseBody = execute(request, task);
+            InstructionRouteDecision decision = parseDecision(responseBody, task.allowedIntents());
             log.info("[指令路由] 本地路由判断完成: scene={}, intent={}, confidence={}, instruction={}",
                     request.sceneId(), decision.normalizedIntent(), String.format("%.2f", decision.confidence()),
                     abbreviate(decision.instruction(), 120));
@@ -70,8 +71,8 @@ public class LocalModelInstructionRouter implements InstructionRouter {
      * @return 原始响应体
      * @throws Exception HTTP 或序列化失败
      */
-    private String execute(InstructionRouteRequest request) throws Exception {
-        String payload = objectMapper.writeValueAsString(buildPayload(request));
+    private String execute(InstructionRouteRequest request, InstructionRouterTask task) throws Exception {
+        String payload = objectMapper.writeValueAsString(buildPayload(request, task));
         HttpRequest.Builder builder = HttpRequest.newBuilder()
                 .uri(URI.create(modelConfig.endpointUrl()))
                 .timeout(Duration.ofMillis(Math.max(100L, modelConfig.timeoutMs())))
@@ -94,9 +95,7 @@ public class LocalModelInstructionRouter implements InstructionRouter {
      * @param request 路由请求
      * @return JSON 对象
      */
-    private ObjectNode buildPayload(InstructionRouteRequest request) {
-        InstructionRouterTask task = resolveTask(request);
-
+    private ObjectNode buildPayload(InstructionRouteRequest request, InstructionRouterTask task) {
         ObjectNode root = objectMapper.createObjectNode();
         root.put("model", modelConfig.modelName());
         root.put("temperature", modelConfig.temperature());

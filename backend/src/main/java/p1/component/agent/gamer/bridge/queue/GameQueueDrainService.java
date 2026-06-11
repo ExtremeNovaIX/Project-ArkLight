@@ -210,7 +210,7 @@ public class GameQueueDrainService {
         if (interruptService == null) {
             return;
         }
-        interruptService.peek(key).ifPresent(request -> {
+        interruptService.consume(key).ifPresent(request -> {
             throw new GameBridgeException("外部打断: " + request.instruction(), successful);
         });
     }

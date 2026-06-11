@@ -196,6 +196,57 @@ class SttStreamHandlerTest {
     }
 
     @Test
+    void shouldNotDispatchFinalResultWhenGameVoiceGateConsumesIt() throws Exception {
+        SttResultDispatcher dispatcher = mock(SttResultDispatcher.class);
+        SttGameIntentGate gameIntentGate = mock(SttGameIntentGate.class);
+        when(gameIntentGate.onFinal("s1", "rp-1", "等一下"))
+                .thenReturn(SttGameIntentGate.Result.consumed("WAIT", 0.93, "等一下", true));
+        WebSocketSession session = session("s1");
+
+        SttStreamHandler.ProxyFactory factory = (port, mapper, onResult, onPartial, onEnd, onError) -> {
+            onResult.accept("等一下");
+            return mock(SttWebSocketProxy.class);
+        };
+
+        SttStreamHandler handler = new SttStreamHandler(config, dispatcher, objectMapper, gameIntentGate, factory);
+        handler.handleTextMessage(session, new TextMessage("{\"rpSessionId\":\"rp-1\",\"characterName\":\"Nova\"}"));
+
+        verify(gameIntentGate).onFinal("s1", "rp-1", "等一下");
+        verify(dispatcher, never()).dispatch(any(), any(), any());
+    }
+
+    @Test
+    void debugOnlyShouldDryRunGateAndSkipRpDispatch() throws Exception {
+        SttResultDispatcher dispatcher = mock(SttResultDispatcher.class);
+        SttGameIntentGate gameIntentGate = mock(SttGameIntentGate.class);
+        when(gameIntentGate.onFinalDryRun("s1", "rp-1", "等一下"))
+                .thenReturn(SttGameIntentGate.Result.consumed(
+                        "WAIT", 0.93, "等一下", false, true, 42L, "dry-run-would-trigger"));
+        WebSocketSession session = session("s1");
+
+        SttStreamHandler.ProxyFactory factory = (port, mapper, onResult, onPartial, onEnd, onError) -> {
+            onResult.accept("等一下");
+            return mock(SttWebSocketProxy.class);
+        };
+
+        SttStreamHandler handler = new SttStreamHandler(config, dispatcher, objectMapper, gameIntentGate, factory);
+        handler.handleTextMessage(session, new TextMessage(
+                "{\"rpSessionId\":\"rp-1\",\"characterName\":\"Nova\",\"debugOnly\":true}"));
+
+        verify(gameIntentGate).onFinalDryRun("s1", "rp-1", "等一下");
+        verify(gameIntentGate, never()).onFinal("s1", "rp-1", "等一下");
+        verify(dispatcher, never()).dispatch(any(), any(), any());
+        verify(session, atLeastOnce()).sendMessage(argThat(msg -> {
+            if (msg instanceof TextMessage tm) {
+                return tm.getPayload().contains("\"type\":\"debug\"")
+                        && tm.getPayload().contains("\"intent\":\"WAIT\"")
+                        && tm.getPayload().contains("\"routeDurationMs\":42");
+            }
+            return false;
+        }));
+    }
+
+    @Test
     void shouldHandleTransportErrorAndCleanup() throws Exception {
         SttResultDispatcher dispatcher = mock(SttResultDispatcher.class);
         SttWebSocketProxy mockProxy = mock(SttWebSocketProxy.class);

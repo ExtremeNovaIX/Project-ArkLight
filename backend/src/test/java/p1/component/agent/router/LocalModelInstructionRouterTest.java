@@ -321,6 +321,37 @@ class LocalModelInstructionRouterTest {
     }
 
     @Test
+    void shouldUseRegisteredTaskAllowedIntentsWhenRoutingByTask() throws Exception {
+        startServer("""
+                {
+                  "choices": [
+                    {
+                      "message": {
+                        "content": "{\\"intent\\":\\"WAIT\\",\\"confidence\\":0.91,\\"instruction\\":\\"等一下\\",\\"reason\\":\\"等待\\"}"
+                      }
+                    }
+                  ]
+                }
+                """);
+        InstructionRouterTaskRegistry taskRegistry = new InstructionRouterTaskRegistry();
+        taskRegistry.register(new InstructionRouterTask(
+                "stt-game-control",
+                List.of("WAIT", "APPLY_INSTRUCTION", "READY", "CHAT"),
+                "识别 STT 游戏控制意图"));
+        LocalModelInstructionRouter router = createRouter(modelConfig(server.getAddress().getPort()), taskRegistry);
+
+        InstructionRouteDecision decision = router.route(InstructionRouteRequest.byTask(
+                "stt-game-control",
+                "stt-game-control",
+                "waiting=false",
+                "等一下"));
+
+        assertTrue(decision.available());
+        assertEquals("WAIT", decision.intent());
+        assertEquals("等一下", decision.instruction());
+    }
+
+    @Test
     void shouldReturnUnavailableWhenEndpointUnreachable() {
         LocalModelInstructionRouter router = createRouter(new InstructionRouterModelConfig() {
             @Override
@@ -414,6 +445,11 @@ class LocalModelInstructionRouterTest {
 
     private LocalModelInstructionRouter createRouter(InstructionRouterModelConfig config) {
         return new LocalModelInstructionRouter(config, new InstructionRouterTaskRegistry());
+    }
+
+    private LocalModelInstructionRouter createRouter(InstructionRouterModelConfig config,
+                                                     InstructionRouterTaskRegistry taskRegistry) {
+        return new LocalModelInstructionRouter(config, taskRegistry);
     }
 
     private InstructionRouterModelConfig modelConfig(int port) {

@@ -98,7 +98,7 @@ QString resolveExternalConfigFile() {
     const QString envConfigDir = qEnvironmentVariable("ARCLIGHT_CONFIG_DIR").trimmed();
     if (!envConfigDir.isEmpty()) {
         const QString candidate = QDir(envConfigDir).absoluteFilePath(QStringLiteral("application.yaml"));
-        if (QFileInfo::isRegularFile(candidate)) {
+        if (QFileInfo(candidate).isFile()) {
             return candidate;
         }
     }
@@ -109,7 +109,7 @@ QString resolveExternalConfigFile() {
         QDir dir(root);
         for (int depth = 0; depth < 6; ++depth) {
             const QString candidate = dir.absoluteFilePath(QStringLiteral("config/application.yaml"));
-            if (QFileInfo::isRegularFile(candidate)) {
+            if (QFileInfo(candidate).isFile()) {
                 return candidate;
             }
             if (!dir.cdUp()) {
@@ -216,6 +216,10 @@ int FrontendSettings::responseDelayMs() const {
     return m_responseDelayMs;
 }
 
+bool FrontendSettings::shortModeEnabled() const {
+    return m_shortModeEnabled;
+}
+
 int FrontendSettings::moteCount() const {
     return m_moteCount;
 }
@@ -226,6 +230,22 @@ int FrontendSettings::uiScalePercent() const {
 
 QString FrontendSettings::backendBaseUrl() const {
     return m_backendBaseUrl;
+}
+
+QString FrontendSettings::gameName() const {
+    return m_gameName;
+}
+
+QString FrontendSettings::gameSessionId() const {
+    return m_gameSessionId;
+}
+
+QString FrontendSettings::gameRpSessionId() const {
+    return m_gameRpSessionId;
+}
+
+bool FrontendSettings::voiceDebugEnabled() const {
+    return m_voiceDebugEnabled;
 }
 
 void FrontendSettings::reset() {
@@ -240,9 +260,14 @@ void FrontendSettings::reset() {
     m_bootAnimationEnabled = true;
     m_bootDurationMs = 1200;
     m_responseDelayMs = 800;
+    m_shortModeEnabled = true;
     m_moteCount = 28;
     m_uiScalePercent = 100;
     m_backendBaseUrl = QStringLiteral("http://localhost:8080");
+    m_gameName = QStringLiteral("STS2MCP");
+    m_gameSessionId.clear();
+    m_gameRpSessionId.clear();
+    m_voiceDebugEnabled = false;
     loadExternalDefaults();
     emit settingsChanged();
 }
@@ -289,6 +314,25 @@ void FrontendSettings::loadExternalDefaults() {
         QStringLiteral("frontend.qt.settings.boot-animation-enabled"),
         QStringLiteral("frontend.settings.boot-animation-enabled")
     });
+    assignBoolFromConfig(m_shortModeEnabled, config, {
+        QStringLiteral("frontend.qt.settings.short-mode-enabled"),
+        QStringLiteral("frontend.settings.short-mode-enabled")
+    });
+    assignBoolFromConfig(m_voiceDebugEnabled, config, {
+        QStringLiteral("frontend.qt.settings.voice-debug-enabled")
+    });
+    assignStringFromConfig(m_gameName, config, {
+        QStringLiteral("frontend.qt.settings.game-name"),
+        QStringLiteral("frontend.settings.game-name")
+    });
+    assignStringFromConfig(m_gameSessionId, config, {
+        QStringLiteral("frontend.qt.settings.game-session-id"),
+        QStringLiteral("frontend.settings.game-session-id")
+    });
+    assignStringFromConfig(m_gameRpSessionId, config, {
+        QStringLiteral("frontend.qt.settings.game-rp-session-id"),
+        QStringLiteral("frontend.settings.game-rp-session-id")
+    });
     assignIntFromConfig(m_bootDurationMs, config, {
         QStringLiteral("frontend.qt.settings.boot-duration-ms"),
         QStringLiteral("frontend.settings.boot-duration-ms")
@@ -318,9 +362,14 @@ void FrontendSettings::save() {
     settings.setValue(QStringLiteral("bootAnimationEnabled"), m_bootAnimationEnabled);
     settings.setValue(QStringLiteral("bootDurationMs"), m_bootDurationMs);
     settings.setValue(QStringLiteral("responseDelayMs"), m_responseDelayMs);
+    settings.setValue(QStringLiteral("shortModeEnabled"), m_shortModeEnabled);
     settings.setValue(QStringLiteral("moteCount"), m_moteCount);
     settings.setValue(QStringLiteral("uiScalePercent"), m_uiScalePercent);
     settings.setValue(QStringLiteral("backendBaseUrl"), m_backendBaseUrl);
+    settings.setValue(QStringLiteral("gameName"), m_gameName);
+    settings.setValue(QStringLiteral("gameSessionId"), m_gameSessionId);
+    settings.setValue(QStringLiteral("gameRpSessionId"), m_gameRpSessionId);
+    settings.setValue(QStringLiteral("voiceDebugEnabled"), m_voiceDebugEnabled);
 }
 
 void FrontendSettings::setLanguageId(const QString &value) {
@@ -414,6 +463,14 @@ void FrontendSettings::setResponseDelayMs(int value) {
     emit settingsChanged();
 }
 
+void FrontendSettings::setShortModeEnabled(bool value) {
+    if (m_shortModeEnabled == value) {
+        return;
+    }
+    m_shortModeEnabled = value;
+    emit settingsChanged();
+}
+
 void FrontendSettings::setMoteCount(int value) {
     const int normalized = clampValue(value, 0, 120);
     if (m_moteCount == normalized) {
@@ -449,6 +506,41 @@ void FrontendSettings::setBackendBaseUrl(const QString &value) {
     emit settingsChanged();
 }
 
+void FrontendSettings::setGameName(const QString &value) {
+    const QString normalized = value.trimmed().isEmpty() ? QStringLiteral("STS2MCP") : value.trimmed();
+    if (m_gameName == normalized) {
+        return;
+    }
+    m_gameName = normalized;
+    emit settingsChanged();
+}
+
+void FrontendSettings::setGameSessionId(const QString &value) {
+    const QString normalized = value.trimmed();
+    if (m_gameSessionId == normalized) {
+        return;
+    }
+    m_gameSessionId = normalized;
+    emit settingsChanged();
+}
+
+void FrontendSettings::setGameRpSessionId(const QString &value) {
+    const QString normalized = value.trimmed();
+    if (m_gameRpSessionId == normalized) {
+        return;
+    }
+    m_gameRpSessionId = normalized;
+    emit settingsChanged();
+}
+
+void FrontendSettings::setVoiceDebugEnabled(bool value) {
+    if (m_voiceDebugEnabled == value) {
+        return;
+    }
+    m_voiceDebugEnabled = value;
+    emit settingsChanged();
+}
+
 void FrontendSettings::load() {
     // 通过 setter 读取配置，这样读取到的旧值也会走同一套默认值和范围校验逻辑。
     // Load through setters so old saved values still pass through defaulting and validation logic.
@@ -462,7 +554,12 @@ void FrontendSettings::load() {
     setBootAnimationEnabled(settings.value(QStringLiteral("bootAnimationEnabled"), m_bootAnimationEnabled).toBool());
     setBootDurationMs(settings.value(QStringLiteral("bootDurationMs"), m_bootDurationMs).toInt());
     setResponseDelayMs(settings.value(QStringLiteral("responseDelayMs"), m_responseDelayMs).toInt());
+    setShortModeEnabled(settings.value(QStringLiteral("shortModeEnabled"), m_shortModeEnabled).toBool());
     setMoteCount(settings.value(QStringLiteral("moteCount"), m_moteCount).toInt());
     setUiScalePercent(settings.value(QStringLiteral("uiScalePercent"), m_uiScalePercent).toInt());
     setBackendBaseUrl(settings.value(QStringLiteral("backendBaseUrl"), m_backendBaseUrl).toString());
+    setGameName(settings.value(QStringLiteral("gameName"), m_gameName).toString());
+    setGameSessionId(settings.value(QStringLiteral("gameSessionId"), m_gameSessionId).toString());
+    setGameRpSessionId(settings.value(QStringLiteral("gameRpSessionId"), m_gameRpSessionId).toString());
+    setVoiceDebugEnabled(settings.value(QStringLiteral("voiceDebugEnabled"), m_voiceDebugEnabled).toBool());
 }

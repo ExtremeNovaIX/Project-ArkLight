@@ -29,7 +29,7 @@ class ChatClient final : public QObject {
     // 打开 RP 主动消息的 SSE 订阅；重复调用会替换旧连接。
     // Open the RP proactive-message SSE stream; repeated calls replace the previous stream.
     void openLiveMessages(const QString &baseUrl, const QString &sessionId,
-                          const QString &characterName);
+                          const QString &characterName, bool shortMode);
 
     void startStoryReplay(const QString &baseUrl, const QString &sessionId,
                           const QString &characterName, int targetLength);

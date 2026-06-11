@@ -379,7 +379,24 @@ class GameOperationQueueProcessorTest {
 
         assertTrue(error.feedback().contains("已执行 1 条操作"));
         assertTrue(error.feedback().contains("外部打断"));
-        assertTrue(interruptService.peek(memoryId).orElseThrow().instruction().contains("用户要求改计划"));
+        assertTrue(interruptService.peek(memoryId).isEmpty());
+
+        String result = processor.enqueueAndDrain(
+                "test-game",
+                memoryId,
+                new StaticStateAdapter(playState),
+                config(),
+                tools(),
+                """
+                        {
+                          "operations":[
+                            {"tool":"good_tool","args":{}}
+                          ]
+                        }
+                        """
+        );
+
+        assertTrue(result.contains("已成功执行 1/1 条操作"));
     }
 
     @Test

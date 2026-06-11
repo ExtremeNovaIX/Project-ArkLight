@@ -182,7 +182,8 @@ void ChatClient::sendTypingActivity(const QString &baseUrl, const QString &sessi
 
 void ChatClient::openLiveMessages(const QString &baseUrl,
                                   const QString &sessionId,
-                                  const QString &characterName) {
+                                  const QString &characterName,
+                                  bool shortMode) {
     QString normalizedBaseUrl = baseUrl.trimmed();
     while (normalizedBaseUrl.endsWith('/')) {
         normalizedBaseUrl.chop(1);
@@ -205,7 +206,7 @@ void ChatClient::openLiveMessages(const QString &baseUrl,
     QUrlQuery query;
     query.addQueryItem(QStringLiteral("sessionId"), sessionId);
     query.addQueryItem(QStringLiteral("characterName"), characterName);
-    query.addQueryItem(QStringLiteral("shortMode"), QStringLiteral("true"));
+    query.addQueryItem(QStringLiteral("shortMode"), shortMode ? QStringLiteral("true") : QStringLiteral("false"));
     url.setQuery(query);
 
     QNetworkRequest request(url);

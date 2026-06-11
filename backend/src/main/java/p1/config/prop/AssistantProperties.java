@@ -271,6 +271,30 @@ public class AssistantProperties {
          * 游戏等待调度配置。
          */
         private WaitConfig wait = new WaitConfig();
+        /**
+         * STT 游戏语音意图门控配置。
+         */
+        private VoiceGateConfig voiceGate = new VoiceGateConfig();
+    }
+
+    @Data
+    public static class VoiceGateConfig {
+        /**
+         * partial 转写触发一次路由判断的最小间隔，单位毫秒。
+         */
+        private long routeIntervalMs = 800;
+        /**
+         * 非 CHAT 意图触发游戏副作用所需的最小置信度。
+         */
+        private double confidenceThreshold = 0.85;
+        /**
+         * 同一语音意图重复触发的冷却时间，单位毫秒。
+         */
+        private long duplicateCooldownMs = 3000;
+        /**
+         * partial 文本至少变化多少个字符才重新路由。
+         */
+        private int minChangedChars = 2;
     }
 
     @Data

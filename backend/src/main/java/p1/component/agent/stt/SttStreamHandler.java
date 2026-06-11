@@ -11,6 +11,8 @@ import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 
 import java.nio.ByteBuffer;
+import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
@@ -40,21 +42,40 @@ public class SttStreamHandler extends TextWebSocketHandler {
     private final SttConfig config;
     private final SttResultDispatcher resultDispatcher;
     private final ObjectMapper objectMapper;
+    private final SttGameIntentGate gameIntentGate;
     private final ProxyFactory proxyFactory;
     private final Map<String, SttWebSocketProxy> sessions = new ConcurrentHashMap<>();
     private final Map<String, String> rpSessionIds = new ConcurrentHashMap<>();
     private final Map<String, String> characterNames = new ConcurrentHashMap<>();
+    private final Map<String, Boolean> debugOnlySessions = new ConcurrentHashMap<>();
 
     public SttStreamHandler(SttConfig config, SttResultDispatcher resultDispatcher, ObjectMapper objectMapper) {
-        this(config, resultDispatcher, objectMapper, SttWebSocketProxy::new);
+        this(config, resultDispatcher, objectMapper, null, SttWebSocketProxy::new);
+    }
+
+    public SttStreamHandler(SttConfig config,
+                            SttResultDispatcher resultDispatcher,
+                            ObjectMapper objectMapper,
+                            SttGameIntentGate gameIntentGate) {
+        this(config, resultDispatcher, objectMapper, gameIntentGate, SttWebSocketProxy::new);
     }
 
     /** 供测试使用，注入自定义 proxy 工厂。 */
     SttStreamHandler(SttConfig config, SttResultDispatcher resultDispatcher, ObjectMapper objectMapper,
                      ProxyFactory proxyFactory) {
+        this(config, resultDispatcher, objectMapper, null, proxyFactory);
+    }
+
+    /** 供测试使用，注入自定义 proxy 工厂。 */
+    SttStreamHandler(SttConfig config,
+                     SttResultDispatcher resultDispatcher,
+                     ObjectMapper objectMapper,
+                     SttGameIntentGate gameIntentGate,
+                     ProxyFactory proxyFactory) {
         this.config = config;
         this.resultDispatcher = resultDispatcher;
         this.objectMapper = objectMapper;
+        this.gameIntentGate = gameIntentGate;
         this.proxyFactory = proxyFactory;
     }
 
@@ -100,10 +121,12 @@ public class SttStreamHandler extends TextWebSocketHandler {
             JsonNode configNode = objectMapper.readTree(text);
             rpSessionIds.put(sessionId, configNode.path("rpSessionId").asText(sessionId));
             characterNames.put(sessionId, configNode.path("characterName").asText(""));
+            debugOnlySessions.put(sessionId, configNode.path("debugOnly").asBoolean(false));
         } catch (JsonProcessingException e) {
             log.debug("[STT] 无法解析配置 JSON，使用默认值: session={}", sessionId);
             rpSessionIds.put(sessionId, sessionId);
             characterNames.put(sessionId, "");
+            debugOnlySessions.put(sessionId, false);
         }
         initProxy(session);
     }
@@ -150,34 +173,87 @@ public class SttStreamHandler extends TextWebSocketHandler {
         }
         rpSessionIds.remove(sessionId);
         characterNames.remove(sessionId);
+        debugOnlySessions.remove(sessionId);
+        if (gameIntentGate != null) {
+            gameIntentGate.cleanup(sessionId);
+        }
     }
 
     private void onFinalResult(WebSocketSession session, String text) {
         String rpSessionId = rpSessionIds.getOrDefault(session.getId(), session.getId());
         String characterName = characterNames.getOrDefault(session.getId(), "");
-        try {
-            String json = objectMapper.writeValueAsString(Map.of(
-                    "type", "result",
-                    "text", text,
-                    "final", true
-            ));
-            session.sendMessage(new TextMessage(json));
-        } catch (Exception e) {
-            log.warn("[STT] 无法发送最终结果: {}", e.getMessage());
+        boolean debugOnly = debugOnlySessions.getOrDefault(session.getId(), false);
+        sendResultMessage(session, text, true);
+        SttGameIntentGate.Result gateResult = gameIntentGate == null
+                ? SttGameIntentGate.Result.pass()
+                : (debugOnly
+                ? gameIntentGate.onFinalDryRun(session.getId(), rpSessionId, text)
+                : gameIntentGate.onFinal(session.getId(), rpSessionId, text));
+        if (debugOnly) {
+            sendDebugMessage(session, text, true, gateResult);
+            return;
         }
-        resultDispatcher.dispatch(rpSessionId, characterName, text);
+        if (!gateResult.consumed()) {
+            resultDispatcher.dispatch(rpSessionId, characterName, text);
+        }
     }
 
     private void onPartialResult(WebSocketSession session, String text) {
+        sendResultMessage(session, text, false);
+        boolean debugOnly = debugOnlySessions.getOrDefault(session.getId(), false);
+        if (debugOnly) {
+            String rpSessionId = rpSessionIds.getOrDefault(session.getId(), session.getId());
+            SttGameIntentGate.Result gateResult = gameIntentGate == null
+                    ? SttGameIntentGate.Result.pass()
+                    : gameIntentGate.onPartialDryRun(session.getId(), rpSessionId, text);
+            sendDebugMessage(session, text, false, gateResult);
+            return;
+        }
+        if (gameIntentGate != null) {
+            String rpSessionId = rpSessionIds.getOrDefault(session.getId(), session.getId());
+            gameIntentGate.onPartial(session.getId(), rpSessionId, text);
+        }
+    }
+
+    private void sendResultMessage(WebSocketSession session, String text, boolean finalResult) {
         try {
             String json = objectMapper.writeValueAsString(Map.of(
                     "type", "result",
                     "text", text,
-                    "final", false
+                    "final", finalResult
             ));
             session.sendMessage(new TextMessage(json));
         } catch (Exception e) {
-            log.debug("[STT] 无法发送部分结果: {}", e.getMessage());
+            if (finalResult) {
+                log.warn("[STT] 无法发送最终结果: {}", e.getMessage());
+            } else {
+                log.debug("[STT] 无法发送部分结果: {}", e.getMessage());
+            }
+        }
+    }
+
+    private void sendDebugMessage(WebSocketSession session,
+                                  String text,
+                                  boolean finalResult,
+                                  SttGameIntentGate.Result gateResult) {
+        try {
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("type", "debug");
+            payload.put("stream", "stt-game-intent");
+            payload.put("receivedAt", Instant.now().toString());
+            payload.put("text", text);
+            payload.put("final", finalResult);
+            payload.put("intent", gateResult.intent());
+            payload.put("confidence", gateResult.confidence());
+            payload.put("instruction", gateResult.instruction());
+            payload.put("consumed", gateResult.consumed());
+            payload.put("triggered", gateResult.triggered());
+            payload.put("routed", gateResult.routed());
+            payload.put("routeDurationMs", gateResult.routeDurationMs());
+            payload.put("reason", gateResult.reason());
+            session.sendMessage(new TextMessage(objectMapper.writeValueAsString(payload)));
+        } catch (Exception e) {
+            log.debug("[STT] 无法发送调试事件: {}", e.getMessage());
         }
     }
 

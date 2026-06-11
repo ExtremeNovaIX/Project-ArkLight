@@ -128,7 +128,7 @@ void ChatSessionController::sendMessage(const QString &content) {
         trimmed,
         m_settings->sessionId(),
         m_settings->characterName(),
-        true);
+        m_settings->shortModeEnabled());
 }
 
 void ChatSessionController::reportTypingActivity() {
@@ -179,7 +179,8 @@ void ChatSessionController::refreshLiveMessages() {
     m_chatClient.openLiveMessages(
         m_settings->backendBaseUrl(),
         m_settings->sessionId(),
-        m_settings->characterName());
+        m_settings->characterName(),
+        m_settings->shortModeEnabled());
 }
 
 void ChatSessionController::appendLocalMessage(const QString &role, const QString &content, const QString &emotion) {

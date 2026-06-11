@@ -83,7 +83,12 @@ public class SttServerManager {
                 builder.directory(Path.of(config.runtimeWorkingDirectory()).toFile());
             }
             builder.redirectErrorStream(true);
-            builder.redirectOutput(ProcessBuilder.Redirect.DISCARD);
+            Path logFile = Path.of(config.logFilePath()).toAbsolutePath().normalize();
+            Path logParent = logFile.getParent();
+            if (logParent != null) {
+                Files.createDirectories(logParent);
+            }
+            builder.redirectOutput(ProcessBuilder.Redirect.appendTo(logFile.toFile()));
             process = builder.start();
             restartCount++;
             log.info("[STT] sherpa-onnx 进程已启动: port={}, modelType={}, restartCount={}",

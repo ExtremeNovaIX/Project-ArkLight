@@ -20,10 +20,11 @@ public class SttWebSocketConfig implements WebSocketConfigurer {
     private final SttConfig config;
     private final SttResultDispatcher resultDispatcher;
     private final ObjectMapper objectMapper;
+    private final SttGameIntentGate gameIntentGate;
 
     @Override
     public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
-        registry.addHandler(new SttStreamHandler(config, resultDispatcher, objectMapper), "/stt/stream")
+        registry.addHandler(new SttStreamHandler(config, resultDispatcher, objectMapper, gameIntentGate), "/stt/stream")
                 .setAllowedOrigins("*");
     }
 }

@@ -19,9 +19,14 @@ class FrontendSettings final : public QObject {
     Q_PROPERTY(bool bootAnimationEnabled READ bootAnimationEnabled WRITE setBootAnimationEnabled NOTIFY settingsChanged)
     Q_PROPERTY(int bootDurationMs READ bootDurationMs WRITE setBootDurationMs NOTIFY settingsChanged)
     Q_PROPERTY(int responseDelayMs READ responseDelayMs WRITE setResponseDelayMs NOTIFY settingsChanged)
+    Q_PROPERTY(bool shortModeEnabled READ shortModeEnabled WRITE setShortModeEnabled NOTIFY settingsChanged)
     Q_PROPERTY(int moteCount READ moteCount WRITE setMoteCount NOTIFY settingsChanged)
     Q_PROPERTY(int uiScalePercent READ uiScalePercent WRITE setUiScalePercent NOTIFY settingsChanged)
     Q_PROPERTY(QString backendBaseUrl READ backendBaseUrl WRITE setBackendBaseUrl NOTIFY settingsChanged)
+    Q_PROPERTY(QString gameName READ gameName WRITE setGameName NOTIFY settingsChanged)
+    Q_PROPERTY(QString gameSessionId READ gameSessionId WRITE setGameSessionId NOTIFY settingsChanged)
+    Q_PROPERTY(QString gameRpSessionId READ gameRpSessionId WRITE setGameRpSessionId NOTIFY settingsChanged)
+    Q_PROPERTY(bool voiceDebugEnabled READ voiceDebugEnabled WRITE setVoiceDebugEnabled NOTIFY settingsChanged)
 
 public:
     explicit FrontendSettings(QObject *parent = nullptr);
@@ -37,9 +42,14 @@ public:
     bool bootAnimationEnabled() const;
     int bootDurationMs() const;
     int responseDelayMs() const;
+    bool shortModeEnabled() const;
     int moteCount() const;
     int uiScalePercent() const;
     QString backendBaseUrl() const;
+    QString gameName() const;
+    QString gameSessionId() const;
+    QString gameRpSessionId() const;
+    bool voiceDebugEnabled() const;
 
     // QML 可调用的方法：重置默认值和写入本机持久化配置。
     // Methods callable from QML: reset defaults and persist settings locally.
@@ -58,9 +68,14 @@ public slots:
     void setBootAnimationEnabled(bool value);
     void setBootDurationMs(int value);
     void setResponseDelayMs(int value);
+    void setShortModeEnabled(bool value);
     void setMoteCount(int value);
     void setUiScalePercent(int value);
     void setBackendBaseUrl(const QString &value);
+    void setGameName(const QString &value);
+    void setGameSessionId(const QString &value);
+    void setGameRpSessionId(const QString &value);
+    void setVoiceDebugEnabled(bool value);
 
 signals:
     // 任何设置变化时发出；QML 绑定依赖它刷新界面。
@@ -86,7 +101,12 @@ private:
     bool m_bootAnimationEnabled = true;
     int m_bootDurationMs = 1200;
     int m_responseDelayMs = 800;
+    bool m_shortModeEnabled = true;
     int m_moteCount = 28;
     int m_uiScalePercent = 100;
     QString m_backendBaseUrl;
+    QString m_gameName;
+    QString m_gameSessionId;
+    QString m_gameRpSessionId;
+    bool m_voiceDebugEnabled = false;
 };
