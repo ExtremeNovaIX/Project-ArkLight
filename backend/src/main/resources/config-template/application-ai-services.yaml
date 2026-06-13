@@ -1,6 +1,5 @@
 assistant:
   model-services:
-    # router 不在这里配置；它优先使用本地 instruction-router sidecar，失败时降级到 checker 轻模型。
     rp: heavy
     parser: light
     checker: light

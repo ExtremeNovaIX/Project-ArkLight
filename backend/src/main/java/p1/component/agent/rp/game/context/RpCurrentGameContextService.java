@@ -50,8 +50,9 @@ public class RpCurrentGameContextService {
                     new ToolProviderRequest(memoryId, UserMessage.from("rp game state context")));
 
             // RP 只读取当前局面。上一批队列结果含有校验、中断和工具细节，不进入人格侧上下文。
-            GameStateSnapshot state = adapter.fetchState(new GameAdapterContext(gameName, memoryId, tools, config));
-            String actionSummary = adapter.renderAvailableOperationSummary(tools, config, state);
+            GameAdapterContext context = new GameAdapterContext(gameName, memoryId, tools, config);
+            GameStateSnapshot state = adapter.fetchState(context);
+            String actionSummary = adapter.renderAvailableOperationSummary(context, state);
             return render(state, actionSummary);
         } catch (Exception e) {
             log.warn("[RP游戏状态] 获取当前游戏状态失败: game={}, session={}, reason={}",

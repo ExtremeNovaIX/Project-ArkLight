@@ -131,16 +131,6 @@ void ChatSessionController::sendMessage(const QString &content) {
         m_settings->shortModeEnabled());
 }
 
-void ChatSessionController::reportTypingActivity() {
-    // 输入变化不应进入聊天记忆；这里只上报一个短期交互占用心跳。
-    if (m_settings == nullptr) {
-        return;
-    }
-    m_chatClient.sendTypingActivity(
-        m_settings->backendBaseUrl(),
-        m_settings->sessionId());
-}
-
 void ChatSessionController::startStoryReplay() {
     if (m_busy) {
         return;
@@ -176,11 +166,34 @@ void ChatSessionController::refreshLiveMessages() {
     if (m_settings == nullptr) {
         return;
     }
+
+    QString baseUrl = m_settings->backendBaseUrl().trimmed();
+    while (baseUrl.endsWith('/')) {
+        baseUrl.chop(1);
+    }
+    const QString sessionId = m_settings->sessionId();
+    const QString characterName = m_settings->characterName();
+    const bool shortModeEnabled = m_settings->shortModeEnabled();
+
+    if (m_liveMessagesOpened
+        && m_liveBaseUrl == baseUrl
+        && m_liveSessionId == sessionId
+        && m_liveCharacterName == characterName
+        && m_liveShortModeEnabled == shortModeEnabled) {
+        return;
+    }
+
+    m_liveBaseUrl = baseUrl;
+    m_liveSessionId = sessionId;
+    m_liveCharacterName = characterName;
+    m_liveShortModeEnabled = shortModeEnabled;
+    m_liveMessagesOpened = true;
+
     m_chatClient.openLiveMessages(
-        m_settings->backendBaseUrl(),
-        m_settings->sessionId(),
-        m_settings->characterName(),
-        m_settings->shortModeEnabled());
+        baseUrl,
+        sessionId,
+        characterName,
+        shortModeEnabled);
 }
 
 void ChatSessionController::appendLocalMessage(const QString &role, const QString &content, const QString &emotion) {

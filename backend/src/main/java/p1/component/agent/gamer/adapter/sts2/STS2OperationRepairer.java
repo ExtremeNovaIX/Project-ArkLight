@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import lombok.extern.slf4j.Slf4j;
+import p1.component.agent.gamer.adapter.core.GameAdapterContext;
 import p1.component.agent.gamer.adapter.core.GameBridgeException;
 import p1.component.agent.gamer.adapter.core.GameStateSnapshot;
 import p1.component.agent.gamer.adapter.core.QueuedGameOperation;
@@ -24,14 +25,14 @@ import java.util.Set;
 public class STS2OperationRepairer {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
-    private final ModePrefixResolver modePrefixResolver;
+    private final STS2ModeDetector modeDetector;
 
-    public STS2OperationRepairer(ModePrefixResolver modePrefixResolver) {
-        this.modePrefixResolver = modePrefixResolver;
+    public STS2OperationRepairer(STS2ModeDetector modeDetector) {
+        this.modeDetector = modeDetector;
     }
 
-    public ToolExecutionRequest repairBeforeExecute(QueuedGameOperation operation, GameStateSnapshot currentState) {
-        operation = repairOperationModePrefix(operation, currentState);
+    public ToolExecutionRequest repairBeforeExecute(GameAdapterContext context, QueuedGameOperation operation, GameStateSnapshot currentState) {
+        operation = repairOperationModePrefix(context, operation, currentState);
         rejectStaleMenuOperation(operation, currentState);
         if (isCombatSelectCard(operation.request().name())) {
             return repairCombatSelectCard(operation, currentState);
@@ -189,9 +190,9 @@ public class STS2OperationRepairer {
                 + renderMapNodeCandidates(candidates));
     }
 
-    private QueuedGameOperation repairOperationModePrefix(QueuedGameOperation operation, GameStateSnapshot currentState) {
+    private QueuedGameOperation repairOperationModePrefix(GameAdapterContext context, QueuedGameOperation operation, GameStateSnapshot currentState) {
         String originalName = operation.request().name();
-        String repairedName = resolveModeAwareOperationName(originalName, currentState);
+        String repairedName = resolveModeAwareOperationName(context, originalName, currentState);
         if (safeEquals(originalName, repairedName)) {
             return operation;
         }
@@ -202,11 +203,11 @@ public class STS2OperationRepairer {
         return operation.withRequest(repairedRequest);
     }
 
-    private String resolveModeAwareOperationName(String toolName, GameStateSnapshot currentState) {
+    private String resolveModeAwareOperationName(GameAdapterContext context, String toolName, GameStateSnapshot currentState) {
         if (toolName == null || toolName.isBlank()) {
             return toolName;
         }
-        String modePrefix = modePrefixResolver.resolve(currentState);
+        String modePrefix = modeDetector.modePrefix(context, currentState);
         String baseName = baseToolName(toolName);
         if (STS2OperationMetadata.MP_PREFIX.equals(modePrefix)
                 && !toolName.startsWith(STS2OperationMetadata.MP_PREFIX)
@@ -762,10 +763,6 @@ public class STS2OperationRepairer {
             }
         }
         return "";
-    }
-
-    public interface ModePrefixResolver {
-        String resolve(GameStateSnapshot currentState);
     }
 
     private record OptionCandidate(int index, String label) {

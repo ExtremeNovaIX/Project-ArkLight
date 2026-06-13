@@ -95,6 +95,33 @@ public class RpProactiveSessionRegistry {
     }
 
     /**
+     * 记录 RP 会话的可复用上下文，但不把它标记为在线订阅。
+     *
+     * @param sessionId     RP 会话 id
+     * @param characterName 当前角色名
+     * @param shortMode     当前显示短句模式；缺省时不覆盖已有值
+     */
+    public void rememberSessionContext(String sessionId, String characterName, Boolean shortMode) {
+        SessionState state = state(sessionId);
+        state.updateCharacter(characterName);
+        state.updateShortMode(shortMode);
+    }
+
+    /**
+     * 查询已经记录过角色上下文的 RP 会话快照，不要求前端 live 订阅仍在线。
+     *
+     * @param sessionId RP 会话 id
+     * @return 已知 RP 会话快照
+     */
+    public Optional<SessionSnapshot> findKnown(String sessionId) {
+        SessionState state = sessions.get(normalizeSessionId(sessionId));
+        if (state == null || state.characterName == null || state.characterName.isBlank()) {
+            return Optional.empty();
+        }
+        return Optional.of(state.snapshot());
+    }
+
+    /**
      * 查询可用于主动发言的在线会话快照。
      *
      * @param sessionId RP 会话 id
@@ -202,8 +229,8 @@ public class RpProactiveSessionRegistry {
         /**
          * 更新最近说话时间。
          */
-        private void touchSpeech() {
-            lastSpeechAt = Instant.now();
+        private synchronized void touchSpeech() {
+            lastSpeechAt = nextSpeechInstant();
         }
 
         /**
@@ -211,12 +238,27 @@ public class RpProactiveSessionRegistry {
          *
          * @param nextShortMode 本次请求使用的短句模式
          */
-        private void observeUserSpeech(boolean nextShortMode) {
-            Instant now = Instant.now();
+        private synchronized void observeUserSpeech(boolean nextShortMode) {
+            Instant now = nextSpeechInstant();
             lastSpeechAt = now;
             lastUserSpeechAt = now;
             shortMode = nextShortMode;
             nonGameIdleSpeechCount.set(0);
+        }
+
+        /**
+         * 同一会话内的发言时间必须严格递增，否则低精度系统时钟会让相邻用户输入被当成同一 tick。
+         */
+        private Instant nextSpeechInstant() {
+            Instant now = Instant.now();
+            Instant previous = lastSpeechAt;
+            if (lastUserSpeechAt != null && (previous == null || lastUserSpeechAt.isAfter(previous))) {
+                previous = lastUserSpeechAt;
+            }
+            if (previous != null && !now.isAfter(previous)) {
+                return previous.plusNanos(1);
+            }
+            return now;
         }
 
         /**
@@ -242,9 +284,9 @@ public class RpProactiveSessionRegistry {
          *
          * @param firstOnlineSubscriber true 表示当前会话刚从离线恢复
          */
-        private void ensureSpeechClockStarted(boolean firstOnlineSubscriber) {
+        private synchronized void ensureSpeechClockStarted(boolean firstOnlineSubscriber) {
             if (firstOnlineSubscriber || lastSpeechAt == null) {
-                lastSpeechAt = Instant.now();
+                lastSpeechAt = nextSpeechInstant();
             }
         }
 

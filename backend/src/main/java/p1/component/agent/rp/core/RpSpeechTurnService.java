@@ -9,7 +9,6 @@ import dev.langchain4j.service.TokenStream;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import p1.component.agent.interaction.InteractionCoordinator;
 import p1.component.agent.gamer.trace.GamerDecisionTraceService;
 import p1.component.agent.rp.game.control.RpControlBlock;
 import p1.component.agent.rp.game.control.RpGameControlTurnLockService;
@@ -40,7 +39,6 @@ public class RpSpeechTurnService {
 
     private static final long GAME_ACTION_SPEECH_COOLDOWN_MS = 6000L;
 
-    private final InteractionCoordinator interactionCoordinator;
     private final AssistantProperties assistantProperties;
     private final TtsSpeechService ttsSpeechService;
     private final RpGameControlBlockExecutor gameControlBlockExecutor;
@@ -92,28 +90,18 @@ public class RpSpeechTurnService {
         private final boolean gameMode;
         private final StreamingJsonInstructionParser controlParser =
                 new StreamingJsonInstructionParser(objectMapper, 4096);
-        private volatile InteractionCoordinator.InteractionLease speechLease;
+        private final GamePlanCapture planCapture;
         private volatile TtsSpeechSession ttsSession;
         private volatile Throwable error;
         private volatile boolean ttsStopAfterCurrentChunk;
         private volatile int completedActionBlocks;
-        private volatile boolean askRegistered;
         private final AtomicBoolean interruptionRecorded = new AtomicBoolean(false);
-
-        private final String gameName;
-        private final String sessionId;
-
-        // plan 块流式解析
-        private final StringBuilder planBuffer = new StringBuilder();
-        private boolean inPlan;
-        private boolean planClosed;
 
         private SpeechCollector(String rpSessionId, String source, String gameName, String sessionId) {
             this.rpSessionId = rpSessionId;
             this.source = source == null || source.isBlank() ? "unknown" : source.trim();
             this.gameMode = gameControlBlockExecutor.hasActiveGame(rpSessionId);
-            this.gameName = gameName;
-            this.sessionId = sessionId;
+            this.planCapture = new GamePlanCapture(gameName, sessionId);
         }
 
         private boolean requiresGameControlLock() {
@@ -138,12 +126,9 @@ public class RpSpeechTurnService {
         }
 
         private void handleGameModeChunk(String text) {
-            if (askRegistered) {
-                return;
-            }
-            // 流式捕获 <plan>...</plan> 块
-            if (!planClosed && gameName != null && sessionId != null) {
-                detectPlanTags(text);
+            String planText = planCapture.accept(text);
+            if (planText != null && !planText.isBlank()) {
+                traceService.recordTurnPlan(planCapture.gameName(), planCapture.sessionId(), planText);
             }
             List<StreamingJsonInstruction> instructions = controlParser.accept(text);
             for (StreamingJsonInstruction instruction : instructions) {
@@ -154,53 +139,12 @@ public class RpSpeechTurnService {
             }
         }
 
-        /**
-         * 在流式文本中检测 {@code <plan>} 开始和结束，提取内容并提交给 trace service。
-         * <p>
-         * 标签可能跨 chunk，因此使用 stateful 解析。
-         */
-        private void detectPlanTags(String chunk) {
-            if (planClosed) {
-                return;
-            }
-            if (!inPlan) {
-                int start = chunk.indexOf("<plan>");
-                if (start < 0) {
-                    return;
-                }
-                inPlan = true;
-                // 从 <plan> 之后开始累加
-                planBuffer.append(chunk.substring(start + 6));
-            }
-            if (inPlan) {
-                int end = planBuffer.indexOf("</plan>");
-                if (end >= 0) {
-                    String planText = planBuffer.substring(0, end).trim();
-                    planClosed = true;
-                    planBuffer.setLength(0);
-                    if (!planText.isBlank()) {
-                        traceService.recordTurnPlan(gameName, sessionId, planText);
-                    }
-                    return;
-                }
-                // 可能新 chunk 中也包含闭合标签
-                planBuffer.append(chunk);
-                end = planBuffer.indexOf("</plan>");
-                if (end >= 0) {
-                    String planText = planBuffer.substring(0, end).trim();
-                    planClosed = true;
-                    planBuffer.setLength(0);
-                    if (!planText.isBlank()) {
-                        traceService.recordTurnPlan(gameName, sessionId, planText);
-                    }
-                }
-            }
-        }
-
         private void handleControlBlock(RpControlBlock block) {
-            if (block.hasSpeech() && shouldSpeakControlBlock(block)) {
+            if (block.hasSpeech()) {
                 appendVisible(block.say());
-                acceptSpeech(block.say());
+                if (shouldSubmitControlBlockToTts(block)) {
+                    acceptSpeech(block.say());
+                }
             }
             try {
                 gameControlBlockExecutor.execute(rpSessionId, block)
@@ -210,7 +154,6 @@ public class RpSpeechTurnService {
                     completedActionBlocks++;
                 }
                 if (block.isAsk()) {
-                    askRegistered = true;
                     finishAfterAsk();
                 }
             } catch (RpGameActionExecutionException e) {
@@ -220,8 +163,11 @@ public class RpSpeechTurnService {
             }
         }
 
-        private boolean shouldSpeakControlBlock(RpControlBlock block) {
-            if (!source.startsWith("game-loop") || !block.isVoice() || block.isAsk()) {
+        private boolean shouldSubmitControlBlockToTts(RpControlBlock block) {
+            if (!block.isVoice() || block.voiceKind() != RpControlBlock.VoiceKind.CHAT) {
+                return false;
+            }
+            if (!source.startsWith("game-loop")) {
                 return true;
             }
             if ("game-loop-replan".equals(source)) {
@@ -293,8 +239,7 @@ public class RpSpeechTurnService {
             if (text == null || text.isEmpty()) {
                 return;
             }
-            if (speechLease == null && !text.isBlank()) {
-                speechLease = interactionCoordinator.beginRpSpeech(rpSessionId);
+            if (ttsSession == null && !text.isBlank()) {
                 ttsSession = ttsSpeechService.open(rpSessionId, source);
                 log.debug("[RP发言流] 首个可见字符到达: session={}, source={}", rpSessionId, source);
             }
@@ -404,10 +349,56 @@ public class RpSpeechTurnService {
                     ttsSession.cancel(error.getMessage());
                 }
             }
-            if (speechLease != null) {
-                speechLease.close();
-            }
             finished.countDown();
+        }
+    }
+
+    private static final class GamePlanCapture {
+        private static final String START_TAG = "<plan>";
+        private static final String END_TAG = "</plan>";
+
+        private final String gameName;
+        private final String sessionId;
+        private final StringBuilder buffer = new StringBuilder();
+        private boolean capturing;
+        private boolean closed;
+
+        private GamePlanCapture(String gameName, String sessionId) {
+            this.gameName = gameName;
+            this.sessionId = sessionId;
+        }
+
+        private String gameName() {
+            return gameName;
+        }
+
+        private String sessionId() {
+            return sessionId;
+        }
+
+        private String accept(String chunk) {
+            if (closed || gameName == null || sessionId == null || chunk == null || chunk.isEmpty()) {
+                return null;
+            }
+            String planChunk = chunk;
+            if (!capturing) {
+                int start = chunk.indexOf(START_TAG);
+                if (start < 0) {
+                    return null;
+                }
+                capturing = true;
+                planChunk = chunk.substring(start + START_TAG.length());
+            }
+            int end = planChunk.indexOf(END_TAG);
+            if (end >= 0) {
+                buffer.append(planChunk, 0, end);
+                closed = true;
+                String planText = buffer.toString().trim();
+                buffer.setLength(0);
+                return planText;
+            }
+            buffer.append(planChunk);
+            return null;
         }
     }
 

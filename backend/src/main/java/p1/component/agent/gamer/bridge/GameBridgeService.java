@@ -65,9 +65,10 @@ public class GameBridgeService {
         ToolProviderResult tools = rawProvider.provideTools(new ToolProviderRequest(
                 memoryId,
                 UserMessage.from("available game operations")));
-        GameStateSnapshot state = adapter.fetchState(new GameAdapterContext(gameName, memoryId, tools, config));
-        String detailed = adapter.renderAvailableOperations(tools, config, state);
-        String summary = adapter.renderAvailableOperationSummary(tools, config, state);
+        GameAdapterContext context = new GameAdapterContext(gameName, memoryId, tools, config);
+        GameStateSnapshot state = adapter.fetchState(context);
+        String detailed = adapter.renderAvailableOperations(context, state);
+        String summary = adapter.renderAvailableOperationSummary(context, state);
         return new GameAvailableOperations(detailed, summary, extractToolNames(detailed), renderStateJson(state));
     }
 
@@ -82,7 +83,8 @@ public class GameBridgeService {
         ToolProviderResult tools = rawProvider.provideTools(new ToolProviderRequest(
                 memoryId,
                 UserMessage.from("probe game actionability")));
-        GameStateSnapshot state = adapter.fetchState(new GameAdapterContext(gameName, memoryId, tools, config));
+        GameAdapterContext context = new GameAdapterContext(gameName, memoryId, tools, config);
+        GameStateSnapshot state = adapter.fetchState(context);
         return new GameStateProbe(adapter.evaluateActionability(state), renderStateFingerprint(adapter, state));
     }
 

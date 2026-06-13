@@ -1,0 +1,13 @@
+stt:
+  # partial 越小 UI 越实时，但会增加 ASR 调用频率。
+  partial-interval-ms: 500
+  # final turn 的最大窗口，噪声环境下过长会拖慢反馈。
+  max-segment-ms: 3000
+
+  sherpa-qwen:
+    # 可直接写逗号分隔热词；通常留空，优先维护 hotwords-file。
+    hotwords: ${STT_SHERPA_QWEN_HOTWORDS:}
+    # 默认使用项目根目录词表；不存在时后端回退到内置精简游戏热词表。
+    hotwords-file: ${STT_SHERPA_QWEN_HOTWORDS_FILE:词表.txt}
+    # 热词过多会过度偏置识别，默认只取前 300 个唯一词。
+    max-hotwords: ${STT_SHERPA_QWEN_MAX_HOTWORDS:300}

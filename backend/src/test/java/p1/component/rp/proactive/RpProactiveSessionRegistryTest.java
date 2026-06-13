@@ -5,6 +5,7 @@ import p1.component.agent.rp.proactive.RpProactiveSessionRegistry;
 
 import java.time.Instant;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -30,5 +31,17 @@ class RpProactiveSessionRegistryTest {
         registry.observeRpSpeech("rp-session");
 
         assertFalse(registry.userSpokeAfter("rp-session", snapshotTime));
+    }
+
+    @Test
+    void shouldRememberContextWithoutMarkingSessionOnline() {
+        RpProactiveSessionRegistry registry = new RpProactiveSessionRegistry();
+
+        registry.rememberSessionContext("rp-session", "Nova", true);
+
+        RpProactiveSessionRegistry.SessionSnapshot snapshot = registry.findKnown("rp-session").orElseThrow();
+        assertEquals("Nova", snapshot.characterName());
+        assertTrue(snapshot.shortMode());
+        assertFalse(registry.findOnline("rp-session").isPresent());
     }
 }

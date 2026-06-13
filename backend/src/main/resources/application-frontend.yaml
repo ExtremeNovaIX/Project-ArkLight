@@ -8,28 +8,6 @@ frontend:
     workspace-name: ArkLight
     # 操作者展示名称。
     operator-name: Local
-  web:
-    settings:
-      # Web 前端默认主题 id。
-      theme-id: arklight
-      # Web 前端默认会话 id；为空时使用前端生成值。
-      session-id: ""
-      # Web 前端是否启用启动动画。
-      boot-animation-enabled: true
-      # Web 前端启动动画时长，单位毫秒。
-      boot-duration-ms: 3500
-      # Web 前端展示回复前的人工延迟，单位毫秒。
-      response-delay-ms: 1000
-      # Web 前端默认是否按短句模式切分回复。
-      short-mode-enabled: true
-      # Web 前端背景粒子数量。
-      mote-count: 42
-      # Web 前端默认游戏名。
-      game-name: STS2MCP
-      # Web 前端默认游戏 session；为空时使用聊天 session。
-      game-session-id: ""
-      # Web 前端默认绑定的 RP session；为空时使用聊天 session。
-      game-rp-session-id: ""
   qt:
     settings:
       # Qt 前端默认语言 id。
@@ -48,3 +26,9 @@ frontend:
       mote-count: 28
       # Qt 前端 UI 缩放百分比。
       ui-scale-percent: 100
+      # Qt 前端默认游戏名。
+      game-name: STS2MCP
+      # Qt 前端默认游戏 session；为空时使用聊天 session。
+      game-session-id: ""
+      # Qt 前端默认绑定的 RP session；为空时使用聊天 session。
+      game-rp-session-id: ""

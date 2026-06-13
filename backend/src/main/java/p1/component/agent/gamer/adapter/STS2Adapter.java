@@ -1,24 +1,26 @@
 package p1.component.agent.gamer.adapter;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
+import dev.langchain4j.agent.tool.ToolSpecification;
 import dev.langchain4j.service.tool.ToolExecutor;
-import dev.langchain4j.service.tool.ToolProviderResult;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import p1.component.agent.gamer.adapter.core.GameActionWindowSignature;
 import p1.component.agent.gamer.adapter.core.GameActionability;
 import p1.component.agent.gamer.adapter.core.GameAdapterContext;
-import p1.component.agent.gamer.adapter.core.GameActionWindowSignature;
 import p1.component.agent.gamer.adapter.core.GameBridgeException;
 import p1.component.agent.gamer.adapter.core.GameOperation;
 import p1.component.agent.gamer.adapter.core.GameOperationPrecondition;
 import p1.component.agent.gamer.adapter.core.GameStateSnapshot;
 import p1.component.agent.gamer.adapter.core.QueuedGameOperation;
 import p1.component.agent.gamer.adapter.sts2.STS2ActionWindowAnalyzer;
-import p1.component.agent.gamer.adapter.sts2.STS2OperationRepairer;
-import p1.component.agent.gamer.adapter.sts2.STS2OperationPreconditionChecker;
-import p1.component.agent.gamer.adapter.sts2.STS2OperationToolRenderer;
+import p1.component.agent.gamer.adapter.sts2.STS2ModeDetector;
 import p1.component.agent.gamer.adapter.sts2.STS2OperationPlanCompiler;
+import p1.component.agent.gamer.adapter.sts2.STS2OperationPreconditionChecker;
+import p1.component.agent.gamer.adapter.sts2.STS2OperationRepairer;
+import p1.component.agent.gamer.adapter.sts2.STS2OperationToolRenderer;
 import p1.component.agent.gamer.adapter.sts2.STS2StateMonitor;
 import p1.component.agent.gamer.adapter.sts2.STS2StateSummaryRenderer;
 import p1.config.mcp.MCPProperties;
@@ -26,10 +28,9 @@ import p1.config.mcp.MCPProperties;
 import java.util.ArrayDeque;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Locale;
-import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 /**
  * 杀戮尖塔 2 游戏适配器。
@@ -39,19 +40,21 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 @Component
 @Slf4j
-public class STS2Adapter implements GameAdapter {
+public class STS2Adapter extends GameAdapter {
 
-    private static final String MP_PREFIX = "mp_";
+    private static final String MP_PREFIX = STS2ModeDetector.MP_PREFIX;
 
-    private final Map<String, String> detectedMode = new ConcurrentHashMap<>();
-    private volatile String lastFetchedGameName;
+    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final ConcurrentHashMap<String, String> loggedModeBySession = new ConcurrentHashMap<>();
+
+    private final STS2ModeDetector modeDetector = new STS2ModeDetector();
     private final STS2StateSummaryRenderer stateSummaryRenderer = new STS2StateSummaryRenderer();
-    private final STS2OperationToolRenderer operationToolRenderer = new STS2OperationToolRenderer();
+    private final STS2OperationToolRenderer operationToolRenderer = new STS2OperationToolRenderer(modeDetector);
     private final STS2OperationPlanCompiler operationPlanCompiler = new STS2OperationPlanCompiler();
     private final STS2ActionWindowAnalyzer actionWindowAnalyzer = new STS2ActionWindowAnalyzer();
     private final STS2OperationPreconditionChecker preconditionChecker = new STS2OperationPreconditionChecker();
     private final STS2StateMonitor stateMonitor = new STS2StateMonitor();
-    private final STS2OperationRepairer operationRepairer = new STS2OperationRepairer(this::currentModePrefix);
+    private final STS2OperationRepairer operationRepairer = new STS2OperationRepairer(modeDetector);
 
     @Override
     public String id() {
@@ -67,58 +70,45 @@ public class STS2Adapter implements GameAdapter {
     }
 
     /**
-     * 自动检测单人/多人模式并获取游戏状态。
+     * 自动检测 STS2 单人/多人状态工具并获取游戏状态。
      */
     @Override
     public GameStateSnapshot fetchState(GameAdapterContext context) {
-        String gameName = context.gameName();
-        lastFetchedGameName = gameName;
-        String cachedPrefix = detectedMode.get(gameName);
-
-        if (cachedPrefix != null) {
-            String toolName = cachedPrefix + context.config().getStateToolName();
-            GameStateSnapshot state = tryFetchState(context, toolName);
-            if (isValidState(state)) {
-                String detectedPrefix = detectModePrefix(state);
-                if (detectedPrefix != null && !detectedPrefix.equals(cachedPrefix)) {
-                    detectedMode.put(gameName, detectedPrefix);
-                    log.info("[STS2] 状态内容修正模式 prefix='{}' -> '{}': game={}",
-                            cachedPrefix, detectedPrefix, gameName);
-                }
-                return state;
-            }
-            log.info("[STS2] 缓存模式 prefix='{}' 已失效，重新检测: game={}", cachedPrefix, gameName);
-            detectedMode.remove(gameName);
-        }
-
-        // 自动检测固定先尝试单人端点，再尝试多人端点。
-        String spName = context.config().getStateToolName();
-        GameStateSnapshot spState = tryFetchState(context, spName);
-        if (isValidState(spState)) {
-            String detectedPrefix = detectModePrefix(spState);
-            String prefix = detectedPrefix == null ? "" : detectedPrefix;
-            detectedMode.put(gameName, prefix);
-            log.info("[STS2] 检测到{}模式: game={}", MP_PREFIX.equals(prefix) ? "多人" : "单人", gameName);
-            return spState;
-        }
-
         String mpName = MP_PREFIX + context.config().getStateToolName();
         GameStateSnapshot mpState = tryFetchState(context, mpName);
-        if (isValidState(mpState)) {
-            detectedMode.put(gameName, MP_PREFIX);
-            log.info("[STS2] 检测到多人模式: game={}", gameName);
+        if (isValidState(mpState) && modeDetector.isMultiplayer(mpState)) {
+            modeDetector.remember(context, mpState);
+            logDetectedMode(context, MP_PREFIX);
             return mpState;
         }
 
-        if (spState != null) {
+        String spName = context.config().getStateToolName();
+        GameStateSnapshot spState = tryFetchState(context, spName);
+        if (isValidState(spState)) {
+            modeDetector.remember(context, spState);
+            logDetectedMode(context, modeDetector.modePrefix(spState));
             return spState;
+        }
+
+        if (mpState != null) {
+            return mpState;
         }
         throw new GameBridgeException("无法检测STS2游戏模式（单人/多人），get_game_state 和 mp_get_game_state 均不可用");
     }
 
+    private void logDetectedMode(GameAdapterContext context, String modePrefix) {
+        String sessionId = context == null ? "" : context.sessionId();
+        String mode = MP_PREFIX.equals(modePrefix) ? "multiplayer" : "singleplayer";
+        String previous = loggedModeBySession.put(sessionId, mode);
+        if (!mode.equals(previous)) {
+            log.info("[STS2] detected {} mode: game={}, session={}", mode, context.gameName(), sessionId);
+            return;
+        }
+        log.debug("[STS2] detected {} mode: game={}, session={}", mode, context.gameName(), sessionId);
+    }
     @Override
-    public boolean isStateTool(String toolName, MCPProperties.GameMCPConfig config) {
-        String baseName = config.getStateToolName();
+    public boolean isStateTool(String toolName, GameAdapterContext context) {
+        String baseName = context.config().getStateToolName();
         return toolName != null && (toolName.equals(baseName) || toolName.equals(MP_PREFIX + baseName));
     }
 
@@ -172,7 +162,9 @@ public class STS2Adapter implements GameAdapter {
     }
 
     @Override
-    public ArrayDeque<QueuedGameOperation> prepareBatch(List<GameOperation> operations, GameStateSnapshot plannedState) {
+    public ArrayDeque<QueuedGameOperation> prepareBatch(GameAdapterContext context,
+                                                        List<GameOperation> operations,
+                                                        GameStateSnapshot plannedState) {
         return operationPlanCompiler.prepareBatch(operations, plannedState);
     }
 
@@ -183,7 +175,7 @@ public class STS2Adapter implements GameAdapter {
 
     @Override
     public GameActionWindowSignature actionWindowSignature(GameStateSnapshot state) {
-        return actionWindowAnalyzer.signature(state, currentModePrefix(state));
+        return actionWindowAnalyzer.signature(state, modeDetector.modePrefix(state));
     }
 
     @Override
@@ -193,12 +185,15 @@ public class STS2Adapter implements GameAdapter {
     }
 
     @Override
-    public ToolExecutionRequest repairBeforeExecute(QueuedGameOperation operation, GameStateSnapshot currentState) {
-        return operationRepairer.repairBeforeExecute(operation, currentState);
+    public ToolExecutionRequest repairBeforeExecute(GameAdapterContext context,
+                                                    QueuedGameOperation operation,
+                                                    GameStateSnapshot currentState) {
+        return operationRepairer.repairBeforeExecute(context, operation, currentState);
     }
 
     @Override
-    public void monitorAfterExecute(QueuedGameOperation operation,
+    public void monitorAfterExecute(GameAdapterContext context,
+                                    QueuedGameOperation operation,
                                     GameStateSnapshot beforeState,
                                     GameStateSnapshot afterState,
                                     String toolResult) {
@@ -212,18 +207,13 @@ public class STS2Adapter implements GameAdapter {
     }
 
     @Override
-    public String renderAvailableOperations(ToolProviderResult tools,
-                                            MCPProperties.GameMCPConfig config,
-                                            GameStateSnapshot state) {
-        String modePrefix = lastFetchedGameName == null ? "" : detectedMode.getOrDefault(lastFetchedGameName, "");
-        return operationToolRenderer.render(tools, config, state, modePrefix);
+    public String renderAvailableOperations(GameAdapterContext context, GameStateSnapshot state) {
+        return operationToolRenderer.render(context, state);
     }
 
     @Override
-    public String renderAvailableOperationSummary(ToolProviderResult tools,
-                                                  MCPProperties.GameMCPConfig config,
-                                                  GameStateSnapshot state) {
-        String rendered = renderAvailableOperations(tools, config, state);
+    public String renderAvailableOperationSummary(GameAdapterContext context, GameStateSnapshot state) {
+        String rendered = renderAvailableOperations(context, state);
         Set<String> actions = new LinkedHashSet<>();
         rendered.lines()
                 .map(String::trim)
@@ -247,86 +237,41 @@ public class STS2Adapter implements GameAdapter {
     }
 
     private GameStateSnapshot tryFetchState(GameAdapterContext context, String toolName) {
-        ToolExecutor executor = context.tools().toolExecutorByName(toolName);
-        if (executor == null) {
-            return null;
-        }
         try {
-            ToolExecutionRequest request = ToolExecutionRequest.builder()
-                    .name(toolName)
-                    .arguments(stateToolArguments(context))
-                    .build();
-            String raw = executor.execute(request, context.sessionId());
-            return parseState(raw);
+            return fetchStateWithTool(context, toolName);
         } catch (Exception e) {
             log.debug("[STS2] 状态工具 {} 尝试失败: {}", toolName, e.getMessage());
             return null;
         }
     }
 
-    private String currentModePrefix(GameStateSnapshot currentState) {
-        String detectedPrefix = detectModePrefix(currentState);
-        if (detectedPrefix != null) {
-            return detectedPrefix;
+    private GameStateSnapshot fetchStateWithTool(GameAdapterContext context, String toolName) {
+        ToolExecutor executor = context.tools().toolExecutorByName(toolName);
+        if (executor == null) {
+            String availableTools = context.tools().tools().keySet().stream()
+                    .map(ToolSpecification::name)
+                    .sorted(String.CASE_INSENSITIVE_ORDER)
+                    .collect(Collectors.joining(", "));
+            throw new GameBridgeException("状态工具不存在: " + toolName
+                    + (availableTools.isBlank() ? "" : "；可用工具: " + availableTools));
         }
-        return lastFetchedGameName == null ? "" : detectedMode.getOrDefault(lastFetchedGameName, "");
+        ToolExecutionRequest request = ToolExecutionRequest.builder()
+                .name(toolName)
+                .arguments(stateToolArguments(context))
+                .build();
+        String raw = executor.execute(request, context.sessionId());
+        return parseState(raw);
     }
 
-    private String detectModePrefix(GameStateSnapshot state) {
-        JsonNode root = state == null ? null : state.json();
-        if (root == null || root.isMissingNode()) {
-            return null;
+    private GameStateSnapshot parseState(String raw) {
+        try {
+            JsonNode json = objectMapper.readTree(raw);
+            String stateType = json.path("state_type").asText("");
+            return new GameStateSnapshot(raw, json, stateType);
+        } catch (Exception e) {
+            String preview = raw == null ? "null" : raw.substring(0, Math.min(raw.length(), 500));
+            throw new GameBridgeException("解析 STS2 状态失败，MCP 返回: " + preview, e);
         }
-
-        String gameMode = root.path("game_mode").asText("");
-        if ("multiplayer".equalsIgnoreCase(gameMode)) {
-            return MP_PREFIX;
-        }
-        if ("singleplayer".equalsIgnoreCase(gameMode)) {
-            return "";
-        }
-
-        String menuScreen = root.path("menu_screen").asText("");
-        if (menuScreen.toLowerCase(Locale.ROOT).startsWith("multiplayer")) {
-            return MP_PREFIX;
-        }
-
-        JsonNode lobby = root.path("lobby");
-        if (lobby.isObject()) {
-            String lobbyType = lobby.path("type").asText("");
-            if ("singleplayer".equalsIgnoreCase(lobbyType)) {
-                return "";
-            }
-            if (!lobbyType.isBlank()
-                    || lobby.has("players")
-                    || lobby.has("player_count")
-                    || lobby.has("all_ready")
-                    || lobby.has("is_local_ready")
-                    || lobby.has("local_player_id")) {
-                return MP_PREFIX;
-            }
-        }
-
-        if (root.has("local_player_slot") || root.has("player_count") || root.has("net_type")) {
-            return MP_PREFIX;
-        }
-        if (hasOption(root.path("options"), "unready")) {
-            return MP_PREFIX;
-        }
-        return null;
-    }
-
-    private boolean hasOption(JsonNode options, String name) {
-        if (options == null || !options.isArray() || name == null || name.isBlank()) {
-            return false;
-        }
-        for (JsonNode option : options) {
-            String optionName = option.isTextual() ? option.asText("") : option.path("name").asText("");
-            if (name.equalsIgnoreCase(optionName)) {
-                return true;
-            }
-        }
-        return false;
     }
 
     private boolean isValidState(GameStateSnapshot state) {

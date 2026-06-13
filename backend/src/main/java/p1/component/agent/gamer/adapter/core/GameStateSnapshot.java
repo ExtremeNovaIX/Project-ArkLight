@@ -7,7 +7,7 @@ import com.fasterxml.jackson.databind.JsonNode;
  *
  * @param rawJson    MCP 返回的原始 JSON 字符串
  * @param json       解析后的 JSON 树
- * @param stateType  游戏大状态类型，用于监视场景级变化
+ * @param stateType  适配器提取的状态类型提示；没有对应字段时为空字符串
  */
 public record GameStateSnapshot(
         String rawJson,

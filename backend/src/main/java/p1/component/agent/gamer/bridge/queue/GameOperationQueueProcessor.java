@@ -92,7 +92,7 @@ public class GameOperationQueueProcessor {
             log.info("[游戏桥接] 收到操作队列: game={}, memoryId={}, queueId={}, operations={}",
                     gameName, key, queueId, operations);
             GameStateSnapshot queueStartState = adapter.fetchState(context);
-            ArrayDeque<QueuedGameOperation> queue = adapter.prepareBatch(operations, queueStartState);
+            ArrayDeque<QueuedGameOperation> queue = adapter.prepareBatch(context, operations, queueStartState);
             if (queue.isEmpty()) {
                 throw new GameBridgeExecutionException("桥接层修复后操作队列为空，未执行动作。");
             }

@@ -123,17 +123,13 @@ public class TtsRuntimeManager {
         if (config.gptSoVitsProviderEnabled() && config.getRuntime().isAutoStartEnabled()) {
             return new RuntimeProfile("GPT-SoVITS", config.getGptSoVits().getBaseUrl(), config.getRuntime());
         }
-        TtsConfig.RuntimeConfig voxRuntime = config.getVoxCpm2().getRuntime();
-        if (config.voxCpmProviderEnabled() && voxRuntime != null && voxRuntime.isAutoStartEnabled()) {
-            return new RuntimeProfile("VoxCPM2", config.getVoxCpm2().getBaseUrl(), voxRuntime);
-        }
         return null;
     }
 
     /**
-     * 启动当前 provider 的 TTS sidecar 进程。
+     * Start the current TTS provider sidecar process.
      *
-     * @param profile 当前 provider 的 runtime profile
+     * @param profile current runtime profile
      */
     private void startProcess(RuntimeProfile profile) {
         Path workingDirectory = resolveWorkingDirectory(profile);

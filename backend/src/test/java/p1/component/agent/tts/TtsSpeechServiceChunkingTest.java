@@ -15,7 +15,7 @@ class TtsSpeechServiceChunkingTest {
 
     @Test
     void shouldStripLegacyLeadingStyleParentheses() throws Exception {
-        try (Harness harness = harness("voxcpm2-http", 2, 40, 40)) {
+        try (Harness harness = harness("gpt-sovits-http", 2, 40, 40)) {
             harness.session.accept("(warm)first sentence.(bright)second sentence.");
             harness.session.finish();
 
@@ -26,7 +26,7 @@ class TtsSpeechServiceChunkingTest {
 
     @Test
     void shouldUseShortFirstChunkThenDefaultChunks() throws Exception {
-        try (Harness harness = harness("voxcpm2-http", 3, 5, 10)) {
+        try (Harness harness = harness("gpt-sovits-http", 3, 5, 10)) {
             harness.session.accept("abcde.1234567890.tail.");
             harness.session.finish();
 
@@ -37,7 +37,7 @@ class TtsSpeechServiceChunkingTest {
 
     @Test
     void shouldNotHardCutBeforeSentenceEnd() throws Exception {
-        try (Harness harness = harness("voxcpm2-http", 1, 5, 10)) {
+        try (Harness harness = harness("gpt-sovits-http", 1, 5, 10)) {
             harness.session.accept("abcdefghij without sentence end");
             assertTrue(harness.provider.requests().isEmpty());
 
@@ -50,7 +50,7 @@ class TtsSpeechServiceChunkingTest {
 
     @Test
     void shouldWaitForStyleParenSplitAcrossStreamingChunks() throws Exception {
-        try (Harness harness = harness("voxcpm2-http", 1, 40, 40)) {
+        try (Harness harness = harness("gpt-sovits-http", 1, 40, 40)) {
             harness.session.accept("(light");
             assertTrue(harness.provider.requests().isEmpty());
 
@@ -66,13 +66,12 @@ class TtsSpeechServiceChunkingTest {
     void shouldStopAfterCurrentChunkWithoutHardCancel() throws Exception {
         TtsConfig config = new TtsConfig();
         config.setEnabled(true);
-        config.setProvider("voxcpm2-http");
+        config.setProvider("gpt-sovits-http");
         config.setFirstChunkChars(1);
         config.setMaxChunkChars(5);
         config.getRuntime().setAutoStartEnabled(false);
-        config.getVoxCpm2().getRuntime().setAutoStartEnabled(false);
 
-        BlockingTtsProvider provider = new BlockingTtsProvider("voxcpm2-http");
+        BlockingTtsProvider provider = new BlockingTtsProvider("gpt-sovits-http");
         TtsProviderRegistry providerRegistry = new TtsProviderRegistry(config, List.of(provider));
         RecordingAudioHub audioHub = new RecordingAudioHub();
         TtsSpeechService service = new TtsSpeechService(
@@ -99,7 +98,7 @@ class TtsSpeechServiceChunkingTest {
 
     @Test
     void shouldDiscardUnsynthesizedTailWhenStoppingAfterCurrentChunk() throws Exception {
-        try (Harness harness = harness("voxcpm2-http", 1, 1, 10)) {
+        try (Harness harness = harness("gpt-sovits-http", 1, 1, 10)) {
             harness.session.accept("first.");
             assertTrue(harness.provider.awaitRequests(), "Timed out waiting for first TTS request");
 
@@ -118,7 +117,6 @@ class TtsSpeechServiceChunkingTest {
         config.setFirstChunkChars(firstChunkChars);
         config.setMaxChunkChars(maxChunkChars);
         config.getRuntime().setAutoStartEnabled(false);
-        config.getVoxCpm2().getRuntime().setAutoStartEnabled(false);
 
         RecordingTtsProvider provider = new RecordingTtsProvider(providerName, expectedRequests);
         TtsProviderRegistry providerRegistry = new TtsProviderRegistry(config, List.of(provider));

@@ -99,7 +99,7 @@ public class GameQueueDrainService {
             attempted++;
 
             try {
-                request = adapter.repairBeforeExecute(operation, beforeState);
+                request = adapter.repairBeforeExecute(context, operation, beforeState);
             } catch (GameBridgeException e) {
                 throw hardOperationFailure(
                         adapter,
@@ -134,7 +134,7 @@ public class GameQueueDrainService {
             }
 
             QueuedGameOperation executedOperation = operation.withRequest(request);
-            String mcpError = adapter.extractToolError(toolResult);
+            String mcpError = adapter.extractToolError(context, toolResult);
             if (mcpError != null) {
                 throw hardOperationFailure(
                         adapter,
@@ -216,20 +216,19 @@ public class GameQueueDrainService {
     }
 
     /**
-     * 在每条 MCP 操作前让出被用户或 RP 发言占用的交互窗口。
+     * 在每条 MCP 操作前检查显式等待是否仍阻止当前请求继续。
      *
      * @param gameName         游戏名
      * @param key              gamer 会话 key
      * @param successful       当前批次已成功执行的 MCP 操作数
-     * @param ignoreRpSpeaking true 表示忽略 RP 正在说话的 lease
+     * @param ignoreRpSpeaking 历史参数；当前请求继续执行时不再受 RP/ASR 临时输入状态影响
      */
     private void interruptIfInteractionBusy(String gameName, String key, int successful, boolean ignoreRpSpeaking) {
         if (interactionCoordinator == null) {
             return;
         }
-        InteractionCoordinator.GameTurnPermission permission = ignoreRpSpeaking
-                ? interactionCoordinator.canGameActForGamerIgnoringRpSpeech(gameName, key)
-                : interactionCoordinator.canGameActForGamer(gameName, key);
+        InteractionCoordinator.GameTurnPermission permission =
+                interactionCoordinator.canContinueCurrentGameRequestForGamer(gameName, key);
         if (!permission.allowed()) {
             throw new GameBridgeException(
                     "交互调度暂停: " + permission.reason(),
@@ -308,7 +307,7 @@ public class GameQueueDrainService {
 
             afterState = adapter.fetchState(context);
             try {
-                adapter.monitorAfterExecute(operation, beforeState, afterState, toolResult);
+                adapter.monitorAfterExecute(context, operation, beforeState, afterState, toolResult);
                 if (attempt > 1) {
                     log.info("[游戏桥接] 状态延迟重读后通过监视: memoryId={}, attempt={}/{}",
                             key, attempt, maxAttempts);

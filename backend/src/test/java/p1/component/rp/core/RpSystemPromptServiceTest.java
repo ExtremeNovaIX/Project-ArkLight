@@ -17,8 +17,8 @@ class RpSystemPromptServiceTest {
 
         assertTrue(prompt.contains("你是 Nova。"));
         assertTrue(prompt.contains("最近在闲聊。"));
-        assertFalse(prompt.contains("<game_control_protocol>"));
-        assertFalse(prompt.contains("\"mode\":\"action|ask|chat|wait\""));
+        assertFalse(prompt.contains("游戏玩家AI"));
+        assertFalse(prompt.contains("<game_output_lock>"));
     }
 
     @Test
@@ -29,9 +29,9 @@ class RpSystemPromptServiceTest {
 
         String prompt = service.build("rp-session", "你是 Nova。", "正在爬塔。");
 
-        assertTrue(prompt.contains("<game_control_protocol>"));
-        assertTrue(prompt.contains("\"mode\":\"action\""));
-        assertTrue(prompt.contains("<output_contract>"));
+        assertTrue(prompt.contains("游戏玩家AI"));
+        assertTrue(prompt.contains("\"type\": \"act\""));
+        assertTrue(prompt.contains("<turn>"));
         assertTrue(prompt.contains("<game_output_lock>"));
     }
 }

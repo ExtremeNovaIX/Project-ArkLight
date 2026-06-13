@@ -25,6 +25,7 @@ public final class ExternalConfigBootstrap {
             new YamlTemplate("application-ai.yaml", "classpath:config-template/application-ai.yaml"),
             new YamlTemplate("application-ai-services.yaml", "classpath:config-template/application-ai-services.yaml"),
             new YamlTemplate("application-frontend.yaml", "classpath:application-frontend.yaml"),
+            new YamlTemplate("application-stt.yaml", "classpath:config-template/application-stt.yaml"),
             new YamlTemplate("application-tts.yaml", "classpath:config-template/application-tts.yaml"),
             new YamlTemplate("mcp-catalog.yaml", "classpath:mcp-catalog.yaml")
     );

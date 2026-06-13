@@ -24,6 +24,7 @@ import p1.component.agent.reasoning.ReasoningContentRecorder;
 import p1.config.mcp.MCPProperties;
 import p1.config.prop.AssistantProperties;
 
+import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.List;
 import java.util.Map;
@@ -134,10 +135,11 @@ class GameOperationQueueProcessorTest {
         GameAdapter adapter = new StaticStateAdapter(freshState) {
             @Override
             public ArrayDeque<QueuedGameOperation> prepareBatch(
+                    GameAdapterContext context,
                     java.util.List<p1.component.agent.gamer.adapter.core.GameOperation> operations,
                     GameStateSnapshot plannedState) {
                 preparedWithFreshState.set("fresh".equals(plannedState.stateType()));
-                return super.prepareBatch(operations, plannedState);
+                return super.prepareBatch(context, operations, plannedState);
             }
         };
 
@@ -166,7 +168,8 @@ class GameOperationQueueProcessorTest {
         AtomicBoolean monitorCalled = new AtomicBoolean(false);
         GameAdapter adapter = new StaticStateAdapter(playState) {
             @Override
-            public void monitorAfterExecute(QueuedGameOperation operation,
+            public void monitorAfterExecute(GameAdapterContext context,
+                                            QueuedGameOperation operation,
                                             GameStateSnapshot beforeState,
                                             GameStateSnapshot afterState,
                                             String toolResult) {
@@ -200,7 +203,8 @@ class GameOperationQueueProcessorTest {
         AtomicBoolean secondExecuted = new AtomicBoolean(false);
         GameAdapter adapter = new SequentialStateAdapter(beforeState, afterState) {
             @Override
-            public void monitorAfterExecute(QueuedGameOperation operation,
+            public void monitorAfterExecute(GameAdapterContext context,
+                                            QueuedGameOperation operation,
                                             GameStateSnapshot beforeState,
                                             GameStateSnapshot afterState,
                                             String toolResult) {
@@ -400,10 +404,10 @@ class GameOperationQueueProcessorTest {
     }
 
     @Test
-    void shouldInterruptQueueBeforeMcpOperationWhenRpIsSpeaking() throws Exception {
+    void shouldContinueCurrentQueueWhenRpIsSpeakingOrVoiceInputIsCollecting() throws Exception {
         ActiveGameRegistry registry = new ActiveGameRegistry();
         registry.register("test-game", "rp-session");
-        InteractionCoordinator coordinator = new InteractionCoordinator(registry, new AssistantProperties());
+        InteractionCoordinator coordinator = new InteractionCoordinator(registry);
         GameQueueResultRenderer renderer = new GameQueueResultRenderer();
         GameOperationQueueProcessor processor = new GameOperationQueueProcessor(
                 new GameOperationBatchParser(),
@@ -414,29 +418,23 @@ class GameOperationQueueProcessorTest {
         GameStateSnapshot playState = state("{\"state_type\":\"monster\",\"battle\":{\"turn\":\"player\",\"is_play_phase\":true}}");
         String memoryId = "test-game-rp-session";
 
-        GameBridgeExecutionException error;
-        try (InteractionCoordinator.InteractionLease ignored = coordinator.beginRpSpeech("rp-session")) {
-            error = assertThrows(
-                    GameBridgeExecutionException.class,
-                    () -> processor.enqueueAndDrain(
-                            "test-game",
-                            memoryId,
-                            new StaticStateAdapter(playState),
-                            config(),
-                            tools(),
-                            """
-                                    {
-                                      "operations":[
-                                        {"tool":"good_tool","args":{}}
-                                      ]
-                                    }
-                                    """));
-        }
+        coordinator.beginGameVoiceInput("rp-session", Duration.ofSeconds(12));
+        String result = processor.enqueueAndDrain(
+                "test-game",
+                memoryId,
+                new StaticStateAdapter(playState),
+                config(),
+                tools(),
+                """
+                        {
+                          "operations":[
+                            {"tool":"good_tool","args":{}}
+                          ]
+                        }
+                        """);
 
-        assertTrue(error.feedback().contains("已执行 0 条操作"));
-        assertTrue(error.feedback().contains("RP 正在说话"));
+        assertTrue(result.contains("1/1"));
     }
-
     @Test
     void shouldRejectEmptyOperationBatch() {
         GameOperationQueueProcessor processor = new GameOperationQueueProcessor();
@@ -491,7 +489,7 @@ class GameOperationQueueProcessorTest {
         return new GameStateSnapshot(raw, objectMapper.readTree(raw), objectMapper.readTree(raw).path("state_type").asText(""));
     }
 
-    private static class StaticStateAdapter implements GameAdapter {
+    private static class StaticStateAdapter extends GameAdapter {
         private final GameStateSnapshot latestState;
 
         private StaticStateAdapter(GameStateSnapshot latestState) {
@@ -526,7 +524,7 @@ class GameOperationQueueProcessorTest {
         }
     }
 
-    private static class WindowStateAdapter implements GameAdapter {
+    private static class WindowStateAdapter extends GameAdapter {
         private final ArrayDeque<GameStateSnapshot> states;
         private GameStateSnapshot latestState;
 

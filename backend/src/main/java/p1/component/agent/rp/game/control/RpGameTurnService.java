@@ -43,18 +43,18 @@ public class RpGameTurnService {
     }
 
     public String play(ActiveGameSession session, String prompt, boolean replan) {
-        Optional<RpProactiveSessionRegistry.SessionSnapshot> online = sessionRegistry.findOnline(session.getRpSessionId());
-        if (online.isEmpty()) {
-            log.debug("[RP游戏回合] RP 会话不在线，跳过本轮: game={}, session={}, rpSession={}",
+        Optional<RpProactiveSessionRegistry.SessionSnapshot> snapshot = sessionRegistry.findKnown(session.getRpSessionId());
+        if (snapshot.isEmpty()) {
+            log.debug("[RP游戏回合] RP 会话缺少角色上下文，跳过本轮: game={}, session={}, rpSession={}",
                     session.getGameName(), session.getSessionId(), session.getRpSessionId());
-            return "RP 会话不在线，跳过。";
+            return "";
         }
         String source = replan ? "game-loop-replan" : "game-loop";
         String messageName = replan ? GAME_REPLAN_MESSAGE_NAME : GAME_LOOP_MESSAGE_NAME;
         return gameControlTurnLockService.withLock(
                 session.getRpSessionId(),
                 source,
-                () -> playLocked(session, prompt, online.get(), source, messageName));
+                () -> playLocked(session, prompt, snapshot.get(), source, messageName));
     }
 
     private String playLocked(ActiveGameSession session,

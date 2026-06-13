@@ -5,16 +5,23 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="b130ff98-1007-43a2-b161-a2069a2adc54" name="更改" comment="">
-      <change afterPath="$PROJECT_DIR$/backend/src/main/java/p1/component/gamer/adapter/GameAdapter.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/p1/component/gamer/GameSessionKey.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/p1/component/gamer/GameSessionKey.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/p1/component/gamer/GamerAgent.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/p1/component/gamer/GamerAgent.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/p1/component/gamer/GamerAgentService.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/p1/component/gamer/GamerAgentService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/p1/component/gamer/GamerMCPClientFactory.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/p1/component/gamer/GamerMCPClientFactory.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/p1/component/gamer/loop/GamerGameLoopService.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/p1/component/gamer/loop/GamerGameLoopService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/p1/config/mcp/MCPProperties.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/p1/config/mcp/MCPProperties.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/p1/config/mcp/McpServerRegistry.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/p1/config/mcp/McpServerRegistry.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/p1/controller/McpRegistryController.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/p1/controller/McpRegistryController.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/resources/mcp-catalog.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/resources/mcp-catalog.yaml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/AGENTS.md" beforeDir="false" afterPath="$PROJECT_DIR$/AGENTS.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/p1/component/agent/gamer/adapter/GameAdapter.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/p1/component/agent/gamer/adapter/GameAdapter.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/p1/component/agent/gamer/adapter/STS2Adapter.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/p1/component/agent/gamer/adapter/STS2Adapter.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/p1/component/agent/gamer/adapter/core/GameStateSnapshot.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/p1/component/agent/gamer/adapter/core/GameStateSnapshot.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/p1/component/agent/gamer/adapter/sts2/STS2OperationRepairer.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/p1/component/agent/gamer/adapter/sts2/STS2OperationRepairer.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/p1/component/agent/gamer/adapter/sts2/STS2OperationToolRenderer.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/p1/component/agent/gamer/adapter/sts2/STS2OperationToolRenderer.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/p1/component/agent/gamer/bridge/GameBridgeService.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/p1/component/agent/gamer/bridge/GameBridgeService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/p1/component/agent/gamer/bridge/queue/GameOperationQueueProcessor.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/p1/component/agent/gamer/bridge/queue/GameOperationQueueProcessor.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/p1/component/agent/gamer/bridge/queue/GameQueueDrainService.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/p1/component/agent/gamer/bridge/queue/GameQueueDrainService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/p1/component/agent/gamer/loop/RpGameDriver.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/p1/component/agent/gamer/loop/RpGameDriver.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/p1/component/agent/rp/game/context/RpCurrentGameContextService.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/p1/component/agent/rp/game/context/RpCurrentGameContextService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/p1/controller/GamerController.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/p1/controller/GamerController.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/test/java/p1/component/agent/gamer/loop/RpGameDriverTest.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/test/java/p1/component/agent/gamer/loop/RpGameDriverTest.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/test/java/p1/component/gamer/adapter/STS2AdapterActionabilityTest.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/test/java/p1/component/gamer/adapter/STS2AdapterActionabilityTest.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/test/java/p1/component/gamer/adapter/STS2AdapterTest.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/test/java/p1/component/gamer/adapter/STS2AdapterTest.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/test/java/p1/component/gamer/bridge/GameOperationQueueProcessorTest.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/test/java/p1/component/gamer/bridge/GameOperationQueueProcessorTest.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/test/java/p1/component/rp/core/RpSystemPromptServiceTest.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/test/java/p1/component/rp/core/RpSystemPromptServiceTest.java" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -27,6 +34,10 @@
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
   </component>
+  <component name="KubernetesApiPersistence"><![CDATA[{}]]></component>
+  <component name="KubernetesApiProvider"><![CDATA[{
+  "isMigrated": true
+}]]></component>
   <component name="MavenImportPreferences">
     <option name="generalSettings">
       <MavenGeneralSettings>
@@ -58,7 +69,7 @@
     "RunOnceActivity.MCP Project settings loaded": "true",
     "RunOnceActivity.ShowReadmeOnStart": "true",
     "RunOnceActivity.git.unshallow": "true",
-    "git-widget-placeholder": "mcp",
+    "git-widget-placeholder": "feature",
     "kotlin-language-version-configured": "true",
     "last_opened_file_path": "E:/PersonalProject/Project-1",
     "nodejs_package_manager_path": "npm",
@@ -83,6 +94,7 @@
       <option name="presentableId" value="Default" />
       <updated>1774416397283</updated>
       <workItem from="1778121256309" duration="170000" />
+      <workItem from="1782733603290" duration="8000" />
     </task>
     <servers />
   </component>

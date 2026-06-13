@@ -23,8 +23,6 @@ class ChatClient final : public QObject {
                      const QString &sessionId, const QString &characterName,
                      bool shortMode);
 
-    // 上报一次输入框活动心跳，后端据此短暂暂停 gamer 行动。
-    void sendTypingActivity(const QString &baseUrl, const QString &sessionId);
 
     // 打开 RP 主动消息的 SSE 订阅；重复调用会替换旧连接。
     // Open the RP proactive-message SSE stream; repeated calls replace the previous stream.

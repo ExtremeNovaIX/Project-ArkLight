@@ -248,6 +248,7 @@ bool FrontendSettings::voiceDebugEnabled() const {
     return m_voiceDebugEnabled;
 }
 
+
 void FrontendSettings::reset() {
     // reset 只改内存中的当前值；真正写入磁盘由 save() 完成。
     // reset only changes in-memory values; save() is responsible for writing to disk.
@@ -307,7 +308,7 @@ void FrontendSettings::loadExternalDefaults() {
         QStringLiteral("frontend.settings.backend-base-url")
     });
 
-    // Qt 独有设置不影响 Web 前端。
+    // 只对 Qt 前端生效的本地偏好。
     assignStringFromConfig(m_languageId, config, {QStringLiteral("frontend.qt.settings.language-id")});
     assignStringFromConfig(m_themeId, config, {QStringLiteral("frontend.qt.settings.theme-id")});
     assignBoolFromConfig(m_bootAnimationEnabled, config, {
@@ -540,6 +541,7 @@ void FrontendSettings::setVoiceDebugEnabled(bool value) {
     m_voiceDebugEnabled = value;
     emit settingsChanged();
 }
+
 
 void FrontendSettings::load() {
     // 通过 setter 读取配置，这样读取到的旧值也会走同一套默认值和范围校验逻辑。

@@ -2,7 +2,7 @@ package p1.component.agent.gamer.adapter.sts2;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import dev.langchain4j.agent.tool.ToolSpecification;
-import dev.langchain4j.service.tool.ToolProviderResult;
+import p1.component.agent.gamer.adapter.core.GameAdapterContext;
 import p1.component.agent.gamer.adapter.core.GameStateSnapshot;
 import p1.config.mcp.MCPProperties;
 
@@ -18,23 +18,24 @@ public class STS2OperationToolRenderer {
     private static final String MP_PREFIX = "mp_";
     private static final String TOOL_COMBAT_PLAY_CARD = "combat_play_card";
     private static final String LEGACY_TOOL_PLAY_CARD = "play_card";
+    private final STS2ModeDetector modeDetector;
+
+    public STS2OperationToolRenderer(STS2ModeDetector modeDetector) {
+        this.modeDetector = modeDetector;
+    }
 
     /**
      * 渲染当前状态下可用的 MCP 操作工具。
      *
-     * @param tools      底层 MCP 工具集合
-     * @param config     当前游戏 MCP 配置
-     * @param state      最新 STS2 状态
-     * @param modePrefix 自动检测出的多人模式前缀
+     * @param context 适配器运行上下文
+     * @param state   最新 STS2 状态
      * @return 面向 gamer 的操作工具描述
      */
-    public String render(ToolProviderResult tools,
-                         MCPProperties.GameMCPConfig config,
-                         GameStateSnapshot state,
-                         String modePrefix) {
+    public String render(GameAdapterContext context, GameStateSnapshot state) {
+        String modePrefix = modeDetector.modePrefix(context, state);
         StringBuilder sb = new StringBuilder();
-        List<ToolSpecification> operationSpecs = tools.tools().keySet().stream()
-                .filter(spec -> !isStateTool(spec.name(), config))
+        List<ToolSpecification> operationSpecs = context.tools().tools().keySet().stream()
+                .filter(spec -> !isStateTool(spec.name(), context.config()))
                 .filter(spec -> isModeVisible(spec.name(), modePrefix))
                 .sorted((a, b) -> a.name().compareToIgnoreCase(b.name()))
                 .toList();

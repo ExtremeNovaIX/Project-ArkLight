@@ -93,9 +93,13 @@ backend/benchmark/halumem/*.jsonl
 # TTS sidecar runtime（GPT-SoVITS 等外部服务与权重，自行下载）
 /backend/tts/
 
+# Python sidecar runtime（uv 管理的本地轻量环境，自行初始化）
+/backend/runtime/
+
 # MCP 服务器目录（第三方代码，自动扫描注册）
 /mcp-servers/*
 !/mcp-servers/.gitkeep
 .idea/workspace.xml
 /config
 .mcp.json
+/.codex

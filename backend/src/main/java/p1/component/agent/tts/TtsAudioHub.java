@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicLong;
 
 import static p1.utils.SessionUtil.normalizeSessionId;
 
@@ -27,6 +28,7 @@ public class TtsAudioHub {
     private static final long EMITTER_TIMEOUT_MS = 0L;
 
     private final ConcurrentMap<String, List<SseEmitter>> emittersBySession = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, AtomicLong> playbackSequenceBySession = new ConcurrentHashMap<>();
 
     /**
      * 创建一个 TTS 音频订阅。
@@ -75,14 +77,16 @@ public class TtsAudioHub {
      * @param text 本段音频对应文本
      * @param frame 音频帧
      */
-    public void publishAudio(String sessionId, String source, long sequence, String text, TtsAudioFrame frame) {
+    public synchronized void publishAudio(String sessionId, String source, long sequence, String text, TtsAudioFrame frame) {
+        String normalizedSessionId = normalizeSessionId(sessionId);
         if (frame == null || frame.audioBytes() == null || frame.audioBytes().length == 0) {
             return;
         }
         publish(new TtsAudioMessage(
-                normalizeSessionId(sessionId),
+                normalizedSessionId,
                 safeSource(source),
                 sequence,
+                nextPlaybackSequence(normalizedSessionId),
                 safeMediaType(frame.mediaType()),
                 frame.sampleRate(),
                 Base64.getEncoder().encodeToString(frame.audioBytes()),
@@ -98,11 +102,13 @@ public class TtsAudioHub {
      * @param source 发言来源
      * @param sequence 最后序号
      */
-    public void publishFinal(String sessionId, String source, long sequence) {
+    public synchronized void publishFinal(String sessionId, String source, long sequence) {
+        String normalizedSessionId = normalizeSessionId(sessionId);
         publish(new TtsAudioMessage(
-                normalizeSessionId(sessionId),
+                normalizedSessionId,
                 safeSource(source),
                 sequence,
+                nextPlaybackSequence(normalizedSessionId),
                 "application/octet-stream",
                 0,
                 "",
@@ -145,7 +151,14 @@ public class TtsAudioHub {
         }
         if (emitters.isEmpty()) {
             emittersBySession.remove(sessionId, emitters);
+            playbackSequenceBySession.remove(sessionId);
         }
+    }
+
+    private long nextPlaybackSequence(String sessionId) {
+        return playbackSequenceBySession
+                .computeIfAbsent(sessionId, ignored -> new AtomicLong())
+                .incrementAndGet();
     }
 
     private String safeSource(String source) {

@@ -202,7 +202,7 @@ public class RpGameDriver {
 
     private GameLoopUserSpeechSignal consumeUserSpeechSignal(ActiveGameSession session) {
         Optional<RpProactiveSessionRegistry.SessionSnapshot> snapshot =
-                proactiveSessionRegistry.findOnline(session.getRpSessionId());
+                proactiveSessionRegistry.findKnown(session.getRpSessionId());
         Instant lastUserSpeechAt = snapshot.map(RpProactiveSessionRegistry.SessionSnapshot::lastUserSpeechAt).orElse(null);
         return new GameLoopUserSpeechSignal(session.consumeUserSpeechTick(lastUserSpeechAt));
     }
@@ -255,19 +255,47 @@ public class RpGameDriver {
     }
 
     public ActiveGameSession start(String gameName, String sessionId) {
-        return start(gameName, sessionId, sessionId);
+        return start(gameName, sessionId, sessionId, null, null);
     }
 
     public ActiveGameSession start(String gameName, String sessionId, String rpSessionId) {
+        return start(gameName, sessionId, rpSessionId, null, null);
+    }
+
+    public ActiveGameSession start(String gameName,
+                                   String sessionId,
+                                   String rpSessionId,
+                                   String characterName,
+                                   Boolean shortMode) {
+        requireRpCharacterContext(rpSessionId, characterName);
         ActiveGameSession existing = registry.get(gameName, sessionId);
         if (existing != null && existing.getState() == ActiveGameSession.State.RUNNING) {
+            rememberSessionContext(existing, characterName, shortMode);
+            existing.clearUserOrStateWait();
             observationBackoffService.reset(existing);
             return existing;
         }
         ActiveGameSession session = registry.register(gameName, sessionId, rpSessionId);
+        rememberSessionContext(session, characterName, shortMode);
         observationBackoffService.reset(session);
         traceService.initSession(gameName, sessionId);
         return session;
+    }
+
+    private void requireRpCharacterContext(String rpSessionId, String characterName) {
+        if (characterName != null && !characterName.isBlank()) {
+            return;
+        }
+        if (proactiveSessionRegistry.findKnown(rpSessionId).isPresent()) {
+            return;
+        }
+        throw new IllegalArgumentException("Game loop requires a selected RP character.");
+    }
+
+    private void rememberSessionContext(ActiveGameSession session, String characterName, Boolean shortMode) {
+        if (session != null) {
+            proactiveSessionRegistry.rememberSessionContext(session.getRpSessionId(), characterName, shortMode);
+        }
     }
 
     public void stop(String gameName, String sessionId) {
@@ -290,10 +318,17 @@ public class RpGameDriver {
     }
 
     public void resume(String gameName, String sessionId) {
+        resume(gameName, sessionId, null, null);
+    }
+
+    public void resume(String gameName, String sessionId, String characterName, Boolean shortMode) {
         ActiveGameSession session = registry.get(gameName, sessionId);
         if (session != null) {
+            rememberSessionContext(session, characterName, shortMode);
+            session.clearUserOrStateWait();
             session.setState(ActiveGameSession.State.RUNNING);
             observationBackoffService.reset(session);
+            clearSameStateObservation(session);
             log.info("[RP游戏驱动] 会话已恢复: game={}, session={}", gameName, sessionId);
         }
     }

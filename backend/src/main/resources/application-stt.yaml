@@ -1,0 +1,8 @@
+stt:
+  partial-interval-ms: 500
+  max-segment-ms: 3000
+
+  sherpa-qwen:
+    hotwords: ${STT_SHERPA_QWEN_HOTWORDS:}
+    hotwords-file: ${STT_SHERPA_QWEN_HOTWORDS_FILE:词表.txt}
+    max-hotwords: ${STT_SHERPA_QWEN_MAX_HOTWORDS:300}

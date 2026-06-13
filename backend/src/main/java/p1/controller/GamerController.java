@@ -42,10 +42,15 @@ public class GamerController {
         }
 
         log.info("[游戏控制器] 启动游戏循环: game={}, session={}", target.gameName(), target.sessionId());
-        ActiveGameSession session = gameLoopService.start(target.gameName(), target.sessionId(), target.rpSessionId());
+        ActiveGameSession session;
+        try {
+            session = gameLoopService.start(target.gameName(), target.sessionId(), target.rpSessionId(), characterName(request), shortMode(request));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
 
         return ResponseEntity.ok(Map.of(
-                "message", "游戏循环已启动",
+                "message", "\u6e38\u620f\u5faa\u73af\u5df2\u542f\u52a8",
                 "session", sessionInfo(session)
         ));
     }
@@ -94,7 +99,7 @@ public class GamerController {
         }
 
         log.info("[游戏控制器] 恢复游戏循环: game={}, session={}", target.gameName(), target.sessionId());
-        gameLoopService.resume(target.gameName(), target.sessionId());
+        gameLoopService.resume(target.gameName(), target.sessionId(), characterName(request), shortMode(request));
 
         ActiveGameSession s = gameLoopService.status(target.gameName(), target.sessionId());
         return ResponseEntity.ok(Map.of(
@@ -156,6 +161,14 @@ public class GamerController {
         );
     }
 
+    private String characterName(GamerLoopRequest request) {
+        return request == null ? null : request.characterName;
+    }
+
+    private Boolean shortMode(GamerLoopRequest request) {
+        return request == null ? null : request.shortMode;
+    }
+
     private Map<String, Object> sessionInfo(ActiveGameSession s) {
         return Map.of(
                 "gameName", s.getGameName(),
@@ -172,6 +185,8 @@ public class GamerController {
         public String gameName;
         public String sessionId;
         public String rpSessionId;
+        public String characterName;
+        public Boolean shortMode;
     }
 
     private record GameTarget(String gameName, String sessionId, String rpSessionId) {

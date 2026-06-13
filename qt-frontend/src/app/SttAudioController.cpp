@@ -27,6 +27,10 @@ namespace {
 constexpr int TargetSampleRate = 16000;
 constexpr int TargetChannelCount = 1;
 constexpr int TargetBytesPerSample = 2;
+constexpr double Pi = 3.14159265358979323846;
+constexpr int PcmFlushBytes = TargetSampleRate * TargetBytesPerSample / 10;
+constexpr double VoiceBandLowHz = 80.0;
+constexpr double VoiceBandHighHz = 3800.0;
 
 QString normalizeBackendBaseUrl(const QString &value) {
     QString normalized = value.trimmed();
@@ -74,6 +78,119 @@ qint16 floatToPcm16(float value) {
     return static_cast<qint16>(std::lround(clamped * 32767.0f));
 }
 
+qreal pcm16Level(const QByteArray &pcm) {
+    const int frames = pcm.size() / TargetBytesPerSample;
+    if (frames <= 0) {
+        return 0.0;
+    }
+    const auto *data = reinterpret_cast<const uchar *>(pcm.constData());
+    double energy = 0.0;
+    for (int index = 0; index < frames; ++index) {
+        const qint16 sample = qFromLittleEndian<qint16>(data + index * TargetBytesPerSample);
+        const double value = sample / 32768.0;
+        energy += value * value;
+    }
+    return qBound<qreal>(0.0, std::sqrt(energy / frames) * 4.0, 1.0);
+}
+
+float linearSampleAt(const QVector<float> &samples, double position) {
+    if (samples.isEmpty()) {
+        return 0.0f;
+    }
+    const int last = samples.size() - 1;
+    if (position <= 0.0) {
+        return samples.first();
+    }
+    if (position >= last) {
+        return samples.last();
+    }
+    const int left = static_cast<int>(std::floor(position));
+    const int right = qMin(left + 1, last);
+    const float fraction = static_cast<float>(position - left);
+    return samples.at(left) + (samples.at(right) - samples.at(left)) * fraction;
+}
+
+float averagedSampleWindow(const QVector<float> &samples, double start, double end) {
+    if (samples.isEmpty()) {
+        return 0.0f;
+    }
+    if (end <= start) {
+        return linearSampleAt(samples, start);
+    }
+    const int first = qMax(0, static_cast<int>(std::floor(start)));
+    const int last = qMin(samples.size() - 1, static_cast<int>(std::ceil(end)) - 1);
+    double weighted = 0.0;
+    double weight = 0.0;
+    for (int index = first; index <= last; ++index) {
+        const double left = qMax(start, static_cast<double>(index));
+        const double right = qMin(end, static_cast<double>(index + 1));
+        const double sampleWeight = qMax(0.0, right - left);
+        weighted += static_cast<double>(samples.at(index)) * sampleWeight;
+        weight += sampleWeight;
+    }
+    if (weight <= 0.0) {
+        return linearSampleAt(samples, start);
+    }
+    return static_cast<float>(weighted / weight);
+}
+
+QByteArray resampleMonoToPcm16k(const QVector<float> &samples, int sourceRate) {
+    if (samples.isEmpty() || sourceRate <= 0) {
+        return {};
+    }
+    const int targetFrames = qMax(
+        1,
+        static_cast<int>(std::llround(samples.size() * (TargetSampleRate / static_cast<double>(sourceRate)))));
+    const double sourceFramesPerTarget = sourceRate / static_cast<double>(TargetSampleRate);
+    QByteArray output;
+    output.resize(targetFrames * TargetBytesPerSample);
+    uchar *out = reinterpret_cast<uchar *>(output.data());
+    for (int index = 0; index < targetFrames; ++index) {
+        const double start = index * sourceFramesPerTarget;
+        const double end = (index + 1) * sourceFramesPerTarget;
+        const float value = sourceFramesPerTarget > 1.0
+            ? averagedSampleWindow(samples, start, end)
+            : linearSampleAt(samples, start);
+        qToLittleEndian<qint16>(floatToPcm16(value), out + index * TargetBytesPerSample);
+    }
+    return output;
+}
+
+void filterVoiceBandPcm16InPlace(QByteArray *pcm,
+                                 double *highPassPreviousInput,
+                                 double *highPassPreviousOutput,
+                                 double *lowPassPreviousOutput) {
+    if (pcm == nullptr
+        || highPassPreviousInput == nullptr
+        || highPassPreviousOutput == nullptr
+        || lowPassPreviousOutput == nullptr
+        || pcm->isEmpty()) {
+        return;
+    }
+    const int frames = pcm->size() / TargetBytesPerSample;
+    if (frames <= 0) {
+        return;
+    }
+
+    const double highPassRc = 1.0 / (2.0 * Pi * VoiceBandLowHz);
+    const double lowPassRc = 1.0 / (2.0 * Pi * VoiceBandHighHz);
+    const double dt = 1.0 / TargetSampleRate;
+    const double highPassAlpha = highPassRc / (highPassRc + dt);
+    const double lowPassAlpha = dt / (lowPassRc + dt);
+
+    auto *data = reinterpret_cast<uchar *>(pcm->data());
+    for (int index = 0; index < frames; ++index) {
+        const qint16 sample = qFromLittleEndian<qint16>(data + index * TargetBytesPerSample);
+        const double input = sample / 32768.0;
+        const double highPassed = highPassAlpha * (*highPassPreviousOutput + input - *highPassPreviousInput);
+        *highPassPreviousInput = input;
+        *highPassPreviousOutput = highPassed;
+        *lowPassPreviousOutput += lowPassAlpha * (highPassed - *lowPassPreviousOutput);
+        qToLittleEndian<qint16>(floatToPcm16(static_cast<float>(*lowPassPreviousOutput)),
+                                data + index * TargetBytesPerSample);
+    }
+}
+
 QString csvEscape(QString value) {
     value.replace('"', "\"\"");
     return QStringLiteral("\"%1\"").arg(value);
@@ -83,13 +200,13 @@ QString csvEscape(QString value) {
 
 SttAudioController::SttAudioController(FrontendSettings *settings, QObject *parent)
     : QObject(parent)
-    , m_settings(settings)
-    , m_processCapture(new WindowsProcessAudioCapture(this)) {
+    , m_settings(settings) {
     connect(&m_mediaDevices, &QMediaDevices::audioInputsChanged, this, &SttAudioController::refreshDevices);
     connect(&m_socket, &QTcpSocket::connected, this, &SttAudioController::handleSocketConnected);
     connect(&m_socket, &QTcpSocket::readyRead, this, &SttAudioController::handleSocketReadyRead);
     connect(&m_socket, &QTcpSocket::disconnected, this, [this]() {
-        setBackendConnected(false);
+        m_primaryBackendConnected = false;
+        updateBackendConnected();
         m_handshakeComplete = false;
         if (!m_stopRequested && m_running) {
             setStatusText(localListeningStatus() + QStringLiteral(" STT disconnected."));
@@ -98,7 +215,8 @@ SttAudioController::SttAudioController(FrontendSettings *settings, QObject *pare
         }
     });
     connect(&m_socket, &QTcpSocket::errorOccurred, this, [this](QAbstractSocket::SocketError) {
-        setBackendConnected(false);
+        m_primaryBackendConnected = false;
+        updateBackendConnected();
         m_handshakeComplete = false;
         const QString errorText = m_socket.errorString().trimmed();
         if (m_running) {
@@ -108,10 +226,7 @@ SttAudioController::SttAudioController(FrontendSettings *settings, QObject *pare
             setStatusText(errorText.isEmpty() ? QStringLiteral("Voice stream error.") : errorText);
         }
     });
-    connect(m_processCapture, &WindowsProcessAudioCapture::pcmReady, this, &SttAudioController::handleProcessPcmReady);
-    connect(m_processCapture, &WindowsProcessAudioCapture::stopped, this, &SttAudioController::handleProcessCaptureStopped);
     refreshDevices();
-    refreshProcesses();
 }
 
 SttAudioController::~SttAudioController() {
@@ -127,10 +242,6 @@ bool SttAudioController::backendConnected() const {
     return m_backendConnected;
 }
 
-int SttAudioController::sourceMode() const {
-    return m_sourceMode;
-}
-
 QStringList SttAudioController::deviceNames() const {
     return m_deviceNames;
 }
@@ -139,20 +250,20 @@ int SttAudioController::selectedDeviceIndex() const {
     return m_selectedDeviceIndex;
 }
 
-QStringList SttAudioController::processNames() const {
-    return m_processNames;
-}
-
-int SttAudioController::selectedProcessIndex() const {
-    return m_selectedProcessIndex;
-}
-
 QString SttAudioController::statusText() const {
     return m_statusText;
 }
 
 QString SttAudioController::transcriptText() const {
     return m_transcriptText;
+}
+
+QString SttAudioController::partialTranscriptText() const {
+    return m_partialTranscriptText;
+}
+
+QString SttAudioController::finalTranscriptText() const {
+    return m_finalTranscriptText;
 }
 
 qreal SttAudioController::audioLevel() const {
@@ -176,10 +287,6 @@ void SttAudioController::refreshDevices() {
     rebuildDeviceList();
 }
 
-void SttAudioController::refreshProcesses() {
-    rebuildProcessList();
-}
-
 void SttAudioController::start() {
     if (m_running) {
         return;
@@ -191,7 +298,10 @@ void SttAudioController::start() {
 
     closeSocket();
     setTranscriptText(QString());
+    setPartialTranscriptText(QString());
+    setFinalTranscriptText(QString());
     setAudioLevel(0.0);
+    resetVoiceBandFilter();
     m_stopRequested = false;
 
     if (!beginAudioCapture()) {
@@ -215,6 +325,7 @@ void SttAudioController::stop() {
     setAudioLevel(0.0);
 
     if (m_socket.state() == QAbstractSocket::ConnectedState && m_handshakeComplete) {
+        flushPendingPcm(true);
         sendTextFrame(QStringLiteral("done"));
         setStatusText(QStringLiteral("Stopping voice stream..."));
     } else {
@@ -229,6 +340,8 @@ void SttAudioController::clearDebugEvents() {
     }
     m_debugEvents.clear();
     m_debugCsvRows.clear();
+    m_lastDebugSignature.clear();
+    m_lastDebugEventAt = 0;
     emit debugEventsChanged();
     setLastDebugExportPath(QString());
 }
@@ -254,31 +367,13 @@ void SttAudioController::exportDebugEvents() {
         return;
     }
 
-    file.write("localTime,receivedAt,phase,text,intent,confidence,instruction,consumed,triggered,routed,routeDurationMs,reason\n");
+    file.write("localTime,receivedAt,stream,asrType,phase,speakerId,speakerConfidence,quality,overlap,noiseLevel,stable,revision,latencyMs,startMs,endMs,text,intent,confidence,instruction,consumed,triggered,routed,routeDurationMs,reason\n");
     for (const QString &row : m_debugCsvRows) {
         file.write(row.toUtf8());
         file.write("\n");
     }
     setLastDebugExportPath(filePath);
     setStatusText(QStringLiteral("Voice debug CSV exported: %1").arg(filePath));
-}
-
-void SttAudioController::setSourceMode(int value) {
-    const int normalized = value == ProcessAudio ? ProcessAudio : Microphone;
-    if (m_sourceMode == normalized) {
-        return;
-    }
-    const bool wasRunning = m_running;
-    if (wasRunning) {
-        stop();
-    }
-    m_sourceMode = normalized;
-    emit sourceModeChanged();
-    if (m_sourceMode == ProcessAudio) {
-        rebuildProcessList();
-    } else {
-        rebuildDeviceList();
-    }
 }
 
 void SttAudioController::setSelectedDeviceIndex(int value) {
@@ -292,95 +387,59 @@ void SttAudioController::setSelectedDeviceIndex(int value) {
         stop();
     }
     m_selectedDeviceIndex = normalized;
+    m_selectedDeviceId = m_filteredDevices.isEmpty() ? QString() : deviceId(m_filteredDevices.at(m_selectedDeviceIndex));
     emit selectedDeviceIndexChanged();
 }
 
-void SttAudioController::setSelectedProcessIndex(int value) {
-    const int maxIndex = qMax(0, m_processes.size() - 1);
-    const int normalized = qBound(0, value, maxIndex);
-    if (m_selectedProcessIndex == normalized) {
-        return;
-    }
-    const bool wasRunning = m_running;
-    if (wasRunning) {
-        stop();
-    }
-    m_selectedProcessIndex = normalized;
-    emit selectedProcessIndexChanged();
-}
-
 void SttAudioController::rebuildDeviceList() {
-    QList<QAudioDevice> microphoneCandidates;
-    for (const QAudioDevice &device : m_allDevices) {
-        if (!isSystemAudioCandidate(device)) {
-            microphoneCandidates.append(device);
-        }
-    }
-    m_filteredDevices = microphoneCandidates.isEmpty() ? m_allDevices : microphoneCandidates;
+    const QString previousDeviceId = m_selectedDeviceId.isEmpty() ? deviceId(selectedDevice()) : m_selectedDeviceId;
+    m_filteredDevices = m_allDevices;
 
     QStringList nextNames;
     for (const QAudioDevice &device : m_filteredDevices) {
         nextNames.append(device.description());
     }
     if (nextNames.isEmpty()) {
-        nextNames.append(QStringLiteral("No microphone devices"));
+        nextNames.append(QStringLiteral("No audio input devices"));
     }
 
     m_deviceNames = nextNames;
-    if (m_selectedDeviceIndex >= m_filteredDevices.size()) {
-        m_selectedDeviceIndex = 0;
+    const int previousIndex = m_selectedDeviceIndex;
+    m_selectedDeviceIndex = 0;
+    if (!previousDeviceId.isEmpty()) {
+        for (int index = 0; index < m_filteredDevices.size(); ++index) {
+            if (deviceId(m_filteredDevices.at(index)) == previousDeviceId) {
+                m_selectedDeviceIndex = index;
+                break;
+            }
+        }
+    }
+    m_selectedDeviceId = m_filteredDevices.isEmpty() ? QString() : deviceId(m_filteredDevices.at(m_selectedDeviceIndex));
+    if (previousIndex != m_selectedDeviceIndex) {
         emit selectedDeviceIndexChanged();
     }
     emit devicesChanged();
 
     if (!m_running) {
         setStatusText(m_filteredDevices.isEmpty()
-                          ? QStringLiteral("No microphone input device is available.")
+                          ? QStringLiteral("No audio input device is available.")
                           : QStringLiteral("Voice input ready."));
     }
 }
 
-void SttAudioController::rebuildProcessList() {
-    m_processes = WindowsProcessAudioCapture::enumerateProcesses();
-
-    QStringList nextNames;
-    for (const auto &process : m_processes) {
-        nextNames.append(process.label);
-    }
-    if (nextNames.isEmpty()) {
-        nextNames.append(QStringLiteral("No Windows processes"));
-    }
-
-    m_processNames = nextNames;
-    if (m_selectedProcessIndex >= m_processes.size()) {
-        m_selectedProcessIndex = 0;
-        emit selectedProcessIndexChanged();
-    }
-    emit processesChanged();
-
-    if (!m_running && m_sourceMode == ProcessAudio) {
-        setStatusText(m_processes.isEmpty()
-                          ? QStringLiteral("No process is available for audio capture.")
-                          : QStringLiteral("Select the voice app process to capture."));
-    }
-}
-
 bool SttAudioController::beginAudioCapture() {
-    if (m_sourceMode == ProcessAudio) {
-        return beginProcessAudioCapture();
-    }
     return beginDeviceAudioCapture();
 }
 
 bool SttAudioController::beginDeviceAudioCapture() {
     if (m_filteredDevices.isEmpty()) {
-        setStatusText(QStringLiteral("No microphone input device is available."));
+        setStatusText(QStringLiteral("No audio input device is available."));
         return false;
     }
 
     const QAudioDevice device = selectedDevice();
     if (device.isNull()) {
-        setStatusText(QStringLiteral("Selected microphone is unavailable."));
+        setStatusText(QStringLiteral("Selected audio input is unavailable."));
         return false;
     }
 
@@ -396,29 +455,11 @@ bool SttAudioController::beginDeviceAudioCapture() {
     if (m_audioDevice == nullptr) {
         m_audioSource->deleteLater();
         m_audioSource = nullptr;
-        setStatusText(QStringLiteral("Could not start microphone input."));
+        setStatusText(QStringLiteral("Could not start audio input."));
         return false;
     }
 
     connect(m_audioDevice, &QIODevice::readyRead, this, &SttAudioController::handleAudioReadyRead);
-    return true;
-}
-
-bool SttAudioController::beginProcessAudioCapture() {
-    if (m_processes.isEmpty()) {
-        rebuildProcessList();
-    }
-    const quint32 processId = selectedProcessId();
-    if (processId == 0) {
-        setStatusText(QStringLiteral("Select the voice app process to capture."));
-        return false;
-    }
-
-    QString errorMessage;
-    if (!m_processCapture->start(processId, &errorMessage)) {
-        setStatusText(errorMessage.isEmpty() ? QStringLiteral("Could not start process audio capture.") : errorMessage);
-        return false;
-    }
     return true;
 }
 
@@ -429,9 +470,6 @@ void SttAudioController::stopAudioCapture() {
         m_audioSource = nullptr;
     }
     m_audioDevice = nullptr;
-    if (m_processCapture != nullptr && m_processCapture->running()) {
-        m_processCapture->stop();
-    }
 }
 
 void SttAudioController::connectBackend() {
@@ -448,7 +486,8 @@ void SttAudioController::connectBackend() {
     m_socketUrl = url;
     m_socketBuffer.clear();
     m_handshakeComplete = false;
-    setBackendConnected(false);
+    m_primaryBackendConnected = false;
+    updateBackendConnected();
     m_socket.connectToHost(url.host(), url.port(80));
 }
 
@@ -462,18 +501,31 @@ void SttAudioController::closeSocket() {
         m_socket.abort();
     }
     m_handshakeComplete = false;
-    setBackendConnected(false);
+    m_primaryBackendConnected = false;
+    updateBackendConnected();
     m_socketBuffer.clear();
+    m_pendingPcm.clear();
 }
 
 void SttAudioController::sendSttConfig() {
     if (m_settings == nullptr) {
         return;
     }
+    QString sessionId = m_settings->sessionId().trimmed();
+    QString gameSessionId = m_settings->gameSessionId().trimmed();
+    QString gameRpSessionId = m_settings->gameRpSessionId().trimmed();
+    if (gameSessionId.isEmpty()) {
+        gameSessionId = sessionId;
+    }
+    if (gameRpSessionId.isEmpty()) {
+        gameRpSessionId = gameSessionId;
+    }
     QJsonObject config;
-    config.insert(QStringLiteral("rpSessionId"), m_settings->sessionId());
+    config.insert(QStringLiteral("rpSessionId"), sessionId);
+    config.insert(QStringLiteral("gameRpSessionId"), gameRpSessionId);
     config.insert(QStringLiteral("characterName"), m_settings->characterName());
     config.insert(QStringLiteral("debugOnly"), m_settings->voiceDebugEnabled());
+    config.insert(QStringLiteral("source"), QStringLiteral("microphone"));
     sendTextFrame(QString::fromUtf8(QJsonDocument(config).toJson(QJsonDocument::Compact)));
 }
 
@@ -485,23 +537,6 @@ void SttAudioController::handleAudioReadyRead() {
     const QByteArray raw = m_audioDevice->readAll();
     const QByteArray pcm = convertToPcm16Mono16k(raw);
     sendPcmToBackend(pcm);
-}
-
-void SttAudioController::handleProcessPcmReady(const QByteArray &pcm, qreal level) {
-    setAudioLevel(level);
-    sendPcmToBackend(pcm);
-}
-
-void SttAudioController::handleProcessCaptureStopped(const QString &errorMessage) {
-    if (!errorMessage.isEmpty() && !m_stopRequested) {
-        if (m_processCapture != nullptr) {
-            m_processCapture->stop();
-        }
-        setRunning(false);
-        setAudioLevel(0.0);
-        closeSocket();
-        setStatusText(errorMessage);
-    }
 }
 
 void SttAudioController::handleSocketConnected() {
@@ -547,7 +582,8 @@ void SttAudioController::handleSocketReadyRead() {
             return;
         }
         m_handshakeComplete = true;
-        setBackendConnected(true);
+        m_primaryBackendConnected = true;
+        updateBackendConnected();
         sendSttConfig();
         setStatusText(localListeningStatus() + QStringLiteral(" STT connected."));
     }
@@ -600,7 +636,7 @@ void SttAudioController::parseSocketFrames() {
         }
 
         if (opcode == 0x1) {
-            handleTextMessage(QString::fromUtf8(payload));
+            handleTextMessage(QString::fromUtf8(payload), QStringLiteral("microphone"));
         } else if (opcode == 0x8) {
             closeSocket();
             return;
@@ -610,19 +646,30 @@ void SttAudioController::parseSocketFrames() {
     }
 }
 
-void SttAudioController::handleTextMessage(const QString &message) {
+void SttAudioController::handleTextMessage(const QString &message, const QString &streamName) {
     const QJsonDocument document = QJsonDocument::fromJson(message.toUtf8());
     if (!document.isObject()) {
         return;
     }
 
-    const QJsonObject object = document.object();
+    QJsonObject object = document.object();
+    if (!streamName.isEmpty() && !object.contains(QStringLiteral("stream"))) {
+        object.insert(QStringLiteral("stream"), streamName);
+    }
     const QString type = object.value(QStringLiteral("type")).toString();
     if (type == QStringLiteral("result")) {
         const QString text = object.value(QStringLiteral("text")).toString().trimmed();
         const bool finalResult = object.value(QStringLiteral("final")).toBool(false);
         if (!text.isEmpty()) {
             setTranscriptText(text);
+            if (finalResult) {
+                setFinalTranscriptText(text);
+            } else {
+                setPartialTranscriptText(text);
+            }
+            if (m_settings != nullptr && m_settings->voiceDebugEnabled()) {
+                appendDebugEvent(object);
+            }
             setStatusText(finalResult
                               ? QStringLiteral("%1: %2").arg(m_settings != nullptr && m_settings->voiceDebugEnabled()
                                                              ? QStringLiteral("Voice debug final")
@@ -641,8 +688,7 @@ void SttAudioController::handleTextMessage(const QString &message) {
         closeSocket();
         setStatusText(QStringLiteral("Voice stream stopped."));
         return;
-    }
-    if (type == QStringLiteral("error")) {
+    }    if (type == QStringLiteral("error")) {
         setStatusText(object.value(QStringLiteral("message")).toString(QStringLiteral("Voice stream error.")));
         closeSocket();
     }
@@ -664,7 +710,24 @@ void SttAudioController::sendPcmToBackend(const QByteArray &payload) {
     if (payload.isEmpty() || m_socket.state() != QAbstractSocket::ConnectedState || !m_handshakeComplete) {
         return;
     }
-    sendBinaryFrame(payload);
+    m_pendingPcm.append(payload);
+    flushPendingPcm(false);
+}
+
+void SttAudioController::flushPendingPcm(bool force) {
+    if (m_socket.state() != QAbstractSocket::ConnectedState || !m_handshakeComplete) {
+        m_pendingPcm.clear();
+        return;
+    }
+    while (m_pendingPcm.size() >= PcmFlushBytes) {
+        const QByteArray chunk = m_pendingPcm.left(PcmFlushBytes);
+        m_pendingPcm.remove(0, PcmFlushBytes);
+        sendBinaryFrame(chunk);
+    }
+    if (force && !m_pendingPcm.isEmpty()) {
+        sendBinaryFrame(m_pendingPcm);
+        m_pendingPcm.clear();
+    }
 }
 
 void SttAudioController::sendFrame(quint8 opcode, const QByteArray &payload) {
@@ -720,6 +783,10 @@ void SttAudioController::setBackendConnected(bool value) {
     emit backendConnectedChanged();
 }
 
+void SttAudioController::updateBackendConnected() {
+    setBackendConnected(m_primaryBackendConnected);
+}
+
 void SttAudioController::setStatusText(const QString &value) {
     if (m_statusText == value) {
         return;
@@ -736,6 +803,22 @@ void SttAudioController::setTranscriptText(const QString &value) {
     emit transcriptTextChanged();
 }
 
+void SttAudioController::setPartialTranscriptText(const QString &value) {
+    if (m_partialTranscriptText == value) {
+        return;
+    }
+    m_partialTranscriptText = value;
+    emit transcriptTextChanged();
+}
+
+void SttAudioController::setFinalTranscriptText(const QString &value) {
+    if (m_finalTranscriptText == value) {
+        return;
+    }
+    m_finalTranscriptText = value;
+    emit transcriptTextChanged();
+}
+
 void SttAudioController::setAudioLevel(qreal value) {
     const qreal normalized = qBound<qreal>(0.0, value, 1.0);
     if (qAbs(m_audioLevel - normalized) < 0.01) {
@@ -747,11 +830,31 @@ void SttAudioController::setAudioLevel(qreal value) {
 
 void SttAudioController::appendDebugEvent(const QJsonObject &object) {
     const QString localTime = QDateTime::currentDateTime().toString(QStringLiteral("HH:mm:ss.zzz"));
-    const QString receivedAt = object.value(QStringLiteral("receivedAt")).toString();
+    const QString eventType = object.value(QStringLiteral("type")).toString();
+    const QString stream = object.value(QStringLiteral("stream")).toString(QStringLiteral("stt"));
     const bool finalResult = object.value(QStringLiteral("final")).toBool(false);
+    if (!finalResult) {
+        return;
+    }
+    const QString asrType = object.value(QStringLiteral("asrType")).toString(
+        eventType == QStringLiteral("result")
+            ? (finalResult ? QStringLiteral("final") : QStringLiteral("partial"))
+            : QStringLiteral("debug"));
+    const QString receivedAt = object.value(QStringLiteral("receivedAt")).toString();
     const QString phase = finalResult ? QStringLiteral("FINAL") : QStringLiteral("PARTIAL");
     const QString text = object.value(QStringLiteral("text")).toString().trimmed();
-    const QString intent = object.value(QStringLiteral("intent")).toString(QStringLiteral("CHAT"));
+    const QString intent = object.value(QStringLiteral("intent")).toString(
+        eventType == QStringLiteral("result") ? QStringLiteral("ASR") : QStringLiteral("CHAT"));
+    const QString speakerId = object.value(QStringLiteral("speakerId")).toString(QStringLiteral("UNKNOWN"));
+    const double speakerConfidence = object.value(QStringLiteral("speakerConfidence")).toDouble(0.0);
+    const QString quality = object.value(QStringLiteral("quality")).toString(QStringLiteral("uncertain"));
+    const bool overlap = object.value(QStringLiteral("overlap")).toBool(false);
+    const double noiseLevel = object.value(QStringLiteral("noiseLevel")).toDouble(0.0);
+    const bool stable = object.value(QStringLiteral("stable")).toBool(finalResult);
+    const int revision = object.value(QStringLiteral("revision")).toInt(-1);
+    const int latencyMs = object.value(QStringLiteral("latencyMs")).toInt(-1);
+    const int startMs = object.value(QStringLiteral("startMs")).toInt(-1);
+    const int endMs = object.value(QStringLiteral("endMs")).toInt(-1);
     const double confidence = object.value(QStringLiteral("confidence")).toDouble(0.0);
     const QString instruction = object.value(QStringLiteral("instruction")).toString().trimmed();
     const bool consumed = object.value(QStringLiteral("consumed")).toBool(false);
@@ -759,34 +862,76 @@ void SttAudioController::appendDebugEvent(const QJsonObject &object) {
     const bool routed = object.value(QStringLiteral("routed")).toBool(false);
     const int routeDurationMs = object.value(QStringLiteral("routeDurationMs")).toInt(0);
     const QString reason = object.value(QStringLiteral("reason")).toString();
+    const QString signature = QStringList{
+        phase,
+        stream,
+        speakerId,
+        text,
+        intent,
+        quality,
+        stable ? QStringLiteral("1") : QStringLiteral("0"),
+        QString::number(revision),
+        consumed ? QStringLiteral("1") : QStringLiteral("0"),
+        triggered ? QStringLiteral("1") : QStringLiteral("0"),
+        routed ? QStringLiteral("1") : QStringLiteral("0"),
+        reason
+    }.join(QLatin1Char('|'));
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    if (signature == m_lastDebugSignature && now - m_lastDebugEventAt < 1500) {
+        return;
+    }
+    m_lastDebugSignature = signature;
+    m_lastDebugEventAt = now;
 
-    const QString summary = QStringLiteral("%1  %2  %3  conf=%4  route=%5ms  consumed=%6  %7")
-            .arg(localTime,
-                 phase,
-                 intent,
-                 QString::number(confidence, 'f', 2),
-                 QString::number(routeDurationMs),
-                 consumed ? QStringLiteral("yes") : QStringLiteral("no"),
-                 text);
+    const QString latencyText = latencyMs >= 0 ? QString::number(latencyMs) + QStringLiteral("ms") : QStringLiteral("-");
+    const QString summary = QStringList{
+        localTime,
+        stream,
+        asrType,
+        phase,
+        QStringLiteral("speaker=%1(%2)").arg(speakerId, QString::number(speakerConfidence, 'f', 2)),
+        QStringLiteral("quality=%1").arg(quality),
+        QStringLiteral("overlap=%1").arg(overlap ? QStringLiteral("yes") : QStringLiteral("no")),
+        QStringLiteral("stable=%1").arg(stable ? QStringLiteral("yes") : QStringLiteral("no")),
+        QStringLiteral("rev=%1").arg(revision >= 0 ? QString::number(revision) : QStringLiteral("-")),
+        QStringLiteral("latency=%1").arg(latencyText),
+        QStringLiteral("route=%1ms").arg(routeDurationMs),
+        QStringLiteral("consumed=%1").arg(consumed ? QStringLiteral("yes") : QStringLiteral("no")),
+        text
+    }.join(QStringLiteral("  "));
     m_debugEvents.prepend(summary);
     while (m_debugEvents.size() > 200) {
         m_debugEvents.removeLast();
     }
 
-    m_debugCsvRows.append(QStringList{
-        csvEscape(localTime),
-        csvEscape(receivedAt),
-        csvEscape(phase),
-        csvEscape(text),
-        csvEscape(intent),
-        QString::number(confidence, 'f', 4),
-        csvEscape(instruction),
-        consumed ? QStringLiteral("true") : QStringLiteral("false"),
-        triggered ? QStringLiteral("true") : QStringLiteral("false"),
-        routed ? QStringLiteral("true") : QStringLiteral("false"),
-        QString::number(routeDurationMs),
-        csvEscape(reason)
-    }.join(QLatin1Char(',')));
+    if (finalResult) {
+        m_debugCsvRows.append(QStringList{
+            csvEscape(localTime),
+            csvEscape(receivedAt),
+            csvEscape(stream),
+            csvEscape(asrType),
+            csvEscape(phase),
+            csvEscape(speakerId),
+            QString::number(speakerConfidence, 'f', 4),
+            csvEscape(quality),
+            overlap ? QStringLiteral("true") : QStringLiteral("false"),
+            QString::number(noiseLevel, 'f', 4),
+            stable ? QStringLiteral("true") : QStringLiteral("false"),
+            revision >= 0 ? QString::number(revision) : QString(),
+            latencyMs >= 0 ? QString::number(latencyMs) : QString(),
+            startMs >= 0 ? QString::number(startMs) : QString(),
+            endMs >= 0 ? QString::number(endMs) : QString(),
+            csvEscape(text),
+            csvEscape(intent),
+            QString::number(confidence, 'f', 4),
+            csvEscape(instruction),
+            consumed ? QStringLiteral("true") : QStringLiteral("false"),
+            triggered ? QStringLiteral("true") : QStringLiteral("false"),
+            routed ? QStringLiteral("true") : QStringLiteral("false"),
+            QString::number(routeDurationMs),
+            csvEscape(reason)
+        }.join(QLatin1Char(',')));
+    }
 
     emit debugEventsChanged();
 }
@@ -799,15 +944,14 @@ void SttAudioController::setLastDebugExportPath(const QString &value) {
     emit lastDebugExportPathChanged();
 }
 
+void SttAudioController::resetVoiceBandFilter() {
+    m_voiceBandHighPassPreviousInput = 0.0;
+    m_voiceBandHighPassPreviousOutput = 0.0;
+    m_voiceBandLowPassPreviousOutput = 0.0;
+}
+
 QString SttAudioController::localListeningStatus() const {
-    if (m_sourceMode == ProcessAudio) {
-        const int index = qBound(0, m_selectedProcessIndex, m_processes.size() - 1);
-        if (!m_processes.isEmpty()) {
-            return QStringLiteral("Local preview: %1.").arg(m_processes.at(index).label);
-        }
-        return QStringLiteral("Local preview: process audio.");
-    }
-    return QStringLiteral("Local preview: microphone.");
+    return QStringLiteral("Local preview: audio input.");
 }
 
 QAudioFormat SttAudioController::captureFormatFor(const QAudioDevice &device) const {
@@ -841,7 +985,6 @@ QByteArray SttAudioController::convertToPcm16Mono16k(const QByteArray &raw) {
 
     QVector<float> mono;
     mono.reserve(sourceFrames);
-    double energy = 0.0;
     for (int frame = 0; frame < sourceFrames; ++frame) {
         const char *frameStart = raw.constData() + frame * sourceBytesPerFrame;
         float mixed = 0.0f;
@@ -850,20 +993,15 @@ QByteArray SttAudioController::convertToPcm16Mono16k(const QByteArray &raw) {
         }
         mixed /= static_cast<float>(channels);
         mono.append(mixed);
-        energy += mixed * mixed;
     }
 
-    setAudioLevel(qSqrt(energy / qMax(1, sourceFrames)) * 4.0);
-
-    const int targetFrames = qMax(1, static_cast<int>(std::llround(sourceFrames * (TargetSampleRate / static_cast<double>(sourceRate)))));
-    QByteArray output;
-    output.resize(targetFrames * TargetBytesPerSample);
-    uchar *out = reinterpret_cast<uchar *>(output.data());
-    for (int i = 0; i < targetFrames; ++i) {
-        const int sourceIndex = qMin(sourceFrames - 1, static_cast<int>(std::floor(i * (sourceRate / static_cast<double>(TargetSampleRate)))));
-        qToLittleEndian<qint16>(floatToPcm16(mono.at(sourceIndex)), out + i * TargetBytesPerSample);
-    }
-    return output;
+    QByteArray pcm = resampleMonoToPcm16k(mono, sourceRate);
+    filterVoiceBandPcm16InPlace(&pcm,
+                                &m_voiceBandHighPassPreviousInput,
+                                &m_voiceBandHighPassPreviousOutput,
+                                &m_voiceBandLowPassPreviousOutput);
+    setAudioLevel(pcm16Level(pcm));
+    return pcm;
 }
 
 QUrl SttAudioController::sttWebSocketUrl() const {
@@ -880,35 +1018,25 @@ QAudioDevice SttAudioController::selectedDevice() const {
     if (m_filteredDevices.isEmpty()) {
         return {};
     }
+    if (!m_selectedDeviceId.isEmpty()) {
+        for (const QAudioDevice &device : m_filteredDevices) {
+            if (deviceId(device) == m_selectedDeviceId) {
+                return device;
+            }
+        }
+    }
     const int index = qBound(0, m_selectedDeviceIndex, m_filteredDevices.size() - 1);
     return m_filteredDevices.at(index);
 }
 
-quint32 SttAudioController::selectedProcessId() const {
-    if (m_processes.isEmpty()) {
-        return 0;
+QString SttAudioController::deviceId(const QAudioDevice &device) const {
+    if (device.isNull()) {
+        return {};
     }
-    const int index = qBound(0, m_selectedProcessIndex, m_processes.size() - 1);
-    return m_processes.at(index).processId;
+    const QByteArray id = device.id();
+    if (!id.isEmpty()) {
+        return QString::fromUtf8(id);
+    }
+    return device.description();
 }
 
-bool SttAudioController::isSystemAudioCandidate(const QAudioDevice &device) const {
-    const QString name = device.description().toLower();
-    const QStringList keywords{
-        QStringLiteral("stereo mix"),
-        QStringLiteral("what u hear"),
-        QStringLiteral("loopback"),
-        QStringLiteral("monitor"),
-        QStringLiteral("cable"),
-        QStringLiteral("voicemeeter"),
-        QStringLiteral("sonar"),
-        QStringLiteral("virtual"),
-        QStringLiteral("wave out"),
-        QStringLiteral("立体声混音"),
-        QStringLiteral("混音"),
-        QStringLiteral("虚拟")
-    };
-    return std::any_of(keywords.cbegin(), keywords.cend(), [&name](const QString &keyword) {
-        return name.contains(keyword);
-    });
-}

@@ -18,6 +18,9 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
@@ -59,7 +62,7 @@ class RpGameDriverTest {
                 bridgeService,
                 registry,
                 new GameLoopProperties(),
-                new InteractionCoordinator(registry, new AssistantProperties()),
+                new InteractionCoordinator(registry),
                 new GameLoopObservationBackoffService(),
                 new RpProactiveSessionRegistry(),
                 mock(GamerDecisionTraceService.class));
@@ -90,7 +93,7 @@ class RpGameDriverTest {
                 bridgeService,
                 registry,
                 new GameLoopProperties(),
-                new InteractionCoordinator(registry, new AssistantProperties()),
+                new InteractionCoordinator(registry),
                 new GameLoopObservationBackoffService(),
                 new RpProactiveSessionRegistry(),
                 mock(GamerDecisionTraceService.class));
@@ -121,7 +124,7 @@ class RpGameDriverTest {
                 bridgeService,
                 registry,
                 new GameLoopProperties(),
-                new InteractionCoordinator(registry, new AssistantProperties()),
+                new InteractionCoordinator(registry),
                 new GameLoopObservationBackoffService(),
                 new RpProactiveSessionRegistry(),
                 mock(GamerDecisionTraceService.class));
@@ -152,7 +155,7 @@ class RpGameDriverTest {
                 bridgeService,
                 registry,
                 new GameLoopProperties(),
-                new InteractionCoordinator(registry, new AssistantProperties()),
+                new InteractionCoordinator(registry),
                 new GameLoopObservationBackoffService(),
                 proactiveSessionRegistry,
                 mock(GamerDecisionTraceService.class));
@@ -162,5 +165,73 @@ class RpGameDriverTest {
         driver.pollTick();
 
         verify(turnService, times(2)).play(any(ActiveGameSession.class), anyString(), anyBoolean());
+    }
+
+    @Test
+    void shouldRememberRpContextWhenStartingWithoutLiveSubscription() {
+        ActiveGameRegistry registry = new ActiveGameRegistry();
+        RpProactiveSessionRegistry proactiveSessionRegistry = new RpProactiveSessionRegistry();
+
+        RpGameDriver driver = new RpGameDriver(
+                mock(RpGameTurnService.class),
+                mock(GameBridgeService.class),
+                registry,
+                new GameLoopProperties(),
+                new InteractionCoordinator(registry),
+                new GameLoopObservationBackoffService(),
+                proactiveSessionRegistry,
+                mock(GamerDecisionTraceService.class));
+
+        driver.start("STS2MCP", "game-session", "rp-session", "Nova", true);
+
+        RpProactiveSessionRegistry.SessionSnapshot snapshot =
+                proactiveSessionRegistry.findKnown("rp-session").orElseThrow();
+        assertEquals("Nova", snapshot.characterName());
+        assertTrue(snapshot.shortMode());
+        assertFalse(proactiveSessionRegistry.findOnline("rp-session").isPresent());
+    }
+
+    @Test
+    void shouldStartWithKnownRpCharacterContextWhenRequestOmitsCharacterName() {
+        ActiveGameRegistry registry = new ActiveGameRegistry();
+        RpProactiveSessionRegistry proactiveSessionRegistry = new RpProactiveSessionRegistry();
+        proactiveSessionRegistry.rememberSessionContext("rp-session", "Nova", true);
+
+        RpGameDriver driver = new RpGameDriver(
+                mock(RpGameTurnService.class),
+                mock(GameBridgeService.class),
+                registry,
+                new GameLoopProperties(),
+                new InteractionCoordinator(registry),
+                new GameLoopObservationBackoffService(),
+                proactiveSessionRegistry,
+                mock(GamerDecisionTraceService.class));
+
+        ActiveGameSession session = driver.start("STS2MCP", "game-session", "rp-session", null, null);
+
+        assertEquals("rp-session", session.getRpSessionId());
+        assertEquals(1, registry.listAll().size());
+        assertEquals("Nova", proactiveSessionRegistry.findKnown("rp-session").orElseThrow().characterName());
+    }
+    @Test
+    void shouldRejectGameLoopStartWithoutRpCharacterContext() {
+        ActiveGameRegistry registry = new ActiveGameRegistry();
+        RpProactiveSessionRegistry proactiveSessionRegistry = new RpProactiveSessionRegistry();
+
+        RpGameDriver driver = new RpGameDriver(
+                mock(RpGameTurnService.class),
+                mock(GameBridgeService.class),
+                registry,
+                new GameLoopProperties(),
+                new InteractionCoordinator(registry),
+                new GameLoopObservationBackoffService(),
+                proactiveSessionRegistry,
+                mock(GamerDecisionTraceService.class));
+
+        assertThrows(IllegalArgumentException.class,
+                () -> driver.start("STS2MCP", "game-session", "rp-session", null, true));
+
+        assertTrue(registry.listAll().isEmpty());
+        assertFalse(proactiveSessionRegistry.findKnown("rp-session").isPresent());
     }
 }

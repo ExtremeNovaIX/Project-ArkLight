@@ -22,44 +22,30 @@ class TtsRuntimeManagerTest {
 
         assertTrue(manager.shouldWaitForManagedRuntime());
     }
-
     @Test
-    void shouldManageVoxRuntimeWhenVoxProviderIsActive() {
+    void shouldNotManageRuntimeForLegacyVoxProviderName() {
         TtsConfig config = new TtsConfig();
         config.setEnabled(true);
         config.setProvider("voxcpm2-http");
-        config.getVoxCpm2().getRuntime().setAutoStartEnabled(true);
-
-        TtsRuntimeManager manager = new TtsRuntimeManager(config);
-
-        assertTrue(manager.shouldWaitForManagedRuntime());
-    }
-
-    @Test
-    void shouldNotManageVoxRuntimeWhenVoxRuntimeIsDisabled() {
-        TtsConfig config = new TtsConfig();
-        config.setEnabled(true);
-        config.setProvider("voxcpm2-http");
-        config.getVoxCpm2().getRuntime().setAutoStartEnabled(false);
+        config.getRuntime().setAutoStartEnabled(true);
 
         TtsRuntimeManager manager = new TtsRuntimeManager(config);
 
         assertFalse(manager.shouldWaitForManagedRuntime());
     }
-
     @Test
     void shouldResolveRelativeExecutableAgainstWorkingDirectory() {
         TtsRuntimeManager manager = new TtsRuntimeManager(new TtsConfig());
-        Path workingDirectory = Path.of("E:/Project/backend/tts/runtime/VoxCPM2");
+        Path workingDirectory = Path.of("E:/Project/backend/tts/runtime/GPT-SoVITS");
 
         List<String> command = manager.resolveExecutable(
-                List.of(".venv\\Scripts\\python.exe", "..\\..\\..\\tools\\voxcpm2_tts_server.py"),
+                List.of(".venv\\Scripts\\python.exe", "api_v2.py"),
                 workingDirectory);
 
         assertEquals(
                 workingDirectory.resolve(".venv/Scripts/python.exe").normalize().toString(),
                 command.getFirst());
-        assertEquals("..\\..\\..\\tools\\voxcpm2_tts_server.py", command.get(1));
+        assertEquals("api_v2.py", command.get(1));
     }
 
     @Test
@@ -68,7 +54,7 @@ class TtsRuntimeManagerTest {
 
         List<String> command = manager.resolveExecutable(
                 List.of("python", "api_v2.py"),
-                Path.of("E:/Project/backend/tts/runtime/VoxCPM2"));
+                Path.of("E:/Project/backend/tts/runtime/GPT-SoVITS"));
 
         assertEquals(List.of("python", "api_v2.py"), command);
     }

@@ -6,7 +6,7 @@ Rectangle {
     id: surface
     property real scaleFactor: 1
     property string workspaceName: "ArkLight Pioneer"
-    property string operatorName: "本地"
+    property string operatorName: "Local"
     property string backendBaseUrl: ""
     property var messagesModel: null
     property string userInput: ""
@@ -17,6 +17,7 @@ Rectangle {
     signal submitMessage(string value)
 
     color: tokens.paper
+    radius: surface.sp(tokens.radiusFrame)
     clip: true
 
     ArkLightTokens {
@@ -28,7 +29,7 @@ Rectangle {
     }
 
     function displayOperatorName() {
-        return operatorName === "Local" ? "本地" : operatorName
+        return operatorName.length > 0 ? operatorName : "Local"
     }
 
     ColumnLayout {
@@ -39,16 +40,17 @@ Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: surface.sp(80)
             color: tokens.whiteAlpha(0.52)
-            border.color: tokens.ink
-            border.width: 2
+            border.color: tokens.inkAlpha(0.34)
+            border.width: 1
             clip: true
 
-            DiagonalGrid {
+            SurfaceTexture {
                 anchors.fill: parent
-                step: surface.sp(10)
-                lineColor: tokens.ink
-                lineAlpha: 0.02
-                drawDiagonals: false
+                scaleFactor: surface.scaleFactor
+                lineColor: tokens.chatGrid
+                lineAlpha: 0.026
+                geometryAlpha: 0.008
+                drawWatermark: false
             }
 
             RowLayout {
@@ -64,51 +66,41 @@ Rectangle {
                 Button {
                     id: settingsButton
                     Layout.preferredHeight: surface.sp(40)
-                    Layout.preferredWidth: surface.sp(108)
+                    Layout.preferredWidth: surface.sp(126)
                     Layout.alignment: Qt.AlignVCenter
-                    leftPadding: surface.sp(16)
-                    rightPadding: surface.sp(16)
                     focusPolicy: Qt.NoFocus
-                    scale: pressed ? 0.96 : (hovered ? 1.02 : 1)
+                    scale: pressed ? 0.95 : (hovered ? 1.015 : 1)
 
-                    Behavior on scale {
-                        NumberAnimation { duration: 130; easing.type: Easing.OutCubic }
-                    }
+                    Behavior on scale { NumberAnimation { duration: 130; easing.type: Easing.OutCubic } }
 
-                    contentItem: Item {
-                        implicitWidth: surface.sp(76)
-                        implicitHeight: surface.sp(24)
+                    contentItem: Row {
+                        anchors.centerIn: parent
+                        spacing: surface.sp(10)
 
-                        Row {
-                            anchors.centerIn: parent
-                            spacing: surface.sp(10)
+                        IconGear {
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: surface.sp(20)
+                            height: surface.sp(20)
+                            strokeColor: settingsButton.hovered ? "#FFFFFF" : tokens.ink
+                        }
 
-                            IconGear {
-                                anchors.verticalCenter: parent.verticalCenter
-                                width: surface.sp(20)
-                                height: surface.sp(20)
-                                strokeColor: settingsButton.hovered ? "#FFFFFF" : tokens.ink
-                            }
-
-                            Text {
-                                anchors.verticalCenter: parent.verticalCenter
-                                text: "设置"
-                                color: settingsButton.hovered ? "#FFFFFF" : tokens.ink
-                                font.family: tokens.sansFont
-                                font.pixelSize: surface.sp(10)
-                                font.weight: Font.Black
-                            }
+                        Text {
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: "设置"
+                            color: settingsButton.hovered ? "#FFFFFF" : tokens.ink
+                            font.family: tokens.sansFont
+                            font.pixelSize: surface.sp(10)
+                            font.weight: Font.Black
+                            font.capitalization: Font.AllUppercase
                         }
                     }
 
                     background: Rectangle {
+                        radius: surface.sp(tokens.radiusFrame)
                         color: settingsButton.hovered ? tokens.ink : "transparent"
                         border.color: tokens.ink
                         border.width: 2
-
-                        Behavior on color {
-                            ColorAnimation { duration: 150 }
-                        }
+                        Behavior on color { ColorAnimation { duration: tokens.fastMotion } }
                     }
 
                     onClicked: surface.openSettings()
@@ -128,25 +120,37 @@ Rectangle {
                 opacity: 0.95
             }
 
-            DiagonalGrid {
+            SurfaceTexture {
                 anchors.fill: parent
-                step: surface.sp(56)
                 lineColor: tokens.chatGrid
-                lineAlpha: 0.11
-                opacity: 0.42
+                lineAlpha: 0.052
+                geometryAlpha: 0.02
+                scaleFactor: surface.scaleFactor
             }
 
             ListView {
                 id: chatList
-                anchors.fill: parent
-                anchors.margins: surface.sp(32)
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.top: parent.top
+                anchors.bottom: parent.bottom
+                anchors.leftMargin: surface.sp(32)
+                anchors.rightMargin: 0
+                anchors.topMargin: surface.sp(32)
+                anchors.bottomMargin: surface.sp(32)
                 spacing: surface.sp(20)
                 clip: true
                 model: surface.messagesModel
+                boundsBehavior: Flickable.StopAtBounds
+
                 add: Transition {
-                    NumberAnimation { property: "opacity"; from: 0; to: 1; duration: 220; easing.type: Easing.OutCubic }
-                    NumberAnimation { property: "scale"; from: 0.985; to: 1; duration: 220; easing.type: Easing.OutCubic }
+                    ParallelAnimation {
+                        NumberAnimation { property: "opacity"; from: 0; to: 1; duration: 260; easing.type: Easing.OutCubic }
+                        NumberAnimation { property: "scale"; from: 0.98; to: 1; duration: 260; easing.type: Easing.OutCubic }
+                        NumberAnimation { property: "y"; from: 20; duration: 260; easing.type: Easing.OutCubic }
+                    }
                 }
+
                 displaced: Transition {
                     NumberAnimation { properties: "x,y"; duration: 180; easing.type: Easing.OutCubic }
                 }
@@ -158,6 +162,7 @@ Rectangle {
                 }
 
                 ScrollBar.vertical: ScrollBar {
+                    anchors.right: parent.right
                     policy: ScrollBar.AsNeeded
                     contentItem: Rectangle {
                         implicitWidth: surface.sp(5)
@@ -168,7 +173,7 @@ Rectangle {
                 }
 
                 delegate: Item {
-                    width: chatList.width
+                    width: chatList.width - surface.sp(32)
                     height: messageColumn.implicitHeight
                     opacity: 1
                     scale: 1
@@ -195,12 +200,15 @@ Rectangle {
 
                             Text {
                                 text: messageRole === "user"
-                                      ? "用户 / " + surface.displayOperatorName()
-                                      : "ArkLight / 远端"
+                                      ? "Operator / " + surface.displayOperatorName()
+                                      : "ArkLight / Remote"
                                 color: tokens.inkAlpha(0.45)
                                 font.family: tokens.monoFont
                                 font.pixelSize: surface.sp(10)
+                                font.capitalization: Font.AllUppercase
                                 anchors.verticalCenter: parent.verticalCenter
+                                elide: Text.ElideRight
+                                width: Math.min(implicitWidth, surface.sp(260))
                             }
 
                             Rectangle {
@@ -213,11 +221,13 @@ Rectangle {
 
                         Rectangle {
                             id: bubble
-                            width: Math.min(messageText.implicitWidth + surface.sp(40), parent.width)
+                            width: Math.min(messageText.implicitWidth + surface.sp(40), messageColumn.width)
                             implicitHeight: messageText.implicitHeight + surface.sp(28)
-                            radius: surface.sp(20)
+                            radius: surface.sp(tokens.radiusBubble)
                             color: messageRole === "user" ? tokens.ink : "#FFFFFF"
-                            border.color: messageRole === "user" ? tokens.ink : (bubbleHover.hovered ? tokens.tealAlpha(0.28) : tokens.inkAlpha(0.08))
+                            border.color: messageRole === "user"
+                                          ? tokens.ink
+                                          : (bubbleHover.hovered ? tokens.tealAlpha(0.28) : tokens.inkAlpha(0.08))
                             border.width: messageRole === "user" ? 0 : 1
                             anchors.right: messageRole === "user" ? parent.right : undefined
                             scale: bubbleHover.hovered ? 1.012 : 1
@@ -226,80 +236,95 @@ Rectangle {
                                 id: bubbleHover
                             }
 
-                            Behavior on scale {
-                                NumberAnimation { duration: 150; easing.type: Easing.OutCubic }
-                            }
-
-                            Behavior on border.color {
-                                ColorAnimation { duration: 160 }
-                            }
+                            Behavior on scale { NumberAnimation { duration: tokens.fastMotion; easing.type: Easing.OutCubic } }
+                            Behavior on border.color { ColorAnimation { duration: 160 } }
 
                             Text {
                                 id: messageText
-                                width: Math.min(implicitWidth, parent.parent.width - surface.sp(40))
                                 anchors.fill: parent
                                 anchors.margins: surface.sp(14)
+                                width: parent.width - surface.sp(28)
                                 text: messageContent
-                                wrapMode: Text.Wrap
+                                wrapMode: Text.WrapAnywhere
                                 color: messageRole === "user" ? "#FFFFFF" : tokens.ink
                                 font.family: tokens.sansFont
                                 font.pixelSize: surface.sp(15)
-                                lineHeight: 1.35
+                                lineHeight: 1.42
                             }
                         }
                     }
                 }
 
                 footer: Item {
-                    width: chatList.width
-                    height: surface.assistantTyping ? surface.sp(58) : 0
+                    width: chatList.width - surface.sp(32)
+                    height: surface.assistantTyping ? typingColumn.implicitHeight + surface.sp(4) : 0
                     visible: surface.assistantTyping
 
-                    Row {
-                        anchors.left: parent.left
-                        anchors.verticalCenter: parent.verticalCenter
-                        spacing: surface.sp(8)
-                        Rectangle {
-                            width: surface.sp(10)
-                            height: surface.sp(10)
-                            radius: surface.sp(5)
-                            color: tokens.teal
-                            SequentialAnimation on opacity {
-                                loops: Animation.Infinite
-                                NumberAnimation { from: 0.35; to: 0.95; duration: 520; easing.type: Easing.InOutSine }
-                                NumberAnimation { from: 0.95; to: 0.35; duration: 520; easing.type: Easing.InOutSine }
+                    Column {
+                        id: typingColumn
+                        width: Math.min(chatList.width * 0.86, surface.sp(512))
+                        spacing: surface.sp(6)
+
+                        Row {
+                            spacing: surface.sp(8)
+                            Rectangle {
+                                width: surface.sp(8)
+                                height: surface.sp(8)
+                                radius: surface.sp(4)
+                                color: tokens.teal
+                                anchors.verticalCenter: parent.verticalCenter
+                            }
+                            Text {
+                                text: "ArkLight / Remote"
+                                color: tokens.inkAlpha(0.45)
+                                font.family: tokens.monoFont
+                                font.pixelSize: surface.sp(10)
+                                font.capitalization: Font.AllUppercase
+                                anchors.verticalCenter: parent.verticalCenter
+                            }
+                            Rectangle {
+                                width: surface.sp(32)
+                                height: 1
+                                color: tokens.inkAlpha(0.1)
+                                anchors.verticalCenter: parent.verticalCenter
                             }
                         }
+
                         Rectangle {
-                            width: surface.sp(10)
-                            height: surface.sp(10)
-                            radius: surface.sp(5)
-                            color: tokens.teal
-                            SequentialAnimation on opacity {
-                                loops: Animation.Infinite
-                                PauseAnimation { duration: 130 }
-                                NumberAnimation { from: 0.35; to: 0.95; duration: 520; easing.type: Easing.InOutSine }
-                                NumberAnimation { from: 0.95; to: 0.35; duration: 520; easing.type: Easing.InOutSine }
+                            width: Math.min(typingRow.implicitWidth + surface.sp(40), typingColumn.width)
+                            implicitHeight: typingRow.implicitHeight + surface.sp(28)
+                            radius: surface.sp(tokens.radiusBubble)
+                            color: "#FFFFFF"
+                            border.color: tokens.inkAlpha(0.08)
+                            border.width: 1
+
+                            Row {
+                                id: typingRow
+                                anchors.centerIn: parent
+                                spacing: surface.sp(8)
+                                Repeater {
+                                    model: 3
+                                    Rectangle {
+                                        width: surface.sp(10)
+                                        height: surface.sp(10)
+                                        radius: surface.sp(5)
+                                        color: tokens.teal
+                                        SequentialAnimation on opacity {
+                                            loops: Animation.Infinite
+                                            PauseAnimation { duration: index * 120 }
+                                            NumberAnimation { from: 0.35; to: 0.95; duration: 520; easing.type: Easing.InOutSine }
+                                            NumberAnimation { from: 0.95; to: 0.35; duration: 520; easing.type: Easing.InOutSine }
+                                        }
+                                    }
+                                }
+                                Text {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: "对方正在输入..."
+                                    color: tokens.inkAlpha(0.6)
+                                    font.family: tokens.sansFont
+                                    font.pixelSize: surface.sp(14)
+                                }
                             }
-                        }
-                        Rectangle {
-                            width: surface.sp(10)
-                            height: surface.sp(10)
-                            radius: surface.sp(5)
-                            color: tokens.teal
-                            SequentialAnimation on opacity {
-                                loops: Animation.Infinite
-                                PauseAnimation { duration: 260 }
-                                NumberAnimation { from: 0.35; to: 0.95; duration: 520; easing.type: Easing.InOutSine }
-                                NumberAnimation { from: 0.95; to: 0.35; duration: 520; easing.type: Easing.InOutSine }
-                            }
-                        }
-                        Text {
-                            anchors.verticalCenter: parent.verticalCenter
-                            text: "对方正在输入..."
-                            color: tokens.inkAlpha(0.6)
-                            font.family: tokens.sansFont
-                            font.pixelSize: surface.sp(14)
                         }
                     }
                 }

@@ -28,6 +28,8 @@ if not defined QT_CMAKE if exist "C:\Qt\6.7.3\mingw_64\bin\qt-cmake.bat" set "QT
 if not defined QT_CMAKE if exist "C:\Qt\6.7.2\mingw_64\bin\qt-cmake.bat" set "QT_CMAKE=C:\Qt\6.7.2\mingw_64\bin\qt-cmake.bat"
 if not defined QT_CMAKE if exist "C:\Qt\6.6.3\mingw_64\bin\qt-cmake.bat" set "QT_CMAKE=C:\Qt\6.6.3\mingw_64\bin\qt-cmake.bat"
 if not defined QT_CMAKE if exist "C:\Qt\6.5.3\mingw_64\bin\qt-cmake.bat" set "QT_CMAKE=C:\Qt\6.5.3\mingw_64\bin\qt-cmake.bat"
+if not defined QT_CMAKE if exist "C:\Qt\6.11.0\mingw_64\bin\qt-cmake.bat" set "QT_CMAKE=C:\Qt\6.11.0\mingw_64\bin\qt-cmake.bat"
+if not defined QT_CMAKE if exist "C:\Qt\6.11.0\msvc2022_64\bin\qt-cmake.bat" set "QT_CMAKE=C:\Qt\6.11.0\msvc2022_64\bin\qt-cmake.bat"
 if not defined QT_CMAKE if exist "E:\QT\6.11.0\mingw_64\bin\qt-cmake.bat" set "QT_CMAKE=E:\QT\6.11.0\mingw_64\bin\qt-cmake.bat"
 if not defined QT_CMAKE if exist "E:\QT\6.11.0\msvc2022_64\bin\qt-cmake.bat" set "QT_CMAKE=E:\QT\6.11.0\msvc2022_64\bin\qt-cmake.bat"
 
@@ -47,6 +49,9 @@ if not defined QT_CMAKE (
     exit /b 1
 )
 
+if exist "C:\Qt\Tools\CMake_64\bin\cmake.exe" set "QT_TOOLS_CMAKE_BIN=C:\Qt\Tools\CMake_64\bin"
+if exist "C:\Qt\Tools\Ninja\ninja.exe" set "QT_TOOLS_NINJA_BIN=C:\Qt\Tools\Ninja"
+if exist "C:\Qt\Tools\mingw1310_64\bin\g++.exe" set "QT_TOOLS_MINGW_BIN=C:\Qt\Tools\mingw1310_64\bin"
 if exist "E:\QT\Tools\CMake_64\bin\cmake.exe" set "QT_TOOLS_CMAKE_BIN=E:\QT\Tools\CMake_64\bin"
 if exist "E:\QT\Tools\Ninja\ninja.exe" set "QT_TOOLS_NINJA_BIN=E:\QT\Tools\Ninja"
 if exist "E:\QT\Tools\mingw1310_64\bin\g++.exe" set "QT_TOOLS_MINGW_BIN=E:\QT\Tools\mingw1310_64\bin"

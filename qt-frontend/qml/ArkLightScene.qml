@@ -5,7 +5,7 @@ Item {
     id: scene
     property real scaleFactor: 1
     property string workspaceName: "ArkLight Pioneer"
-    property string operatorName: "本地"
+    property string operatorName: "Local"
     property string backendBaseUrl: ""
     property string characterName: ""
     property string characterImageUrl: ""
@@ -16,7 +16,6 @@ Item {
     property bool sendDisabled: false
     property bool isBooting: false
     property bool showBootTitle: false
-    property int moteCount: 42
     signal openSettings()
     signal inputEdited(string value)
     signal submitMessage(string value)
@@ -31,56 +30,71 @@ Item {
 
     Rectangle {
         anchors.fill: parent
-        color: tokens.paper
+        color: tokens.blackPanel
     }
 
-    StardustField {
+    SurfaceTexture {
         anchors.fill: parent
         scaleFactor: scene.scaleFactor
-        count: scene.moteCount
-        moteColor: tokens.orange
+        lineColor: "#FFFFFF"
+        lineAlpha: 0.018
+        geometryAlpha: 0.01
+    }
+
+    Item {
+        id: shell
+        anchors.fill: parent
+        anchors.margins: scene.sp(tokens.outerMargin)
         clip: true
-    }
 
-    DiagonalGrid {
-        anchors.fill: parent
-        step: scene.sp(80)
-        lineColor: tokens.ink
-        lineAlpha: 0.085
-        opacity: 0.058
-    }
-
-    RowLayout {
-        anchors.fill: parent
-        spacing: 0
-
-        CharacterStage {
-            Layout.preferredWidth: Math.max(scene.sp(320), scene.width * 0.4)
-            Layout.fillHeight: true
-            scaleFactor: scene.scaleFactor
-            workspaceName: scene.workspaceName
-            characterName: scene.characterName
-            characterImageUrl: scene.characterImageUrl
-            activeEmotion: scene.activeCharacterEmotion
+        Rectangle {
+            anchors.fill: parent
+            radius: scene.sp(tokens.radiusFrame)
+            color: tokens.paper
+            border.color: tokens.whiteAlpha(0.12)
+            border.width: 1
         }
 
-        ChatSurface {
-            Layout.fillWidth: true
-            Layout.fillHeight: true
+        SurfaceTexture {
+            anchors.fill: parent
             scaleFactor: scene.scaleFactor
-            workspaceName: scene.workspaceName
-            operatorName: scene.operatorName
-            backendBaseUrl: scene.backendBaseUrl
-            messagesModel: scene.messagesModel
-            userInput: scene.userInput
-            assistantTyping: scene.assistantTyping
-            sendDisabled: scene.sendDisabled
-            onOpenSettings: scene.openSettings()
-            onInputEdited: function(value) {
-                scene.inputEdited(value)
+            lineColor: tokens.chatGrid
+            lineAlpha: 0.038
+            geometryAlpha: 0.018
+        }
+
+        RowLayout {
+            anchors.fill: parent
+            spacing: 0
+
+            CharacterStage {
+                Layout.preferredWidth: Math.max(scene.sp(330), Math.min(shell.width * 0.39, scene.sp(560)))
+                Layout.fillHeight: true
+                scaleFactor: scene.scaleFactor
+                workspaceName: scene.workspaceName
+                characterName: scene.characterName
+                characterImageUrl: scene.characterImageUrl
+                activeEmotion: scene.activeCharacterEmotion
             }
-            onSubmitMessage: function(value) {
-                scene.submitMessage(value)
+
+            ChatSurface {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                scaleFactor: scene.scaleFactor
+                workspaceName: scene.workspaceName
+                operatorName: scene.operatorName
+                backendBaseUrl: scene.backendBaseUrl
+                messagesModel: scene.messagesModel
+                userInput: scene.userInput
+                assistantTyping: scene.assistantTyping
+                sendDisabled: scene.sendDisabled
+                onOpenSettings: scene.openSettings()
+                onInputEdited: function(value) {
+                    scene.inputEdited(value)
+                }
+                onSubmitMessage: function(value) {
+                    scene.submitMessage(value)
+                }
             }
         }
     }

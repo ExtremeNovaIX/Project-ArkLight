@@ -53,7 +53,7 @@ class STS2AdapterTest {
         GameOperation operation = new GameOperation("combat_play_card", objectMapper.readTree("{\"card_index\":2,\"target\":\"NIBBIT_0\"}"));
         QueuedGameOperation queued = adapter.prepareOperation(operation, planned);
 
-        ToolExecutionRequest repaired = adapter.repairBeforeExecute(queued, current);
+        ToolExecutionRequest repaired = adapter.repairBeforeExecute(context(), queued, current);
 
         assertEquals("{\"card_index\":1,\"target\":\"NIBBIT_0\"}", repaired.arguments());
     }
@@ -82,7 +82,7 @@ class STS2AdapterTest {
         GameOperation operation = new GameOperation("combat_play_card", objectMapper.readTree("{\"card\":\"打击\",\"target\":\"NIBBIT_0\"}"));
         QueuedGameOperation queued = adapter.prepareOperation(operation, planned);
 
-        ToolExecutionRequest repaired = adapter.repairBeforeExecute(queued, current);
+        ToolExecutionRequest repaired = adapter.repairBeforeExecute(context(), queued, current);
 
         assertEquals(
                 objectMapper.readTree("{\"target\":\"NIBBIT_0\",\"card_index\":1}"),
@@ -112,7 +112,7 @@ class STS2AdapterTest {
         GameOperation operation = new GameOperation("combat_play_card", objectMapper.readTree("{\"card\":\"防御\",\"target\":\"PLAYER_0\"}"));
         QueuedGameOperation queued = adapter.prepareOperation(operation, planned);
 
-        ToolExecutionRequest repaired = adapter.repairBeforeExecute(queued, current);
+        ToolExecutionRequest repaired = adapter.repairBeforeExecute(context(), queued, current);
 
         assertEquals(
                 objectMapper.readTree("{\"card_index\":0}"),
@@ -246,7 +246,7 @@ class STS2AdapterTest {
                 new GameOperation("combat_end_turn", objectMapper.readTree("{}"))
         );
 
-        ArrayDeque<QueuedGameOperation> queue = adapter.prepareBatch(operations, planned);
+        ArrayDeque<QueuedGameOperation> queue = adapter.prepareBatch(context(), operations, planned);
         List<QueuedGameOperation> prepared = new ArrayList<>(queue);
 
         assertEquals(4, prepared.size());
@@ -276,7 +276,7 @@ class STS2AdapterTest {
                 new GameOperation("combat_play_card", objectMapper.readTree("{\"card\":\"头槌\"}"))
         );
 
-        ArrayDeque<QueuedGameOperation> queue = adapter.prepareBatch(operations, planned);
+        ArrayDeque<QueuedGameOperation> queue = adapter.prepareBatch(context(), operations, planned);
 
         assertEquals(4, queue.size());
     }
@@ -298,16 +298,11 @@ class STS2AdapterTest {
         MCPProperties.GameMCPConfig config = new MCPProperties.GameMCPConfig();
         config.setStateToolName("get_game_state");
 
-        String combatTools = adapter.renderAvailableOperations(
-                tools, config, state("{\"state_type\":\"monster\",\"battle\":{\"turn\":\"player\",\"is_play_phase\":true}}"));
-        String combatToolSummary = adapter.renderAvailableOperationSummary(
-                tools, config, state("{\"state_type\":\"monster\",\"battle\":{\"turn\":\"player\",\"is_play_phase\":true}}"));
-        String rewardTools = adapter.renderAvailableOperations(
-                tools, config, state("{\"state_type\":\"card_reward\"}"));
-        String postCombatRewardTools = adapter.renderAvailableOperations(
-                tools, config, state("{\"state_type\":\"rewards\",\"rewards\":{\"items\":[],\"can_proceed\":true}}"));
-        String selectTools = adapter.renderAvailableOperations(
-                tools, config, state("{\"state_type\":\"card_select\",\"card_select\":{\"cards\":[]}}"));
+        String combatTools = adapter.renderAvailableOperations(context(tools, config), state("{\"state_type\":\"monster\",\"battle\":{\"turn\":\"player\",\"is_play_phase\":true}}"));
+        String combatToolSummary = adapter.renderAvailableOperationSummary(context(tools, config), state("{\"state_type\":\"monster\",\"battle\":{\"turn\":\"player\",\"is_play_phase\":true}}"));
+        String rewardTools = adapter.renderAvailableOperations(context(tools, config), state("{\"state_type\":\"card_reward\"}"));
+        String postCombatRewardTools = adapter.renderAvailableOperations(context(tools, config), state("{\"state_type\":\"rewards\",\"rewards\":{\"items\":[],\"can_proceed\":true}}"));
+        String selectTools = adapter.renderAvailableOperations(context(tools, config), state("{\"state_type\":\"card_select\",\"card_select\":{\"cards\":[]}}"));
 
         assertTrue(combatTools.contains("combat_play_card"));
         assertTrue(combatTools.contains("combat_end_turn"));
@@ -357,7 +352,7 @@ class STS2AdapterTest {
                 }
                 """);
 
-        String rendered = adapter.renderAvailableOperations(tools, config, handSelect);
+        String rendered = adapter.renderAvailableOperations(context(tools, config), handSelect);
 
         assertTrue(rendered.contains("combat_select_card"));
         assertTrue(rendered.contains("combat_confirm_selection"));
@@ -380,7 +375,7 @@ class STS2AdapterTest {
         GameOperation operation = new GameOperation("combat_select_card", objectMapper.readTree("{\"card\":\"防御\"}"));
         QueuedGameOperation queued = QueuedGameOperation.from(operation, current);
 
-        ToolExecutionRequest repaired = adapter.repairBeforeExecute(queued, current);
+        ToolExecutionRequest repaired = adapter.repairBeforeExecute(context(), queued, current);
 
         assertEquals(
                 objectMapper.readTree("{\"card_index\":1}"),
@@ -415,7 +410,7 @@ class STS2AdapterTest {
         config.setStateToolName("get_game_state");
 
         GameStateSnapshot cardSelect = adapter.fetchState(new GameAdapterContext("STS2MCP", "session", tools, config));
-        String availableOperations = adapter.renderAvailableOperations(tools, config, cardSelect);
+        String availableOperations = adapter.renderAvailableOperations(context(tools, config), cardSelect);
 
         assertTrue(availableOperations.contains("- deck_select_card:"));
         assertFalse(availableOperations.contains("- mp_combat_select_card:"));
@@ -450,16 +445,87 @@ class STS2AdapterTest {
                 eliteBattle
         );
 
-        assertDoesNotThrow(() -> adapter.repairBeforeExecute(endTurn, eliteBattle));
+        assertDoesNotThrow(() -> adapter.repairBeforeExecute(context(), endTurn, eliteBattle));
 
         adapter.fetchState(new GameAdapterContext("STS2MCP", "session", tools, config));
-        String availableOperations = adapter.renderAvailableOperations(tools, config, eliteBattle);
+        String availableOperations = adapter.renderAvailableOperations(context(tools, config), eliteBattle);
         assertTrue(availableOperations.contains("- mp_combat_end_turn:"));
         assertTrue(availableOperations.contains("- mp_combat_play_card:"));
         assertFalse(availableOperations.contains("- mp_event_choose_option:"));
         assertFalse(availableOperations.contains("- mp_map_vote:"));
     }
 
+    @Test
+    void shouldPreferMultiplayerStateWhenOnlyMultiplayerResponseHasGameMode() throws Exception {
+        String singleplayerShapedMap = """
+                {
+                  "state_type":"map",
+                  "map":{"next_options":[{"index":0,"col":1,"row":1,"type":"Monster"}]}
+                }
+                """;
+        String multiplayerMap = """
+                {
+                  "game_mode" : "multiplayer",
+                  "state_type":"map",
+                  "map":{"next_options":[{"index":0,"col":1,"row":1,"type":"Monster"}]}
+                }
+                """;
+        ToolProviderResult tools = toolsWithResponses(Map.of(
+                "get_game_state", singleplayerShapedMap,
+                "mp_get_game_state", multiplayerMap,
+                "map_choose_node", "{}",
+                "mp_map_vote", "{}"
+        ));
+        MCPProperties.GameMCPConfig config = new MCPProperties.GameMCPConfig();
+        config.setStateToolName("get_game_state");
+
+        GameStateSnapshot fetched = adapter.fetchState(new GameAdapterContext("STS2MCP", "session", tools, config));
+        String availableOperations = adapter.renderAvailableOperations(context(tools, config), fetched);
+
+        assertTrue(fetched.rawJson().contains("\"game_mode\" : \"multiplayer\""));
+        assertTrue(availableOperations.contains("- mp_map_vote:"));
+        assertFalse(availableOperations.contains("- map_choose_node:"));
+    }
+
+    @Test
+    void shouldNotLeakDetectedModeBetweenSessions() throws Exception {
+        String multiplayerMap = """
+                {
+                  "game_mode":"multiplayer",
+                  "state_type":"map",
+                  "map":{"next_options":[{"index":0,"col":1,"row":1,"type":"Monster"}]}
+                }
+                """;
+        String singleplayerMap = """
+                {
+                  "state_type":"map",
+                  "map":{"next_options":[{"index":0,"col":2,"row":1,"type":"Monster"}]}
+                }
+                """;
+        ToolProviderResult multiplayerTools = toolsWithResponses(Map.of(
+                "get_game_state", singleplayerMap,
+                "mp_get_game_state", multiplayerMap,
+                "map_choose_node", "{}",
+                "mp_map_vote", "{}"
+        ));
+        ToolProviderResult singleplayerTools = toolsWithResponses(Map.of(
+                "get_game_state", singleplayerMap,
+                "mp_get_game_state", "{\"status\":\"error\",\"message\":\"Not in a multiplayer run.\"}",
+                "map_choose_node", "{}",
+                "mp_map_vote", "{}"
+        ));
+        MCPProperties.GameMCPConfig config = new MCPProperties.GameMCPConfig();
+        config.setStateToolName("get_game_state");
+
+        GameStateSnapshot multiplayerState = adapter.fetchState(
+                new GameAdapterContext("STS2MCP", "session-mp", multiplayerTools, config));
+        adapter.fetchState(new GameAdapterContext("STS2MCP", "session-sp", singleplayerTools, config));
+
+        String multiplayerOperations = adapter.renderAvailableOperations(context(multiplayerTools, config), multiplayerState);
+
+        assertTrue(multiplayerOperations.contains("- mp_map_vote:"));
+        assertFalse(multiplayerOperations.contains("- map_choose_node:"));
+    }
     @Test
     void shouldDetectMultiplayerLobbyFromSingleplayerState() throws Exception {
         ToolProviderResult tools = toolsWithResponses(Map.of(
@@ -490,7 +556,7 @@ class STS2AdapterTest {
         config.setStateToolName("get_game_state");
 
         GameStateSnapshot fetched = adapter.fetchState(new GameAdapterContext("STS2MCP", "session", tools, config));
-        String renderedEventTools = adapter.renderAvailableOperations(tools, config, state("{\"state_type\":\"event\"}"));
+        String renderedEventTools = adapter.renderAvailableOperations(context(tools, config), state("{\"state_type\":\"event\"}"));
 
         assertEquals("menu", fetched.stateType());
         assertTrue(renderedEventTools.contains("- mp_event_choose_option:"));
@@ -524,7 +590,7 @@ class STS2AdapterTest {
                 eventState
         );
 
-        ToolExecutionRequest repaired = adapter.repairBeforeExecute(operation, eventState);
+        ToolExecutionRequest repaired = adapter.repairBeforeExecute(context(), operation, eventState);
 
         assertEquals("mp_event_choose_option", repaired.name());
         assertEquals(
@@ -554,7 +620,7 @@ class STS2AdapterTest {
                 eventState
         );
 
-        ToolExecutionRequest repaired = adapter.repairBeforeExecute(operation, eventState);
+        ToolExecutionRequest repaired = adapter.repairBeforeExecute(context(), operation, eventState);
 
         assertEquals(
                 objectMapper.readTree("{\"option_index\":1}"),
@@ -581,7 +647,7 @@ class STS2AdapterTest {
                 eventState
         );
 
-        ToolExecutionRequest repaired = adapter.repairBeforeExecute(operation, eventState);
+        ToolExecutionRequest repaired = adapter.repairBeforeExecute(context(), operation, eventState);
 
         assertEquals(
                 objectMapper.readTree("{\"option_index\":1}"),
@@ -608,7 +674,7 @@ class STS2AdapterTest {
                 eventState
         );
 
-        ToolExecutionRequest repaired = adapter.repairBeforeExecute(operation, eventState);
+        ToolExecutionRequest repaired = adapter.repairBeforeExecute(context(), operation, eventState);
 
         assertEquals(
                 objectMapper.readTree("{\"option_index\":1}"),
@@ -624,7 +690,7 @@ class STS2AdapterTest {
         );
 
         GameBridgeException ex = assertThrows(GameBridgeException.class,
-                () -> adapter.repairBeforeExecute(operation, state("{\"state_type\":\"event\"}")));
+                () -> adapter.repairBeforeExecute(context(), operation, state("{\"state_type\":\"event\"}")));
 
         assertTrue(ex.getMessage().contains("菜单操作已过期"));
     }
@@ -640,7 +706,7 @@ class STS2AdapterTest {
         GameOperation operation = new GameOperation("combat_play_card", objectMapper.readTree("{\"card_index\":1}"));
         QueuedGameOperation queued = adapter.prepareOperation(operation, planned);
 
-        assertThrows(GameBridgeException.class, () -> adapter.repairBeforeExecute(queued, current));
+        assertThrows(GameBridgeException.class, () -> adapter.repairBeforeExecute(context(), queued, current));
     }
 
     @Test
@@ -652,6 +718,7 @@ class STS2AdapterTest {
 
         GameBridgeException ex = assertThrows(GameBridgeException.class, () ->
                 adapter.monitorAfterExecute(
+                        context(),
                         operation,
                         state("{\"state_type\":\"monster\",\"player\":{\"hand\":[]}}"),
                         state("{\"state_type\":\"rewards\",\"player\":{\"hand\":[]}}"),
@@ -672,6 +739,7 @@ class STS2AdapterTest {
 
         GameBridgeException ex = assertThrows(GameBridgeException.class, () ->
                 adapter.monitorAfterExecute(
+                        context(),
                         queued,
                         state("{\"state_type\":\"monster\",\"player\":{\"hand\":[{\"name\":\"空翻\"},{\"name\":\"打击\"}]}}"),
                         state("{\"state_type\":\"monster\",\"player\":{\"hand\":[{\"name\":\"打击\"},{\"name\":\"防御\"},{\"name\":\"打击\"}]}}"),
@@ -701,6 +769,7 @@ class STS2AdapterTest {
 
         GameBridgeException ex = assertThrows(GameBridgeException.class, () ->
                 adapter.monitorAfterExecute(
+                        context(),
                         operation,
                         state(unchanged),
                         state(unchanged),
@@ -721,6 +790,7 @@ class STS2AdapterTest {
 
         assertThrows(GameBridgeException.class, () ->
                 adapter.monitorAfterExecute(
+                        context(),
                         queued,
                         state("{\"state_type\":\"monster\",\"player\":{\"hand\":[{\"name\":\"打击\"},{\"name\":\"打击\"},{\"name\":\"防御\"},{\"name\":\"打击\"}]}}"),
                         state("{\"state_type\":\"monster\",\"player\":{\"hand\":[]}}"),
@@ -830,7 +900,7 @@ class STS2AdapterTest {
         GameOperation operation = new GameOperation("event_choose_option", objectMapper.readTree("{\"option_index\":0}"));
         QueuedGameOperation queued = adapter.prepareOperation(operation, planned);
 
-        ToolExecutionRequest repaired = adapter.repairBeforeExecute(queued, current);
+        ToolExecutionRequest repaired = adapter.repairBeforeExecute(context(), queued, current);
 
         assertEquals(
                 objectMapper.readTree("{\"option_index\":1}"),
@@ -883,7 +953,7 @@ class STS2AdapterTest {
         QueuedGameOperation queued = adapter.prepareOperation(operation, restSite);
 
         GameOperationPrecondition precondition = adapter.checkOperationPrecondition(queued, restSite);
-        ToolExecutionRequest repaired = adapter.repairBeforeExecute(queued, restSite);
+        ToolExecutionRequest repaired = adapter.repairBeforeExecute(context(), queued, restSite);
 
         assertTrue(precondition.satisfied(), precondition.reason());
         assertEquals(
@@ -904,8 +974,7 @@ class STS2AdapterTest {
         MCPProperties.GameMCPConfig config = new MCPProperties.GameMCPConfig();
         config.setStateToolName("get_game_state");
 
-        String rendered = adapter.renderAvailableOperations(
-                tools, config, state("{\"state_type\":\"rest_site\"}"));
+        String rendered = adapter.renderAvailableOperations(context(tools, config), state("{\"state_type\":\"rest_site\"}"));
 
         assertTrue(rendered.contains("rest_choose_option"));
         assertTrue(rendered.contains("proceed_to_map"));
@@ -938,7 +1007,7 @@ class STS2AdapterTest {
         GameOperation operation = new GameOperation("rewards_pick_card", objectMapper.readTree("{\"card_index\":2}"));
         QueuedGameOperation queued = adapter.prepareOperation(operation, planned);
 
-        ToolExecutionRequest repaired = adapter.repairBeforeExecute(queued, current);
+        ToolExecutionRequest repaired = adapter.repairBeforeExecute(context(), queued, current);
 
         assertEquals(
                 objectMapper.readTree("{\"card_index\":0}"),
@@ -999,7 +1068,7 @@ class STS2AdapterTest {
         GameOperation operation = new GameOperation("map_choose_node", objectMapper.readTree("{\"node_index\":0}"));
         QueuedGameOperation queued = adapter.prepareOperation(operation, planned);
 
-        ToolExecutionRequest repaired = adapter.repairBeforeExecute(queued, current);
+        ToolExecutionRequest repaired = adapter.repairBeforeExecute(context(), queued, current);
 
         assertEquals(
                 objectMapper.readTree("{\"node_index\":1}"),
@@ -1007,6 +1076,15 @@ class STS2AdapterTest {
         );
     }
 
+    private GameAdapterContext context() {
+        MCPProperties.GameMCPConfig config = new MCPProperties.GameMCPConfig();
+        config.setStateToolName("get_game_state");
+        return context(tools(), config);
+    }
+
+    private GameAdapterContext context(ToolProviderResult tools, MCPProperties.GameMCPConfig config) {
+        return new GameAdapterContext("STS2MCP", "session", tools, config);
+    }
     private GameStateSnapshot state(String raw) throws Exception {
         return new GameStateSnapshot(raw, objectMapper.readTree(raw), objectMapper.readTree(raw).path("state_type").asText(""));
     }

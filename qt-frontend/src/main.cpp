@@ -9,8 +9,11 @@
 
 #include "ChatSessionController.h"
 #include "CharacterCatalog.h"
+#include "ConfigCatalogController.h"
+#include "DoctorController.h"
 #include "FrontendSettings.h"
 #include "SttAudioController.h"
+#include "TtsAudioController.h"
 
 namespace {
 
@@ -62,7 +65,10 @@ int main(int argc, char *argv[]) {
     FrontendSettings settings;
     CharacterCatalog catalog;
     ChatSessionController chatSession(&settings, &catalog);
+    ConfigCatalogController configCatalog;
+    DoctorController runtimeDoctor;
     SttAudioController sttAudio(&settings);
+    TtsAudioController ttsAudio(&settings);
 
     // QQmlApplicationEngine loads the QML module and creates the UI object tree.
     QQmlApplicationEngine engine;
@@ -71,7 +77,10 @@ int main(int argc, char *argv[]) {
     engine.rootContext()->setContextProperty(QStringLiteral("frontendSettings"), &settings);
     engine.rootContext()->setContextProperty(QStringLiteral("characterCatalog"), &catalog);
     engine.rootContext()->setContextProperty(QStringLiteral("chatSession"), &chatSession);
+    engine.rootContext()->setContextProperty(QStringLiteral("configCatalog"), &configCatalog);
+    engine.rootContext()->setContextProperty(QStringLiteral("runtimeDoctor"), &runtimeDoctor);
     engine.rootContext()->setContextProperty(QStringLiteral("sttAudio"), &sttAudio);
+    engine.rootContext()->setContextProperty(QStringLiteral("ttsAudio"), &ttsAudio);
 
     // If QML root creation fails, quit the app; QueuedConnection schedules the quit in the event queue.
     QObject::connect(

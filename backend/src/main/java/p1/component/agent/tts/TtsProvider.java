@@ -13,7 +13,7 @@ public interface TtsProvider {
     /**
      * provider 配置名称。
      *
-     * @return 例如 gpt-sovits-http 或 voxcpm2-http
+     * @return 例如 gpt-sovits-http
      */
     String providerName();
 

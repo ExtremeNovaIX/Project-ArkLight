@@ -38,7 +38,6 @@ public:
     // Q_INVOKABLE 表示 QML 可以调用这些 C++ 方法。
     // Q_INVOKABLE means QML can call these C++ methods.
     Q_INVOKABLE void sendMessage(const QString &content);
-    Q_INVOKABLE void reportTypingActivity();
     Q_INVOKABLE void startStoryReplay();
     Q_INVOKABLE void clearMessages();
     Q_INVOKABLE void selectCharacter(const QString &characterName);
@@ -73,4 +72,9 @@ private:
     bool m_busy = false;
     QString m_statusText;
     QString m_activeEmotion;
+    QString m_liveBaseUrl;
+    QString m_liveSessionId;
+    QString m_liveCharacterName;
+    bool m_liveShortModeEnabled = false;
+    bool m_liveMessagesOpened = false;
 };

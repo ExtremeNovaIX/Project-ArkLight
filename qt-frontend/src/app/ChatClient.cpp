@@ -156,30 +156,6 @@ void ChatClient::sendMessage(const QString &baseUrl,
     });
 }
 
-void ChatClient::sendTypingActivity(const QString &baseUrl, const QString &sessionId) {
-    // typing 心跳只续期后端交互窗口；地址无效时直接忽略，不影响聊天输入。
-    QString normalizedBaseUrl = baseUrl.trimmed();
-    while (normalizedBaseUrl.endsWith('/')) {
-        normalizedBaseUrl.chop(1);
-    }
-    if (normalizedBaseUrl.isEmpty()) {
-        return;
-    }
-
-    QUrl url(normalizedBaseUrl + QStringLiteral("/api/chat/typing"));
-    if (!url.isValid()) {
-        return;
-    }
-    QUrlQuery query;
-    query.addQueryItem(QStringLiteral("sessionId"), sessionId);
-    url.setQuery(query);
-
-    QNetworkRequest request(url);
-    request.setRawHeader("Accept", "application/json");
-    QNetworkReply *reply = m_network->post(request, QByteArray());
-    connect(reply, &QNetworkReply::finished, reply, &QObject::deleteLater);
-}
-
 void ChatClient::openLiveMessages(const QString &baseUrl,
                                   const QString &sessionId,
                                   const QString &characterName,
@@ -188,16 +164,19 @@ void ChatClient::openLiveMessages(const QString &baseUrl,
     while (normalizedBaseUrl.endsWith('/')) {
         normalizedBaseUrl.chop(1);
     }
+
+    if (m_liveReply != nullptr) {
+        QNetworkReply *previousReply = m_liveReply;
+        m_liveReply = nullptr;
+        QObject::disconnect(previousReply, nullptr, this, nullptr);
+        previousReply->abort();
+        previousReply->deleteLater();
+    }
+    m_liveBuffer.clear();
+
     if (normalizedBaseUrl.isEmpty()) {
         return;
     }
-
-    if (m_liveReply != nullptr) {
-        m_liveReply->abort();
-        m_liveReply->deleteLater();
-        m_liveReply = nullptr;
-    }
-    m_liveBuffer.clear();
 
     QUrl url(normalizedBaseUrl + QStringLiteral("/api/chat/live"));
     if (!url.isValid()) {
@@ -369,6 +348,10 @@ void ChatClient::handleStoryReplayReply(QNetworkReply *reply) {
 }
 
 void ChatClient::handleLiveReadyRead(QNetworkReply *reply) {
+    if (reply == nullptr || !reply->isReadable()) {
+        return;
+    }
+
     m_liveBuffer.append(reply->readAll());
     while (true) {
         int frameEnd = m_liveBuffer.indexOf("\n\n");
@@ -413,7 +396,9 @@ void ChatClient::handleLiveFinished(QNetworkReply *reply) {
         return;
     }
 
-    handleLiveReadyRead(reply);
+    if (reply->error() != QNetworkReply::OperationCanceledError) {
+        handleLiveReadyRead(reply);
+    }
     m_liveReply = nullptr;
     m_liveBuffer.clear();
     reply->deleteLater();

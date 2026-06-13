@@ -3,10 +3,13 @@ package p1.component.agent.gamer.adapter;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
-import dev.langchain4j.agent.tool.ToolSpecification;
-import dev.langchain4j.service.tool.ToolExecutor;
-import dev.langchain4j.service.tool.ToolProviderResult;
-import p1.component.agent.gamer.adapter.core.*;
+import p1.component.agent.gamer.adapter.core.GameActionWindowSignature;
+import p1.component.agent.gamer.adapter.core.GameActionability;
+import p1.component.agent.gamer.adapter.core.GameAdapterContext;
+import p1.component.agent.gamer.adapter.core.GameOperation;
+import p1.component.agent.gamer.adapter.core.GameOperationPrecondition;
+import p1.component.agent.gamer.adapter.core.GameStateSnapshot;
+import p1.component.agent.gamer.adapter.core.QueuedGameOperation;
 import p1.config.mcp.MCPProperties;
 
 import java.util.ArrayDeque;
@@ -14,19 +17,21 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * 游戏适配器接口。
+ * 游戏适配器抽象父类。
  * <p>
  * 通用桥接层负责排队、逐条执行和转发 MCP 工具；具体游戏适配器负责解释游戏语义，
  * 例如如何获取状态、如何修复过期操作、以及什么时候应该中断剩余队列。
  */
-public interface GameAdapter {
+public abstract class GameAdapter {
+
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     /**
      * 返回适配器 id。
      *
      * @return 配置中 mcp.games.*.adapter 使用的适配器标识
      */
-    String id();
+    public abstract String id();
 
     /**
      * 判断该适配器是否支持当前游戏配置。
@@ -35,7 +40,7 @@ public interface GameAdapter {
      * @param config   游戏 MCP 配置
      * @return true 表示当前适配器可用于该游戏
      */
-    default boolean supports(String gameName, MCPProperties.GameMCPConfig config) {
+    public boolean supports(String gameName, MCPProperties.GameMCPConfig config) {
         return id().equalsIgnoreCase(config.getAdapter());
     }
 
@@ -45,72 +50,35 @@ public interface GameAdapter {
      * @param context 适配器运行上下文
      * @return 状态工具参数 JSON
      */
-    default String stateToolArguments(GameAdapterContext context) {
+    public String stateToolArguments(GameAdapterContext context) {
         return "{}";
     }
 
     /**
-     * 解析 MCP 返回的状态 JSON。
-     *
-     * @param raw MCP 状态工具返回的原始文本
-     * @return 标准化状态快照
-     */
-    default GameStateSnapshot parseState(String raw) {
-        try {
-            JsonNode json = new ObjectMapper().readTree(raw);
-            String stateType = json.path("state_type").asText("");
-            return new GameStateSnapshot(raw, json, stateType);
-        } catch (Exception e) {
-            String preview = raw == null ? "null" : raw.substring(0, Math.min(raw.length(), 500));
-            throw new GameBridgeException("解析游戏状态失败，MCP 返回: " + preview, e);
-        }
-    }
-
-    /**
      * 解析状态工具在 MCP 工具列表中的实际名称。
-     * 子类可覆写以处理前缀（如 STS2 多人模式 mp_ 前缀）。
      *
      * @param config 游戏 MCP 配置
      * @return MCP 工具列表中的实际状态工具名
      */
-    default String resolveStateToolName(MCPProperties.GameMCPConfig config) {
+    public String resolveStateToolName(MCPProperties.GameMCPConfig config) {
         return config.getStateToolName();
     }
 
     /**
-     * 从底层 MCP 获取最新游戏状态。
+     * 从底层 MCP 获取最新游戏状态。具体游戏决定使用哪个状态工具、协议格式和检测策略。
      *
      * @param context 适配器运行上下文
      * @return 标准化后的游戏状态快照
      */
-    default GameStateSnapshot fetchState(GameAdapterContext context) {
-        String name = resolveStateToolName(context.config());
-        ToolExecutor executor = context.tools().toolExecutorByName(name);
-        if (executor == null) {
-            String availableTools = context.tools().tools().keySet().stream()
-                    .map(ToolSpecification::name)
-                    .sorted(String.CASE_INSENSITIVE_ORDER)
-                    .collect(Collectors.joining(", "));
-            throw new GameBridgeException("状态工具不存在: " + name
-                    + (availableTools.isBlank() ? "" : "；可用工具: " + availableTools));
-        }
-        ToolExecutionRequest request = ToolExecutionRequest.builder()
-                .name(name)
-                .arguments(stateToolArguments(context))
-                .build();
-        String raw = executor.execute(request, context.sessionId());
-        return parseState(raw);
-    }
+    public abstract GameStateSnapshot fetchState(GameAdapterContext context);
 
     /**
      * 根据已经获取到的游戏状态判断是否需要 RP 行动。
-     * <p>
-     * 默认返回可行动，以保持通用适配器的旧行为；具体游戏可覆写为更精确的判断。
      *
      * @param state 最新游戏状态快照
      * @return 当前行动窗口判断结果
      */
-    default GameActionability evaluateActionability(GameStateSnapshot state) {
+    public GameActionability evaluateActionability(GameStateSnapshot state) {
         return GameActionability.actionable("通用适配器默认认为当前状态可行动");
     }
 
@@ -120,11 +88,9 @@ public interface GameAdapter {
      * @param state 游戏状态快照
      * @return 适合放入 prompt 的状态文本
      */
-    default String renderStateForAgent(GameStateSnapshot state) {
+    public String renderStateForAgent(GameStateSnapshot state) {
         return state.rawJson();
     }
-
-    // ── 操作队列钩子（含合理默认实现） ──
 
     /**
      * 在操作入队前记录游戏语义信息。
@@ -133,19 +99,21 @@ public interface GameAdapter {
      * @param plannedState agent 做计划时看到的状态
      * @return 带有元数据的排队操作
      */
-    default QueuedGameOperation prepareOperation(GameOperation operation, GameStateSnapshot plannedState) {
+    public QueuedGameOperation prepareOperation(GameOperation operation, GameStateSnapshot plannedState) {
         return QueuedGameOperation.from(operation, plannedState);
     }
 
     /**
-     * 将一批操作全部入队。子类可覆写以跨操作模拟状态变化（如手牌减少），
-     * 确保每条操作的元数据（plannedCardName 等）基于前序操作执行后的预期状态。
+     * 将一批操作全部入队。
      *
+     * @param context      适配器运行上下文
      * @param operations   agent 提交的原始操作列表
      * @param plannedState agent 做计划时看到的状态
      * @return 带有元数据的排队操作队列
      */
-    default ArrayDeque<QueuedGameOperation> prepareBatch(List<GameOperation> operations, GameStateSnapshot plannedState) {
+    public ArrayDeque<QueuedGameOperation> prepareBatch(GameAdapterContext context,
+                                                        List<GameOperation> operations,
+                                                        GameStateSnapshot plannedState) {
         ArrayDeque<QueuedGameOperation> queue = new ArrayDeque<>();
         for (GameOperation op : operations) {
             queue.offerLast(prepareOperation(op, plannedState));
@@ -155,26 +123,20 @@ public interface GameAdapter {
 
     /**
      * 判断操作队列真正开始执行前是否需要重新读取一次游戏状态。
-     * <p>
-     * 默认复用 RP 决策时的状态以减少通用桥接层开销；对状态可能在模型思考期间自行推进的游戏，
-     * 适配器应返回 true，让第一条 MCP 操作也基于执行前的最新状态做修复和校验。
      *
      * @return true 表示队列执行前需要从 MCP 重读状态
      */
-    default boolean shouldRefreshStateBeforeDrain() {
+    public boolean shouldRefreshStateBeforeDrain() {
         return false;
     }
 
     /**
      * 返回当前状态对应的本地行动窗口签名。
-     * <p>
-     * 默认不启用窗口校验；具体游戏可只纳入会影响本地操作合法性的字段，
-     * 避免完整 JSON hash 造成无关状态变化误中断。
      *
      * @param state 当前游戏状态
      * @return 行动窗口签名
      */
-    default GameActionWindowSignature actionWindowSignature(GameStateSnapshot state) {
+    public GameActionWindowSignature actionWindowSignature(GameStateSnapshot state) {
         return GameActionWindowSignature.unchecked();
     }
 
@@ -185,53 +147,54 @@ public interface GameAdapter {
      * @param currentState 执行前最新状态
      * @return 前置条件检查结果
      */
-    default GameOperationPrecondition checkOperationPrecondition(QueuedGameOperation operation,
-                                                                 GameStateSnapshot currentState) {
+    public GameOperationPrecondition checkOperationPrecondition(QueuedGameOperation operation,
+                                                                GameStateSnapshot currentState) {
         return GameOperationPrecondition.passed();
     }
 
     /**
      * 在操作真正执行前进行修复。
      *
+     * @param context      适配器运行上下文
      * @param operation    即将执行的排队操作
      * @param currentState 执行前最新状态
      * @return 修复后的 MCP 工具请求
      */
-    default ToolExecutionRequest repairBeforeExecute(QueuedGameOperation operation, GameStateSnapshot currentState) {
+    public ToolExecutionRequest repairBeforeExecute(GameAdapterContext context,
+                                                    QueuedGameOperation operation,
+                                                    GameStateSnapshot currentState) {
         return operation.request();
     }
 
     /**
      * 在操作执行后判断状态是否仍然可靠。
-     * 默认不做任何操作；具体游戏适配器可以在这里拦截脏状态。
      *
+     * @param context     适配器运行上下文
      * @param operation   已执行的操作
      * @param beforeState 执行前状态
      * @param afterState  执行后状态
      * @param toolResult  MCP 工具返回文本
-     * @throws GameBridgeException 状态不可靠，应当中断当前动作链路
      */
-    default void monitorAfterExecute(QueuedGameOperation operation,
-                                     GameStateSnapshot beforeState,
-                                     GameStateSnapshot afterState,
-                                     String toolResult) {
+    public void monitorAfterExecute(GameAdapterContext context,
+                                    QueuedGameOperation operation,
+                                    GameStateSnapshot beforeState,
+                                    GameStateSnapshot afterState,
+                                    String toolResult) {
     }
 
     /**
      * 从 MCP 工具返回值中提取业务错误。
-     * <p>
-     * 默认只识别通用 JSON 结构：{"status":"error","error":"..."}。
-     * 连接失败、HTTP 异常等基础设施错误通常不会进入这里，而是在工具调用阶段直接抛异常。
      *
+     * @param context    适配器运行上下文
      * @param toolResult MCP 工具返回文本
      * @return 错误说明；不是业务错误时返回 null
      */
-    default String extractToolError(String toolResult) {
+    public String extractToolError(GameAdapterContext context, String toolResult) {
         if (toolResult == null || toolResult.isBlank()) {
             return null;
         }
         try {
-            JsonNode root = new ObjectMapper().readTree(toolResult);
+            JsonNode root = objectMapper.readTree(toolResult);
             if ("error".equals(root.path("status").asText(""))) {
                 return root.path("error").asText("未知错误");
             }
@@ -245,40 +208,35 @@ public interface GameAdapter {
      * 判断某个 MCP 工具是否是状态查询工具。
      *
      * @param toolName MCP 工具名
-     * @param config   游戏 MCP 配置
+     * @param context  适配器运行上下文
      * @return true 表示该工具应由桥接层内部使用，不暴露给 agent 作为操作工具
      */
-    default boolean isStateTool(String toolName, MCPProperties.GameMCPConfig config) {
-        return toolName != null && toolName.equals(resolveStateToolName(config));
-    }
-
-    /**
-     * 渲染可供 agent 提交到 operations 的 MCP 操作工具列表。
-     *
-     * @param tools  底层 MCP 工具集合
-     * @param config 游戏 MCP 配置
-     * @return 可用操作工具的说明文本
-     */
-    default String renderAvailableOperations(ToolProviderResult tools, MCPProperties.GameMCPConfig config) {
-        return renderAvailableOperations(tools, config, null);
+    public boolean isStateTool(String toolName, GameAdapterContext context) {
+        return toolName != null && toolName.equals(resolveStateToolName(context.config()));
     }
 
     /**
      * 根据当前状态渲染可供 agent 提交到 operations 的 MCP 操作工具列表。
-     * <p>
-     * 默认实现只过滤状态工具；具体游戏可以根据 state_type 收窄工具列表，减少模型误选和 prompt 体积。
      *
-     * @param tools  底层 MCP 工具集合
-     * @param config 游戏 MCP 配置
-     * @param state  最新游戏状态；为空时按通用规则渲染
+     * @param context 适配器运行上下文
+     * @param state   最新游戏状态；为空时按通用规则渲染
      * @return 可用操作工具的说明文本
      */
-    default String renderAvailableOperations(ToolProviderResult tools,
-                                             MCPProperties.GameMCPConfig config,
-                                             GameStateSnapshot state) {
+    public String renderAvailableOperations(GameAdapterContext context, GameStateSnapshot state) {
+        return renderGenericAvailableOperations(context, state);
+    }
+
+    /**
+     * 通用操作工具渲染，只过滤状态工具。
+     *
+     * @param context 适配器运行上下文
+     * @param state   最新游戏状态
+     * @return 可用操作工具的说明文本
+     */
+    protected String renderGenericAvailableOperations(GameAdapterContext context, GameStateSnapshot state) {
         StringBuilder sb = new StringBuilder();
-        tools.tools().keySet().stream()
-                .filter(spec -> !isStateTool(spec.name(), config))
+        context.tools().tools().keySet().stream()
+                .filter(spec -> !isStateTool(spec.name(), context))
                 .sorted((a, b) -> a.name().compareToIgnoreCase(b.name()))
                 .forEach(spec -> sb.append("- ")
                         .append(spec.name())
@@ -290,18 +248,13 @@ public interface GameAdapter {
 
     /**
      * 渲染给 RP 看的操作工具摘要。
-     * <p>
-     * RP 只需要知道“现在有哪几类手可以用”，具体参数规则留给 parser 和桥接层处理。
      *
-     * @param tools  MCP 工具集合
-     * @param config 游戏 MCP 配置
-     * @param state  最新游戏状态
+     * @param context 适配器运行上下文
+     * @param state   最新游戏状态
      * @return 扁平工具名列表
      */
-    default String renderAvailableOperationSummary(ToolProviderResult tools,
-                                                   MCPProperties.GameMCPConfig config,
-                                                   GameStateSnapshot state) {
-        String rendered = renderAvailableOperations(tools, config, state);
+    public String renderAvailableOperationSummary(GameAdapterContext context, GameStateSnapshot state) {
+        String rendered = renderAvailableOperations(context, state);
         String summary = rendered.lines()
                 .map(String::trim)
                 .filter(line -> line.startsWith("- "))

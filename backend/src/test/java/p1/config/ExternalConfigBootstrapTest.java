@@ -48,8 +48,8 @@ class ExternalConfigBootstrapTest {
             assertTrue(frontendConfig.contains("game-name: STS2MCP"));
             assertTrue(ttsConfig.contains("gpt-so-vits:"));
             assertTrue(ttsConfig.contains("top-k:"));
-            assertTrue(ttsConfig.contains("vox-cpm2:"));
-            assertTrue(ttsConfig.contains("cfg-value:"));
+            assertFalse(ttsConfig.contains("vox-cpm2:"));
+            assertFalse(ttsConfig.contains("cfg-value:"));
             assertFalse(ttsConfig.contains("startup-command:"));
             assertEquals(tempDir.toAbsolutePath().normalize().toString(), System.getProperty("arclight.config.dir"));
             assertSameUri(tempDir.toUri().toString(), System.getProperty("arclight.config.uri"));

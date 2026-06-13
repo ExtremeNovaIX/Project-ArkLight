@@ -3,7 +3,6 @@ package p1.service;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import p1.component.agent.interaction.InteractionCoordinator;
 import p1.component.agent.gamer.GamerPendingQuestionService;
 import p1.component.agent.rp.context.SummaryCacheManager;
 import p1.component.agent.rp.core.CharacterPromptRegistry;
@@ -25,7 +24,6 @@ public class ChatService {
     private final SummaryCacheManager summaryCacheManager;
     private final RpSystemPromptService rpSystemPromptService;
     private final RpProactiveSessionRegistry proactiveSessionRegistry;
-    private final InteractionCoordinator interactionCoordinator;
     private final RpSpeechTurnService rpSpeechTurnService;
     private final GamerPendingQuestionService pendingQuestionService;
 
@@ -41,14 +39,11 @@ public class ChatService {
         String rolePrompt = characterPromptRegistry.getPrompt(request.getCharacterName());
         String currentSummary = summaryCacheManager.getSummary(sessionId);
         String systemPrompt = rpSystemPromptService.build(sessionId, rolePrompt, currentSummary);
-        String reply;
-        try (InteractionCoordinator.InteractionLease ignored = interactionCoordinator.beginUserTurn(sessionId)) {
-            reply = rpSpeechTurnService.collect(
-                    sessionId,
-                    "user-reply",
-                    rpAgent.chat(sessionId, userMessage, systemPrompt));
-            proactiveSessionRegistry.observeRpSpeech(sessionId);
-        }
+        String reply = rpSpeechTurnService.collect(
+                sessionId,
+                "user-reply",
+                rpAgent.chat(sessionId, userMessage, systemPrompt));
+        proactiveSessionRegistry.observeRpSpeech(sessionId);
         return reply;
     }
 

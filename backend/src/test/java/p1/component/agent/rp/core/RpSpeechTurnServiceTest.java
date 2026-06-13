@@ -9,7 +9,6 @@ import dev.langchain4j.service.TokenStream;
 import dev.langchain4j.service.tool.ToolExecution;
 import org.junit.jupiter.api.Test;
 import p1.component.agent.gamer.trace.GamerDecisionTraceService;
-import p1.component.agent.interaction.InteractionCoordinator;
 import p1.component.agent.rp.game.control.RpControlBlock;
 import p1.component.agent.rp.game.control.RpGameControlBlockExecutor;
 import p1.component.agent.rp.game.control.RpGameControlTurnLockService;
@@ -50,7 +49,6 @@ class RpSpeechTurnServiceTest {
         TtsSpeechSession ttsSession = mock(TtsSpeechSession.class);
         when(ttsSpeechService.open("rp-session", "game-loop")).thenReturn(ttsSession);
         RpSpeechTurnService service = new RpSpeechTurnService(
-                mock(InteractionCoordinator.class),
                 assistantProperties(),
                 ttsSpeechService,
                 controlBlockExecutor,
@@ -85,10 +83,7 @@ class RpSpeechTurnServiceTest {
         when(controlBlockExecutor.hasActiveGame("rp-session")).thenReturn(true);
         when(controlBlockExecutor.execute(eq("rp-session"), any(RpControlBlock.class))).thenReturn(Optional.empty());
         TtsSpeechService ttsSpeechService = mock(TtsSpeechService.class);
-        TtsSpeechSession ttsSession = mock(TtsSpeechSession.class);
-        when(ttsSpeechService.open("rp-session", "game-loop")).thenReturn(ttsSession);
         RpSpeechTurnService service = new RpSpeechTurnService(
-                mock(InteractionCoordinator.class),
                 assistantProperties(),
                 ttsSpeechService,
                 controlBlockExecutor,
@@ -107,6 +102,7 @@ class RpSpeechTurnServiceTest {
         ArgumentCaptor<RpControlBlock> blockCaptor = ArgumentCaptor.forClass(RpControlBlock.class);
         verify(controlBlockExecutor, org.mockito.Mockito.times(1)).execute(eq("rp-session"), blockCaptor.capture());
         assertTrue(blockCaptor.getValue().isAsk());
+        verify(ttsSpeechService, org.mockito.Mockito.never()).open(any(), any());
     }
 
     @Test
@@ -114,7 +110,6 @@ class RpSpeechTurnServiceTest {
         RpGameControlBlockExecutor controlBlockExecutor = mock(RpGameControlBlockExecutor.class);
         when(controlBlockExecutor.hasActiveGame("rp-session")).thenReturn(true);
         RpSpeechTurnService service = new RpSpeechTurnService(
-                mock(InteractionCoordinator.class),
                 assistantProperties(),
                 mock(TtsSpeechService.class),
                 controlBlockExecutor,
@@ -154,7 +149,6 @@ class RpSpeechTurnServiceTest {
         when(controlBlockExecutor.hasActiveGame("rp-session")).thenReturn(true);
         RpGameInterruptionService interruptionService = mock(RpGameInterruptionService.class);
         RpSpeechTurnService service = new RpSpeechTurnService(
-                mock(InteractionCoordinator.class),
                 assistantProperties(),
                 mock(TtsSpeechService.class),
                 controlBlockExecutor,
@@ -175,6 +169,29 @@ class RpSpeechTurnServiceTest {
                 org.mockito.Mockito.eq(0));
     }
 
+    @Test
+    void shouldRecordSplitGamePlanOnce() {
+        RpGameControlBlockExecutor controlBlockExecutor = mock(RpGameControlBlockExecutor.class);
+        when(controlBlockExecutor.hasActiveGame("rp-session")).thenReturn(true);
+        GamerDecisionTraceService traceService = mock(GamerDecisionTraceService.class);
+        RpSpeechTurnService service = new RpSpeechTurnService(
+                assistantProperties(),
+                mock(TtsSpeechService.class),
+                controlBlockExecutor,
+                mock(RpGameInterruptionService.class),
+                new RpGameControlTurnLockService(),
+                traceService);
+
+        String text = service.collect(
+                "rp-session",
+                "game-loop",
+                new ChunkTokenStream("<turn><plan>Alpha", "</plan></turn>"),
+                "STS2MCP",
+                "game-session");
+
+        assertEquals("", text);
+        verify(traceService).recordTurnPlan("STS2MCP", "game-session", "Alpha");
+    }
     private AssistantProperties assistantProperties() {
         AssistantProperties assistantProperties = mock(AssistantProperties.class);
         AssistantProperties.ChatModelConfig chatModelConfig = new AssistantProperties.ChatModelConfig();

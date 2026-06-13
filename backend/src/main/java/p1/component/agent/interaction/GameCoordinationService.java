@@ -100,6 +100,32 @@ public class GameCoordinationService {
     }
 
     /**
+     * 登记语音输入期间的短暂游戏占用。
+     *
+     * @param rpSessionId RP 会话 id
+     * @param ttl         语音输入 hold 的兜底保留时间
+     * @return true 表示当前存在可控制的游戏会话并已登记 hold
+     */
+    public boolean beginVoiceInputHold(String rpSessionId, Duration ttl) {
+        ActiveGameSession session = activeSession(rpSessionId).orElse(null);
+        if (session == null) {
+            return false;
+        }
+        interactionCoordinator.beginGameVoiceInput(session.getRpSessionId(), ttl);
+        session.touch();
+        return true;
+    }
+
+    /**
+     * 释放语音输入期间的短暂游戏占用。
+     *
+     * @param rpSessionId RP 会话 id
+     */
+    public void endVoiceInputHold(String rpSessionId) {
+        interactionCoordinator.endGameVoiceInput(normalizeSessionId(rpSessionId));
+    }
+
+    /**
      * 用户确认可以继续。
      *
      * @param rpSessionId RP 会话 id

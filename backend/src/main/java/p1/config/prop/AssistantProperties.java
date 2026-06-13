@@ -196,12 +196,6 @@ public class AssistantProperties {
     @Data
     public static class RpConfig {
         /**
-         * 是否在 RP 收到每条用户消息时先执行通用指令路由。
-         * <p>
-         * 这里只控制 RP 是否消费路由结果；路由模型地址、模型名和超时等固定参数写在通用路由配置类中。
-         */
-        private boolean instructionRouterEnabled = false;
-        /**
          * RP 主动发言配置。
          */
         private ProactiveConfig proactive = new ProactiveConfig();
@@ -256,45 +250,9 @@ public class AssistantProperties {
     @Data
     public static class InteractionConfig {
         /**
-         * 一次用户文本请求持有交互窗口的兜底超时，单位毫秒。
-         */
-        private long userTurnTtlMs = 180000;
-        /**
-         * 前端 typing 或未来语音 VAD 心跳暂停游戏自动行动的用户活动窗口，输入停止后按该时长恢复，单位毫秒。
-         */
-        private long userActivityTtlMs = 3000;
-        /**
-         * RP 从首个可见响应字符到流结束期间持有交互窗口的兜底超时，单位毫秒。
-         */
-        private long rpSpeechTtlMs = 180000;
-        /**
          * 游戏等待调度配置。
          */
         private WaitConfig wait = new WaitConfig();
-        /**
-         * STT 游戏语音意图门控配置。
-         */
-        private VoiceGateConfig voiceGate = new VoiceGateConfig();
-    }
-
-    @Data
-    public static class VoiceGateConfig {
-        /**
-         * partial 转写触发一次路由判断的最小间隔，单位毫秒。
-         */
-        private long routeIntervalMs = 800;
-        /**
-         * 非 CHAT 意图触发游戏副作用所需的最小置信度。
-         */
-        private double confidenceThreshold = 0.85;
-        /**
-         * 同一语音意图重复触发的冷却时间，单位毫秒。
-         */
-        private long duplicateCooldownMs = 3000;
-        /**
-         * partial 文本至少变化多少个字符才重新路由。
-         */
-        private int minChangedChars = 2;
     }
 
     @Data

@@ -31,7 +31,7 @@ class GamerPendingQuestionServiceTest {
     void shouldSpeakQuestionAndReturnUserAnswerContextToRp() throws Exception {
         ActiveGameRegistry registry = new ActiveGameRegistry();
         registry.register("STS2MCP", "game-session", "rp-session");
-        InteractionCoordinator coordinator = new InteractionCoordinator(registry, new AssistantProperties());
+        InteractionCoordinator coordinator = new InteractionCoordinator(registry);
         RecordingMemory memory = new RecordingMemory("rp-session");
         TtsSpeechService ttsSpeechService = mock(TtsSpeechService.class);
         TtsSpeechSession ttsSession = mock(TtsSpeechSession.class);
@@ -62,7 +62,7 @@ class GamerPendingQuestionServiceTest {
     void shouldRecordTimeoutAndResumeRpControlWhenQuestionTimesOut() throws Exception {
         ActiveGameRegistry registry = new ActiveGameRegistry();
         registry.register("STS2MCP", "game-session", "rp-session");
-        InteractionCoordinator coordinator = new InteractionCoordinator(registry, new AssistantProperties());
+        InteractionCoordinator coordinator = new InteractionCoordinator(registry);
         RecordingMemory memory = new RecordingMemory("rp-session");
         TtsSpeechService ttsSpeechService = mock(TtsSpeechService.class);
         when(ttsSpeechService.open(eq("rp-session"), eq("game-ask"))).thenReturn(mock(TtsSpeechSession.class));

@@ -1,0 +1,421 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Arklight Local API",
+    "version": "0.1.0",
+    "description": "Machine-readable contract for the local Qt frontend."
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8080"
+    }
+  ],
+  "paths": {
+    "/api/doctor/status": {
+      "get": {
+        "operationId": "getDoctorStatus",
+        "summary": "Return local runtime dependency status.",
+        "responses": {
+          "200": {
+            "description": "Doctor status snapshot.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DoctorSnapshot"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/chat/send": {
+      "post": {
+        "operationId": "sendChatMessage",
+        "summary": "Send one RP chat message.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Segmented assistant reply.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/ErrorResponse"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/ErrorResponse"
+          }
+        }
+      }
+    },
+    "/api/chat/live": {
+      "get": {
+        "operationId": "subscribeLiveChatMessages",
+        "summary": "Subscribe to RP proactive messages over SSE.",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "characterName",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "shortMode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "SSE stream with rp-message events.",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/tts/live": {
+      "get": {
+        "operationId": "subscribeLiveTtsAudio",
+        "summary": "Subscribe to live TTS audio frames over SSE.",
+        "responses": {
+          "200": {
+            "description": "SSE stream with TTS audio events.",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/gamer/loop/start": {
+      "post": {
+        "operationId": "startGamerLoop",
+        "summary": "Start game loop.",
+        "requestBody": {
+          "$ref": "#/components/requestBodies/GamerLoopRequestBody"
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/GamerLoopCommandResponse"
+          },
+          "400": {
+            "$ref": "#/components/responses/ErrorResponse"
+          }
+        }
+      }
+    },
+    "/api/gamer/loop/stop": {
+      "post": {
+        "operationId": "stopGamerLoop",
+        "summary": "Stop game loop.",
+        "requestBody": {
+          "$ref": "#/components/requestBodies/GamerLoopRequestBody"
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/GamerLoopCommandResponse"
+          },
+          "400": {
+            "$ref": "#/components/responses/ErrorResponse"
+          }
+        }
+      }
+    },
+    "/api/gamer/loop/pause": {
+      "post": {
+        "operationId": "pauseGamerLoop",
+        "summary": "Pause game loop.",
+        "requestBody": {
+          "$ref": "#/components/requestBodies/GamerLoopRequestBody"
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/GamerLoopCommandResponse"
+          },
+          "400": {
+            "$ref": "#/components/responses/ErrorResponse"
+          }
+        }
+      }
+    },
+    "/api/gamer/loop/resume": {
+      "post": {
+        "operationId": "resumeGamerLoop",
+        "summary": "Resume game loop.",
+        "requestBody": {
+          "$ref": "#/components/requestBodies/GamerLoopRequestBody"
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/GamerLoopCommandResponse"
+          },
+          "400": {
+            "$ref": "#/components/responses/ErrorResponse"
+          }
+        }
+      }
+    },
+    "/api/gamer/loop/status": {
+      "get": {
+        "operationId": "getGamerLoopStatus",
+        "summary": "Return current game loop status.",
+        "parameters": [
+          {
+            "name": "gameName",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sessionId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Game loop status.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GamerLoopStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/test/story-replay/start": {
+      "post": {
+        "operationId": "startStoryReplay",
+        "summary": "Run local story replay test flow.",
+        "responses": {
+          "200": {
+            "description": "Story replay summary.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/stt/stream": {
+      "get": {
+        "operationId": "openSttStream",
+        "summary": "WebSocket endpoint for Qt PCM audio streaming.",
+        "description": "This path is upgraded to WebSocket by Spring WebSocket, not served as plain HTTP.",
+        "responses": {
+          "101": {
+            "description": "WebSocket protocol switch."
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "responses": {
+      "ErrorResponse": {
+        "description": "User-facing error payload.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorPayload"
+            }
+          }
+        }
+      },
+      "GamerLoopCommandResponse": {
+        "description": "Game loop command result.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
+    "requestBodies": {
+      "GamerLoopRequestBody": {
+        "required": false,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/GamerLoopRequest"
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "ChatRequest": {
+        "type": "object",
+        "required": ["message"],
+        "properties": {
+          "message": {
+            "type": "string"
+          },
+          "sessionId": {
+            "type": "string"
+          },
+          "characterName": {
+            "type": "string"
+          },
+          "shortMode": {
+            "type": "boolean"
+          }
+        }
+      },
+      "DoctorCheck": {
+        "type": "object",
+        "required": ["id", "label", "status", "detail", "action", "path"],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["OK", "WARN", "ERROR"]
+          },
+          "detail": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          }
+        }
+      },
+      "DoctorSnapshot": {
+        "type": "object",
+        "required": ["status", "hasIssues", "issueCount", "checkedAt", "checks"],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": ["OK", "WARN", "ERROR"]
+          },
+          "hasIssues": {
+            "type": "boolean"
+          },
+          "issueCount": {
+            "type": "integer"
+          },
+          "checkedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "checks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DoctorCheck"
+            }
+          }
+        }
+      },
+      "ErrorPayload": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string"
+          },
+          "error": {
+            "type": "string"
+          }
+        }
+      },
+      "GamerLoopRequest": {
+        "type": "object",
+        "properties": {
+          "gameName": {
+            "type": "string"
+          },
+          "sessionId": {
+            "type": "string"
+          },
+          "rpSessionId": {
+            "type": "string"
+          },
+          "characterName": {
+            "type": "string"
+          },
+          "shortMode": {
+            "type": "boolean"
+          }
+        }
+      },
+      "GamerLoopStatus": {
+        "type": "object",
+        "properties": {
+          "running": {
+            "type": "boolean"
+          },
+          "gameName": {
+            "type": "string"
+          },
+          "sessionId": {
+            "type": "string"
+          },
+          "session": {
+            "type": "object"
+          }
+        }
+      }
+    }
+  }
+}

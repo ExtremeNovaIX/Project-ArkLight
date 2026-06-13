@@ -160,7 +160,7 @@ class SttRealAudioIntentGateManualTest {
 
     private void waitForManagedSidecars() throws Exception {
         Duration timeout = Duration.ofSeconds(Long.getLong("stt.manual.sidecar.timeout.seconds", 240L));
-        waitForHttpOk(ttsConfig.getVoxCpm2().getBaseUrl().replaceAll("/+$", "") + "/health", timeout);
+        waitForHttpOk(ttsConfig.getGptSoVits().getBaseUrl().replaceAll("/+$", "") + "/docs", timeout);
         waitForTcp("127.0.0.1", sttConfig.serverPort(), timeout);
     }
 

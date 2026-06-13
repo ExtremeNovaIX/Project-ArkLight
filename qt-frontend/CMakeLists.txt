@@ -31,14 +31,18 @@ qt_add_executable(arklight_qt
     src/app/CharacterCatalog.h
     src/app/ChatSessionController.cpp
     src/app/ChatSessionController.h
+    src/app/ConfigCatalogController.cpp
+    src/app/ConfigCatalogController.h
+    src/app/DoctorController.cpp
+    src/app/DoctorController.h
     src/app/FrontendSettings.cpp
     src/app/FrontendSettings.h
     src/app/MessageParser.cpp
     src/app/MessageParser.h
     src/app/SttAudioController.cpp
     src/app/SttAudioController.h
-    src/app/WindowsProcessAudioCapture.cpp
-    src/app/WindowsProcessAudioCapture.h
+    src/app/TtsAudioController.cpp
+    src/app/TtsAudioController.h
 )
 
 qt_add_qml_module(arklight_qt
@@ -59,8 +63,8 @@ qt_add_qml_module(arklight_qt
         qml/IconUser.qml
         qml/Main.qml
         qml/SettingsCompatDialog.qml
-        qml/StardustField.qml
         qml/StatusStrip.qml
+        qml/SurfaceTexture.qml
 )
 
 target_include_directories(arklight_qt PRIVATE src/app)

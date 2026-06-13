@@ -27,7 +27,7 @@ if not exist "%ARCLIGHT_CHARA_DIR%" (
 
 if not exist "qt\arklight_qt.exe" (
     echo qt\arklight_qt.exe not found.
-    echo Use start-web.bat, or package Qt with QTDIR/PREBUILT_QT_DIR.
+    echo Package Qt with QTDIR/PREBUILT_QT_DIR.
     pause
     exit /b 1
 )

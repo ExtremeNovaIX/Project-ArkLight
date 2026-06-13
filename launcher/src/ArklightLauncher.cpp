@@ -18,7 +18,6 @@ namespace {
 
 enum class FrontendMode {
     Qt,
-    Web,
     BackendOnly
 };
 
@@ -459,17 +458,6 @@ bool launchProcess(const fs::path &exe,
     return true;
 }
 
-bool openBrowser(const std::wstring &url) {
-    HINSTANCE result = ShellExecuteW(nullptr, L"open", url.c_str(), nullptr, g_rootDir.wstring().c_str(), SW_SHOWNORMAL);
-    auto code = reinterpret_cast<intptr_t>(result);
-    if (code <= 32) {
-        logLine(L"ShellExecute failed for url: " + url + L", code=" + std::to_wstring(code));
-        return false;
-    }
-    logLine(L"Opened browser: " + url);
-    return true;
-}
-
 void terminateProcessTree(DWORD pid) {
     if (pid == 0) {
         return;
@@ -501,16 +489,14 @@ void stopBackend(ChildProcess &backend) {
 
 FrontendMode resolveMode(const std::vector<std::wstring> &args, const fs::path &exePath) {
     std::wstring exeName = toLower(exePath.filename().wstring());
-    FrontendMode mode = exeName.find(L"web") != std::wstring::npos ? FrontendMode::Web : FrontendMode::Qt;
+    FrontendMode mode = FrontendMode::Qt;
     if (exeName.find(L"backend") != std::wstring::npos) {
         mode = FrontendMode::BackendOnly;
     }
 
     for (const auto &arg : args) {
         std::wstring lower = toLower(arg);
-        if (lower == L"--web") {
-            mode = FrontendMode::Web;
-        } else if (lower == L"--qt") {
+        if (lower == L"--qt") {
             mode = FrontendMode::Qt;
         } else if (lower == L"--backend-only") {
             mode = FrontendMode::BackendOnly;
@@ -656,18 +642,6 @@ int runLauncher() {
 
     if (mode == FrontendMode::BackendOnly) {
         MessageBoxW(nullptr, L"后端正在运行。点击“确定”会停止本启动器拉起的后端。", L"Arklight Launcher", MB_OK | MB_ICONINFORMATION);
-        stopBackend(backend);
-        return 0;
-    }
-
-    if (mode == FrontendMode::Web) {
-        std::wstring url = endpoint.baseUrl + L"/";
-        if (!openBrowser(url)) {
-            stopBackend(backend);
-            showError(L"浏览器打开失败。你可以手动访问：" + url);
-            return 1;
-        }
-        MessageBoxW(nullptr, L"Web 前端已经打开。点击“确定”会停止本启动器拉起的后端。", L"Arklight Launcher", MB_OK | MB_ICONINFORMATION);
         stopBackend(backend);
         return 0;
     }

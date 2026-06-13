@@ -1,90 +1,62 @@
 package p1.component.agent.stt;
 
-import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import org.springframework.util.StringUtils;
 import p1.component.agent.interaction.GameCoordinationService;
-import p1.component.agent.router.InstructionRouteDecision;
-import p1.component.agent.router.InstructionRouteRequest;
-import p1.component.agent.router.InstructionRouter;
-import p1.component.agent.router.InstructionRouterTask;
-import p1.component.agent.router.InstructionRouterTaskRegistry;
-import p1.config.prop.AssistantProperties;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
-import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Pattern;
 
 @Service
 @Slf4j
 public class SttGameIntentGate {
 
-    static final String TASK_ID = "stt-game-control";
-    private static final String INTENT_WAIT = "WAIT";
-    private static final String INTENT_APPLY_INSTRUCTION = "APPLY_INSTRUCTION";
-    private static final String INTENT_READY = "READY";
-    private static final String INTENT_CHAT = "CHAT";
-    private static final int MIN_PARTIAL_CONTROL_CHARS = 2;
-    private static final int MIN_PARTIAL_APPLY_CHARS = 4;
-    private static final List<String> ALLOWED_INTENTS = List.of(
-            INTENT_WAIT,
-            INTENT_APPLY_INSTRUCTION,
-            INTENT_READY,
-            INTENT_CHAT);
-    private static final String SCENE_INSTRUCTION = """
-            你负责判断混合语音转写是否是在直接给 gamer agent 下游戏指令。
-            音频可能来自多人混合声道，必须保守，宁可漏掉暧昧讨论，也不要把闲聊当成指令。
+    static final String INTENT_WAIT = "WAIT";
+    static final String INTENT_APPLY_INSTRUCTION = "APPLY_INSTRUCTION";
+    static final String INTENT_READY = "READY";
+    static final String INTENT_CHAT = "CHAT";
+    static final String INTENT_VOICE_HOLD = "VOICE_HOLD";
 
-            意图定义：
-            - WAIT：用户明确要求 gamer 暂停、先别动、等一下、不要继续操作。
-            - APPLY_INSTRUCTION：用户明确给出新的游戏行动偏好、战术建议或操作方向，例如“先防”“打这个”“这回合别贪”。
-            - READY：只有用户明确表示可以继续、好了、继续吧时使用；如果 runtime_context 中 waiting=false，通常应归为 CHAT。
-            - CHAT：闲聊、评价、情绪、复盘、暧昧讨论、听不清、多人混杂、低置信转写。
+    private static final Duration VOICE_HOLD_TTL = Duration.ofSeconds(12);
+    private static final long DUPLICATE_COOLDOWN_MS = 3000L;
+    private static final long HOLD_REFRESH_INTERVAL_MS = 500L;
+    private static final Pattern ASR_PREFIX = Pattern.compile("^\\[ASR uncertain:[^\\]]*]\\s*",
+            Pattern.CASE_INSENSITIVE);
+    private static final Pattern PUNCTUATION = Pattern.compile(
+            "[\\s\\p{Punct}，。！？、；：‘’“”（）【】《》「」『』…·]+",
+            Pattern.UNICODE_CHARACTER_CLASS);
+    private static final Pattern PARTIAL_WAIT = Pattern.compile(
+            ".*(?:等一下|等下|等等|稍等|等我一下|先停|停一下|暂停|先别动|别动|不要动|别操作|先别操作|别急|慢点).*");
+    private static final Pattern PARTIAL_LISTEN = Pattern.compile(
+            ".*(?:听我说|等我说完|我还没说完|先听我说).*");
+    private static final Pattern PARTIAL_REQUEST = Pattern.compile(
+            ".*(?:你能不能|能不能|你可以.{0,80}[吗么嘛]?|可以.{0,80}[吗么嘛]|可不可以|能.{1,80}[吗么嘛]|行不行|帮我|麻烦你|请你|要不|不如|是不是可以).*");
+    private static final Pattern FINAL_WAIT = PARTIAL_WAIT;
+    private static final Pattern FINAL_READY = Pattern.compile(
+            ".*(?:好了|可以了|继续|你继续|开始吧|执行吧|动吧|没事了|继续吧|可以继续|好了继续).*");
+    private static final Pattern FINAL_REQUEST = Pattern.compile(
+            ".*(?:你能不能|能不能|你可以.{0,80}[吗么嘛]?|可以.{0,80}[吗么嘛]|可不可以|能.{1,80}[吗么嘛]|行不行|帮我|麻烦你|请你|要不|不如|是不是可以).*");
 
-            输出要求：
-            - 只能输出 JSON，intent 必须来自 allowed_intents。
-            - 只有像直接对 gamer agent 发出的当前游戏控制意图，才输出 WAIT、APPLY_INSTRUCTION 或 READY。
-            - “我觉得这样打更好”“先防更稳”这类明确战术偏好可归为 APPLY_INSTRUCTION。
-            - “这把好离谱”“太搞了”“他怎么这样玩”这类评价必须归为 CHAT。
-            - 混合语音、多人同时说话、上下文不足或不确定时，输出 CHAT 且 confidence 不高于 0.5。
-            - instruction 用极短中文保留可执行意图；WAIT 可写等待原因，READY 为空。
-            """;
-
-    private final InstructionRouter instructionRouter;
-    private final InstructionRouterTaskRegistry taskRegistry;
     private final GameCoordinationService gameCoordinationService;
-    private final AssistantProperties assistantProperties;
     private final Clock clock;
     private final Map<String, UtteranceState> states = new ConcurrentHashMap<>();
 
-    @Autowired
-    public SttGameIntentGate(InstructionRouter instructionRouter,
-                             InstructionRouterTaskRegistry taskRegistry,
-                             GameCoordinationService gameCoordinationService,
-                             AssistantProperties assistantProperties) {
-        this(instructionRouter, taskRegistry, gameCoordinationService, assistantProperties, Clock.systemUTC());
+    public SttGameIntentGate(GameCoordinationService gameCoordinationService) {
+        this(gameCoordinationService, Clock.systemUTC());
     }
 
-    SttGameIntentGate(InstructionRouter instructionRouter,
-                      InstructionRouterTaskRegistry taskRegistry,
-                      GameCoordinationService gameCoordinationService,
-                      AssistantProperties assistantProperties,
-                      Clock clock) {
-        this.instructionRouter = instructionRouter;
-        this.taskRegistry = taskRegistry;
+    public SttGameIntentGate() {
+        this.gameCoordinationService = null;
+        this.clock = null;
+    }
+
+    SttGameIntentGate(GameCoordinationService gameCoordinationService, Clock clock) {
         this.gameCoordinationService = gameCoordinationService;
-        this.assistantProperties = assistantProperties;
         this.clock = clock;
-    }
-
-    @PostConstruct
-    void registerRouterTask() {
-        taskRegistry.register(new InstructionRouterTask(TASK_ID, ALLOWED_INTENTS, SCENE_INSTRUCTION));
     }
 
     public Result onPartial(String connectionId, String rpSessionId, String transcript) {
@@ -97,23 +69,40 @@ public class SttGameIntentGate {
 
     private Result onPartialInternal(String connectionId, String rpSessionId, String transcript, boolean dryRun) {
         String text = normalizeText(transcript);
-        if (text.isBlank()) {
+        String compact = compactText(text);
+        if (compact.isBlank()) {
             return Result.pass("blank");
         }
         if (!dryRun && !hasActiveGame(rpSessionId)) {
             return Result.pass("no-active-game");
         }
 
+        VoiceSignal signal = partialSignal(compact);
+        if (signal == VoiceSignal.NONE) {
+            return Result.pass("partial-no-match");
+        }
+
         UtteranceState state = stateFor(connectionId);
         synchronized (state) {
-            state.currentText = text;
             Instant now = clock.instant();
-            if (!shouldRoutePartial(state, text, now)) {
-                return Result.pass("partial-unchanged");
+            state.currentText = text;
+            state.rpSessionId = rpSessionId;
+            boolean shouldRefresh = shouldRefreshHold(state, compact, now);
+            state.lastPartialSignature = compact;
+            state.lastPartialAt = now;
+            if (!shouldRefresh) {
+                return Result.consumed(INTENT_VOICE_HOLD, 1.0, text, false, true, 0L, "voice-hold-active");
             }
-            state.lastPartialRouteAt = now;
-            state.lastRoutedPartialText = text;
-            return routeAndApply(state, rpSessionId, text, false, now, dryRun);
+
+            boolean triggered = false;
+            if (!dryRun) {
+                triggered = gameCoordinationService.beginVoiceInputHold(rpSessionId, VOICE_HOLD_TTL);
+                state.voiceHoldActive = triggered || state.voiceHoldActive;
+            }
+            log.debug("[STT游戏语音门控] partial 命中语音占用: signal={}, rpSession={}, text={}",
+                    signal, rpSessionId, abbreviate(text));
+            return Result.consumed(INTENT_VOICE_HOLD, 1.0, text, triggered, true, 0L,
+                    dryRun ? "dry-run-voice-hold" : "voice-hold");
         }
     }
 
@@ -127,152 +116,123 @@ public class SttGameIntentGate {
 
     private Result onFinalInternal(String connectionId, String rpSessionId, String transcript, boolean dryRun) {
         String text = normalizeText(transcript);
-        if (text.isBlank()) {
-            resetUtterance(connectionId);
-            return Result.pass("blank");
-        }
-        if (!dryRun && !hasActiveGame(rpSessionId)) {
-            resetUtterance(connectionId);
-            return Result.pass("no-active-game");
-        }
-
+        String compact = compactText(text);
         UtteranceState state = stateFor(connectionId);
         synchronized (state) {
-            Instant now = clock.instant();
-            if (matchesConsumedUtterance(state, text, now)) {
-                state.currentText = "";
-                state.lastRoutedPartialText = "";
-                return Result.consumed(state.lastEffectIntent, 1.0, state.lastEffectInstruction,
-                        false, false, 0L, "matched-consumed-partial");
-            }
-            Result result = routeAndApply(state, rpSessionId, text, true, now, dryRun);
+            releaseVoiceHold(state, dryRun);
             state.currentText = "";
-            state.lastRoutedPartialText = "";
-            return result;
+            state.lastPartialSignature = "";
+            state.lastPartialAt = null;
+            if (compact.isBlank()) {
+                return Result.pass("blank");
+            }
+            if (!dryRun && !hasActiveGame(rpSessionId)) {
+                return Result.pass("no-active-game");
+            }
+
+            FinalDecision decision = finalDecision(compact, text);
+            if (decision.intent().equals(INTENT_CHAT)) {
+                return Result.pass("final-no-match");
+            }
+            if (decision.intent().equals(INTENT_READY) && !gameCoordinationService.isWaiting(rpSessionId)) {
+                return Result.pass(INTENT_READY, 1.0, "", true, 0L, "ready-without-waiting");
+            }
+
+            Instant now = clock.instant();
+            String signature = decision.intent() + "|" + compactText(decision.instruction().isBlank()
+                    ? text
+                    : decision.instruction());
+            if (isDuplicate(state, signature, now)) {
+                rememberEffect(state, text, decision.intent(), decision.instruction(), signature, now);
+                return Result.consumed(decision.intent(), 1.0, decision.instruction(), false, true, 0L,
+                        "duplicate-cooldown");
+            }
+
+            if (!dryRun) {
+                applySideEffect(rpSessionId, decision.intent(), decision.instruction());
+            }
+            rememberEffect(state, text, decision.intent(), decision.instruction(), signature, now);
+            log.info("[STT游戏语音门控] final 已消费: rpSession={}, intent={}, instruction={}",
+                    rpSessionId, decision.intent(), abbreviate(decision.instruction()));
+            return Result.consumed(decision.intent(), 1.0, decision.instruction(), !dryRun, true, 0L,
+                    dryRun ? "dry-run-would-trigger" : "triggered");
         }
     }
 
     public void cleanup(String connectionId) {
-        if (connectionId != null) {
-            states.remove(connectionId);
+        if (connectionId == null) {
+            return;
+        }
+        UtteranceState state = states.remove(connectionId);
+        if (state == null) {
+            return;
+        }
+        synchronized (state) {
+            releaseVoiceHold(state, false);
         }
     }
 
-    private Result routeAndApply(UtteranceState state,
-                                 String rpSessionId,
-                                 String text,
-                                 boolean finalResult,
-                                 Instant now,
-                                 boolean dryRun) {
-        long routeStartedAt = System.nanoTime();
-        InstructionRouteDecision decision = instructionRouter.route(InstructionRouteRequest.byTask(
-                TASK_ID,
-                TASK_ID,
-                runtimeContext(rpSessionId, dryRun),
-                text));
-        long routeDurationMs = Math.max(0L, (System.nanoTime() - routeStartedAt) / 1_000_000L);
-        String intent = decision.normalizedIntent();
-        if (!decision.confidentEnough(config().getConfidenceThreshold()) || INTENT_CHAT.equals(intent)) {
-            log.debug("[STT游戏语音门控] 跳过语音意图: final={}, intent={}, confidence={}, text={}",
-                    finalResult, intent, String.format(Locale.ROOT, "%.2f", decision.confidence()), abbreviate(text));
-            return Result.pass(intent, decision.confidence(), decision.instruction(), true, routeDurationMs, "chat-or-low-confidence");
+    private VoiceSignal partialSignal(String compact) {
+        if (PARTIAL_WAIT.matcher(compact).matches()) {
+            return VoiceSignal.WAIT;
         }
-
-        if (!finalResult && shouldDeferPartialIntent(intent, text)) {
-            log.debug("[STT游戏语音门控] 延迟短 partial 语音意图: intent={}, confidence={}, text={}",
-                    intent, String.format(Locale.ROOT, "%.2f", decision.confidence()), abbreviate(text));
-            return Result.pass(intent, decision.confidence(), decision.instruction(), true, routeDurationMs, "deferred-short-partial");
+        if (PARTIAL_LISTEN.matcher(compact).matches()) {
+            return VoiceSignal.LISTEN;
         }
-
-        if (INTENT_READY.equals(intent) && !gameCoordinationService.isWaiting(rpSessionId)) {
-            log.debug("[STT游戏语音门控] READY 语音被忽略，当前没有等待状态: rpSession={}, text={}",
-                    rpSessionId, abbreviate(text));
-            return Result.pass(intent, decision.confidence(), decision.instruction(), true, routeDurationMs, "ready-without-waiting");
+        if (PARTIAL_REQUEST.matcher(compact).matches()) {
+            return VoiceSignal.REQUEST;
         }
-
-        String instruction = instructionFor(intent, decision.instruction(), text);
-        String signature = intent + "|" + canonical(instruction.isBlank() ? text : instruction);
-        if (isDuplicate(state, signature, now)) {
-            rememberConsumed(state, text, intent, instruction, signature, now);
-            return Result.consumed(intent, decision.confidence(), instruction, false, true, routeDurationMs, "duplicate-cooldown");
-        }
-
-        if (!dryRun) {
-            applySideEffect(rpSessionId, intent, instruction);
-        }
-        rememberConsumed(state, text, intent, instruction, signature, now);
-        log.info("[STT游戏语音门控] 已消费语音意图: rpSession={}, final={}, intent={}, confidence={}, instruction={}",
-                rpSessionId, finalResult, intent, String.format(Locale.ROOT, "%.2f", decision.confidence()), instruction);
-        return Result.consumed(intent, decision.confidence(), instruction, !dryRun,
-                true, routeDurationMs, dryRun ? "dry-run-would-trigger" : "triggered");
+        return VoiceSignal.NONE;
     }
 
-    private boolean shouldRoutePartial(UtteranceState state, String text, Instant now) {
-        if (!hasEnoughTextChange(state.lastRoutedPartialText, text)) {
-            return false;
+    private FinalDecision finalDecision(String compact, String text) {
+        if (FINAL_WAIT.matcher(compact).matches()) {
+            return new FinalDecision(INTENT_WAIT, text);
         }
-        if (state.lastPartialRouteAt == null) {
+        if (FINAL_READY.matcher(compact).matches()) {
+            return new FinalDecision(INTENT_READY, "");
+        }
+        if (FINAL_REQUEST.matcher(compact).matches()) {
+            return new FinalDecision(INTENT_APPLY_INSTRUCTION, text);
+        }
+        return new FinalDecision(INTENT_CHAT, "");
+    }
+
+    private boolean shouldRefreshHold(UtteranceState state, String compact, Instant now) {
+        if (!state.voiceHoldActive || state.lastPartialAt == null) {
             return true;
         }
-        long intervalMs = Math.max(1L, config().getRouteIntervalMs());
-        return now.toEpochMilli() - state.lastPartialRouteAt.toEpochMilli() >= intervalMs;
-    }
-
-    private boolean shouldDeferPartialIntent(String intent, String text) {
-        int length = canonical(text).length();
-        if (INTENT_APPLY_INSTRUCTION.equals(intent)) {
-            return length < MIN_PARTIAL_APPLY_CHARS;
-        }
-        return length < MIN_PARTIAL_CONTROL_CHARS;
-    }
-
-    private boolean hasEnoughTextChange(String previous, String current) {
-        String before = canonical(previous);
-        String after = canonical(current);
-        if (before.equals(after)) {
-            return false;
-        }
-        if (before.isBlank()) {
+        if (!compact.equals(state.lastPartialSignature)) {
             return true;
         }
-        int minChangedChars = Math.max(1, config().getMinChangedChars());
-        if (after.startsWith(before) || before.startsWith(after)) {
-            return Math.abs(after.length() - before.length()) >= minChangedChars;
-        }
-        return true;
+        return now.toEpochMilli() - state.lastPartialAt.toEpochMilli() >= HOLD_REFRESH_INTERVAL_MS;
     }
 
-    private boolean matchesConsumedUtterance(UtteranceState state, String text, Instant now) {
-        if (state.lastConsumedText.isBlank() || state.lastEffectAt == null) {
-            return false;
+    private void releaseVoiceHold(UtteranceState state, boolean dryRun) {
+        if (!state.voiceHoldActive) {
+            return;
         }
-        long associationWindowMs = Math.max(1000L, Math.max(1L, config().getRouteIntervalMs()) * 3L);
-        if (now.toEpochMilli() - state.lastEffectAt.toEpochMilli() > associationWindowMs) {
-            return false;
+        String rpSessionId = state.rpSessionId;
+        state.voiceHoldActive = false;
+        state.rpSessionId = "";
+        if (!dryRun && rpSessionId != null && !rpSessionId.isBlank()) {
+            gameCoordinationService.endVoiceInputHold(rpSessionId);
         }
-        String consumed = canonical(state.lastConsumedText);
-        String current = canonical(text);
-        return current.equals(consumed)
-                || current.startsWith(consumed)
-                || consumed.startsWith(current)
-                || current.contains(consumed)
-                || consumed.contains(current);
     }
 
     private boolean isDuplicate(UtteranceState state, String signature, Instant now) {
         if (!signature.equals(state.lastEffectSignature) || state.lastEffectAt == null) {
             return false;
         }
-        long cooldownMs = Math.max(0L, config().getDuplicateCooldownMs());
-        return now.toEpochMilli() - state.lastEffectAt.toEpochMilli() < cooldownMs;
+        return now.toEpochMilli() - state.lastEffectAt.toEpochMilli() < DUPLICATE_COOLDOWN_MS;
     }
 
-    private void rememberConsumed(UtteranceState state,
-                                  String text,
-                                  String intent,
-                                  String instruction,
-                                  String signature,
-                                  Instant now) {
+    private void rememberEffect(UtteranceState state,
+                                String text,
+                                String intent,
+                                String instruction,
+                                String signature,
+                                Instant now) {
         state.lastConsumedText = text;
         state.lastEffectIntent = intent;
         state.lastEffectInstruction = instruction;
@@ -290,35 +250,11 @@ public class SttGameIntentGate {
         }
     }
 
-    private String instructionFor(String intent, String routedInstruction, String text) {
-        if (INTENT_READY.equals(intent)) {
-            return "";
-        }
-        if (StringUtils.hasText(routedInstruction)) {
-            return routedInstruction.trim();
-        }
-        return text;
-    }
-
-    private String runtimeContext(String rpSessionId, boolean dryRun) {
-        boolean waiting = gameCoordinationService.isWaiting(rpSessionId);
-        boolean activeGame = hasActiveGame(rpSessionId);
-        return """
-                active_game=%s
-                waiting=%s
-                audio_source=mixed
-                speaker_identity=unknown
-                policy=high_precision_voice_gate
-                dry_run=%s
-                confidence_threshold=%.2f
-                """.formatted(activeGame, waiting, dryRun, config().getConfidenceThreshold()).trim();
-    }
-
     private boolean hasActiveGame(String rpSessionId) {
         try {
             return gameCoordinationService.hasActiveGame(rpSessionId);
         } catch (Exception e) {
-            log.debug("[STT游戏语音门控] 活跃游戏检测失败: rpSession={}, reason={}", rpSessionId, e.getMessage());
+            log.debug("[STT游戏语音门控] active game 检测失败: rpSession={}, reason={}", rpSessionId, e.getMessage());
             return false;
         }
     }
@@ -328,35 +264,15 @@ public class SttGameIntentGate {
         return states.computeIfAbsent(key, ignored -> new UtteranceState());
     }
 
-    private void resetUtterance(String connectionId) {
-        UtteranceState state = connectionId == null ? null : states.get(connectionId);
-        if (state == null) {
-            return;
-        }
-        synchronized (state) {
-            state.currentText = "";
-            state.lastRoutedPartialText = "";
-        }
-    }
-
-    private AssistantProperties.VoiceGateConfig config() {
-        if (assistantProperties == null
-                || assistantProperties.getInteraction() == null
-                || assistantProperties.getInteraction().getVoiceGate() == null) {
-            return new AssistantProperties.VoiceGateConfig();
-        }
-        return assistantProperties.getInteraction().getVoiceGate();
-    }
-
     private String normalizeText(String text) {
-        return text == null ? "" : text.replaceAll("\\s+", " ").trim();
-    }
-
-    private String canonical(String text) {
         if (text == null) {
             return "";
         }
-        return text.replaceAll("\\s+", "").trim();
+        return ASR_PREFIX.matcher(text).replaceFirst("").replaceAll("\\s+", " ").trim();
+    }
+
+    private String compactText(String text) {
+        return PUNCTUATION.matcher(normalizeText(text)).replaceAll("");
     }
 
     private String abbreviate(String text) {
@@ -365,6 +281,16 @@ public class SttGameIntentGate {
         }
         String normalized = normalizeText(text);
         return normalized.length() <= 80 ? normalized : normalized.substring(0, 80) + "...";
+    }
+
+    private enum VoiceSignal {
+        NONE,
+        WAIT,
+        LISTEN,
+        REQUEST
+    }
+
+    private record FinalDecision(String intent, String instruction) {
     }
 
     public record Result(
@@ -407,8 +333,10 @@ public class SttGameIntentGate {
 
     private static final class UtteranceState {
         private String currentText = "";
-        private String lastRoutedPartialText = "";
-        private Instant lastPartialRouteAt;
+        private String rpSessionId = "";
+        private boolean voiceHoldActive;
+        private String lastPartialSignature = "";
+        private Instant lastPartialAt;
         private String lastConsumedText = "";
         private String lastEffectIntent = "";
         private String lastEffectInstruction = "";

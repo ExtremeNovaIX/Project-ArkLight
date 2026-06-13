@@ -32,4 +32,25 @@ class SttTranscriptAccumulatorTest {
 
         assertEquals("我觉得先防更好", transcript);
     }
+
+    @Test
+    void shouldAppendEnglishSegmentsWithSpace() {
+        String transcript = SttTranscriptAccumulator.appendSegment("hello", "world");
+
+        assertEquals("hello world", transcript);
+    }
+
+    @Test
+    void shouldAppendChineseSegmentsWithoutSpace() {
+        String transcript = SttTranscriptAccumulator.appendSegment("你好", "世界");
+
+        assertEquals("你好世界", transcript);
+    }
+
+    @Test
+    void shouldAvoidDuplicatedSegments() {
+        String transcript = SttTranscriptAccumulator.appendSegment("hello world", "world");
+
+        assertEquals("hello world", transcript);
+    }
 }

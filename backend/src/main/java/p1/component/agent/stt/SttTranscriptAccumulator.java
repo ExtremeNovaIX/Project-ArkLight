@@ -32,6 +32,32 @@ final class SttTranscriptAccumulator {
         return partial + finished;
     }
 
+    static String appendSegment(String currentTranscript, String nextSegment) {
+        String current = normalizePartialHypothesis(currentTranscript);
+        String next = normalizePartialHypothesis(nextSegment);
+        if (current.isBlank()) {
+            return next;
+        }
+        if (next.isBlank()) {
+            return current;
+        }
+        if (current.equals(next) || current.endsWith(next) || current.contains(next)) {
+            return current;
+        }
+        if (next.startsWith(current)) {
+            return next;
+        }
+
+        int overlap = longestSuffixPrefixOverlap(current, next);
+        if (overlap > 0) {
+            return current + next.substring(overlap);
+        }
+        if (shouldJoinWithoutSpace(current.charAt(current.length() - 1), next.charAt(0))) {
+            return current + next;
+        }
+        return current + " " + next;
+    }
+
     private static int longestSuffixPrefixOverlap(String left, String right) {
         int max = Math.min(left.length(), right.length());
         for (int length = max; length > 0; length--) {
@@ -41,5 +67,17 @@ final class SttTranscriptAccumulator {
             }
         }
         return 0;
+    }
+
+    private static boolean shouldJoinWithoutSpace(char left, char right) {
+        return isCjk(left) || isCjk(right);
+    }
+
+    private static boolean isCjk(char value) {
+        Character.UnicodeScript script = Character.UnicodeScript.of(value);
+        return script == Character.UnicodeScript.HAN
+                || script == Character.UnicodeScript.HIRAGANA
+                || script == Character.UnicodeScript.KATAKANA
+                || script == Character.UnicodeScript.HANGUL;
     }
 }
