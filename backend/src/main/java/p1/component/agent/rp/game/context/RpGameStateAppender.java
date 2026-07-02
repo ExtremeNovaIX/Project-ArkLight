@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import p1.component.agent.gamer.loop.ActiveGameRegistry;
 import p1.component.agent.gamer.loop.ActiveGameSession;
+import p1.component.agent.gamer.trace.GamerDecisionTraceService;
 import p1.component.agent.interaction.GameCoordinationService;
 import p1.component.agent.rp.context.RpRuntimeMessageInsertSupport;
 import p1.component.agent.rp.game.control.RpGameTurnService;
@@ -31,6 +32,7 @@ public class RpGameStateAppender {
     private final GameCoordinationService gameCoordinationService;
     private final RpGameRuntimeInstructionContext runtimeInstructionContext;
     private final RpGameInterruptionService gameInterruptionService;
+    private final GamerDecisionTraceService traceService;
 
     /**
      * 如果当前 RP 会话正在游戏中，就在本轮用户消息之前插入最新游戏状态。
@@ -64,7 +66,7 @@ public class RpGameStateAppender {
      * 渲染当前游戏动态上下文。这里不包含 RP 近期动作投影。
      */
     private String buildGameModeContext(ActiveGameSession session) {
-        return """
+        String context = """
                 <game_mode>
                   %s
                   %s
@@ -76,6 +78,10 @@ public class RpGameStateAppender {
                 currentGameContextService.build(session.getGameName(), session.getSessionId()),
                 gameInterruptionService.consumeRuntimeEvent(session.getRpSessionId()),
                 runtimeInstructionContext.render()).trim();
+        if (traceService != null) {
+            traceService.recordRpVisibleContext(session.getGameName(), session.getSessionId(), context);
+        }
+        return context;
     }
 
     private boolean isGameLoopTrigger(List<ChatMessage> messages, int index) {

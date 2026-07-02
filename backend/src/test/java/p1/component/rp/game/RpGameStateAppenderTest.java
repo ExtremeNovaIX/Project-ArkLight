@@ -5,6 +5,7 @@ import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.chat.request.ChatRequest;
 import org.junit.jupiter.api.Test;
 import p1.component.agent.gamer.loop.ActiveGameRegistry;
+import p1.component.agent.gamer.trace.GamerDecisionTraceService;
 import p1.component.agent.interaction.GameCoordinationService;
 import p1.component.agent.rp.game.context.RpCurrentGameContextService;
 import p1.component.agent.rp.game.context.RpGameRuntimeInstructionContext;
@@ -20,6 +21,7 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class RpGameStateAppenderTest {
@@ -31,7 +33,8 @@ class RpGameStateAppenderTest {
                 null,
                 null,
                 new RpGameRuntimeInstructionContext(),
-                mock(RpGameInterruptionService.class));
+                mock(RpGameInterruptionService.class),
+                mock(GamerDecisionTraceService.class));
         ChatRequest request = ChatRequest.builder()
                 .messages(List.of(UserMessage.from("普通闲聊")))
                 .build();
@@ -55,12 +58,14 @@ class RpGameStateAppenderTest {
         when(interruptionService.consumeRuntimeEvent("rp-session"))
                 .thenReturn("<game_runtime_event>上一轮已中断</game_runtime_event>");
         RpGameRuntimeInstructionContext runtimeInstructionContext = new RpGameRuntimeInstructionContext();
+        GamerDecisionTraceService traceService = mock(GamerDecisionTraceService.class);
         RpGameStateAppender appender = new RpGameStateAppender(
                 registry,
                 contextService,
                 coordinationService,
                 runtimeInstructionContext,
-                interruptionService);
+                interruptionService,
+                traceService);
         UserMessage currentUserMessage = UserMessage.from("你可以直接结束回合吗？");
         ChatRequest request = ChatRequest.builder()
                 .messages(List.of(AiMessage.from("前一轮回复"), currentUserMessage))
@@ -82,6 +87,7 @@ class RpGameStateAppenderTest {
         assertFalse(gameContext.singleText().contains("<game_loop_instruction>"));
         assertTrue(gameContext.singleText().contains("<game_runtime_event>"));
         assertFalse(gameContext.singleText().contains("<recent_game_actions>"));
+        verify(traceService).recordRpVisibleContext("STS2MCP", "game-session", gameContext.singleText());
         assertSame(currentUserMessage, updated.messages().get(2));
     }
 
@@ -99,7 +105,8 @@ class RpGameStateAppenderTest {
                 contextService,
                 coordinationService,
                 new RpGameRuntimeInstructionContext(),
-                interruptionService);
+                interruptionService,
+                mock(GamerDecisionTraceService.class));
         UserMessage loopTrigger = UserMessage.from(RpGameTurnService.GAME_LOOP_MESSAGE_NAME, ".");
         ChatRequest request = ChatRequest.builder()
                 .messages(List.of(AiMessage.from("前一轮回复"), loopTrigger))

@@ -54,7 +54,8 @@ class MemoryArchiveMdAssemblerTest {
         assertEquals(
                 List.of(
                         "group-20260424210000",
-                        "night-market"
+                        "night-market",
+                        "jiang-nan"
                 ),
                 markdown.frontmatter().get("tags")
         );

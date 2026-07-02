@@ -65,8 +65,17 @@ public class RpGameControlBlockExecutor {
         if (!block.isCommittedAction()) {
             return Optional.empty();
         }
-        String result = actionParserService.execute(session.getGameName(), session.getSessionId(), block.doText());
-        return Optional.of(result);
+        try {
+            String result = actionParserService.execute(session.getGameName(), session.getSessionId(), block.doText());
+            return Optional.of(result);
+        } catch (RuntimeException e) {
+            traceService.appendRpCommandFailureTrace(
+                    session.getGameName(),
+                    session.getSessionId(),
+                    block.doText(),
+                    e.getMessage());
+            throw e;
+        }
     }
 
     private Optional<String> registerAsk(ActiveGameSession session, RpControlBlock block) {

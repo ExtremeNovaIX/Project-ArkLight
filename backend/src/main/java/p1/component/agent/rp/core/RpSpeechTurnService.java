@@ -261,8 +261,49 @@ public class RpSpeechTurnService {
             visibleResponse.append(text.trim());
         }
 
-        private synchronized void onCompleteResponse(ChatResponse ignored) {
+        private synchronized void onCompleteResponse(ChatResponse response) {
+            appendCompleteResponseTail(response);
             finish();
+        }
+
+        private void appendCompleteResponseTail(ChatResponse response) {
+            if (closed.get() || response == null || response.aiMessage() == null) {
+                return;
+            }
+            String completeText = response.aiMessage().text();
+            if (completeText == null || completeText.isEmpty()) {
+                return;
+            }
+            String tail = missingCompleteTail(completeText);
+            if (tail.isEmpty()) {
+                return;
+            }
+            rawResponse.append(tail);
+            if (gameMode) {
+                handleGameModeChunk(tail);
+            } else {
+                acceptSpeech(tail);
+            }
+        }
+
+        private String missingCompleteTail(String completeText) {
+            String current = rawResponse.toString();
+            if (current.isEmpty()) {
+                return completeText;
+            }
+            if (completeText.startsWith(current)) {
+                return completeText.substring(current.length());
+            }
+            if (current.endsWith(completeText)) {
+                return "";
+            }
+            int maxOverlap = Math.min(current.length(), completeText.length());
+            for (int overlap = maxOverlap; overlap > 0; overlap--) {
+                if (current.regionMatches(current.length() - overlap, completeText, 0, overlap)) {
+                    return completeText.substring(overlap);
+                }
+            }
+            return completeText;
         }
 
         private synchronized void onError(Throwable throwable) {

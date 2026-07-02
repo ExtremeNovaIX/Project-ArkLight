@@ -1,5 +1,5 @@
 tts:
-  enabled: ${TTS_ENABLED:true}
+  enabled: true
   provider: gpt-sovits-http
   synthesis-timeout-ms: 60000
   first-chunk-min-chars: 6
@@ -7,10 +7,10 @@ tts:
   max-chunk-chars: 40
   sentence-end-marks:
     - "。"
+    - "，"
     - "！"
     - "？"
     - "；"
-    - "…"
     - "."
     - "!"
     - "?"
@@ -18,9 +18,9 @@ tts:
     - "\n"
 
   gpt-so-vits:
-    base-url: ${GPT_SOVITS_BASE_URL:http://127.0.0.1:9880}
-    ref-audio-path: ${GPT_SOVITS_REF_AUDIO_PATH:}
-    prompt-text: ${GPT_SOVITS_PROMPT_TEXT:}
+    base-url: http://127.0.0.1:9880
+    ref-audio-path: ""
+    prompt-text: ""
     text-lang: zh
     prompt-lang: zh
     media-type: wav

@@ -48,14 +48,6 @@ public class STS2OperationPlanCompiler {
             recordPlayCardMetadata(queued, args, mutableHandCopy(plannedState));
             return;
         }
-        if (isCombatSelectCard(toolName)) {
-            recordCardSelectionMetadata(queued, args, handSelectCards(plannedState));
-            return;
-        }
-        if (isRewardPickCard(toolName)) {
-            recordCardSelectionMetadata(queued, args, cardRewardCards(plannedState));
-            return;
-        }
         if (isIndexedOptionTool(toolName)) {
             recordOptionMetadata(queued, args, optionCandidates(plannedState));
             return;
@@ -88,22 +80,6 @@ public class STS2OperationPlanCompiler {
             queued.metadata().put(STS2OperationMetadata.PLANNED_CARD_NAME, cardName);
         }
         mutableHand.remove(cardIndex.intValue());
-    }
-
-    private void recordCardSelectionMetadata(QueuedGameOperation queued, JsonNode args, JsonNode cards) {
-        String requestedCardName = readCardName(args);
-        if (!requestedCardName.isBlank()) {
-            queued.metadata().put(STS2OperationMetadata.PLANNED_CARD_NAME, requestedCardName);
-            return;
-        }
-        Integer cardIndex = readCardIndex(args);
-        if (cardIndex == null || !cards.isArray() || cardIndex < 0 || cardIndex >= cards.size()) {
-            return;
-        }
-        String cardName = cards.path(cardIndex).path("name").asText("");
-        if (!cardName.isBlank()) {
-            queued.metadata().put(STS2OperationMetadata.PLANNED_CARD_NAME, cardName);
-        }
     }
 
     private void recordOptionMetadata(QueuedGameOperation queued, JsonNode args, List<OptionCandidate> candidates) {
@@ -165,14 +141,6 @@ public class STS2OperationPlanCompiler {
                 || STS2OperationMetadata.LEGACY_TOOL_PLAY_CARD.equals(name);
     }
 
-    private boolean isCombatSelectCard(String toolName) {
-        return STS2OperationMetadata.TOOL_COMBAT_SELECT_CARD.equals(baseToolName(toolName));
-    }
-
-    private boolean isRewardPickCard(String toolName) {
-        return STS2OperationMetadata.TOOL_REWARDS_PICK_CARD.equals(baseToolName(toolName));
-    }
-
     private boolean isIndexedOptionTool(String toolName) {
         return baseToolName(toolName).endsWith("_choose_option");
     }
@@ -195,18 +163,6 @@ public class STS2OperationPlanCompiler {
         return state == null || state.json() == null
                 ? com.fasterxml.jackson.databind.node.JsonNodeFactory.instance.arrayNode()
                 : state.json().path("player").path("hand");
-    }
-
-    private JsonNode handSelectCards(GameStateSnapshot state) {
-        return state == null || state.json() == null
-                ? com.fasterxml.jackson.databind.node.JsonNodeFactory.instance.arrayNode()
-                : state.json().path("hand_select").path("cards");
-    }
-
-    private JsonNode cardRewardCards(GameStateSnapshot state) {
-        return state == null || state.json() == null
-                ? com.fasterxml.jackson.databind.node.JsonNodeFactory.instance.arrayNode()
-                : state.json().path("card_reward").path("cards");
     }
 
     private List<OptionCandidate> optionCandidates(GameStateSnapshot state) {

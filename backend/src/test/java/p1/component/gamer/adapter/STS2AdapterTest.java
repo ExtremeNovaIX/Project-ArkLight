@@ -10,7 +10,6 @@ import p1.component.agent.gamer.adapter.core.GameBridgeException;
 import p1.component.agent.gamer.adapter.core.GameAdapterContext;
 import p1.component.agent.gamer.adapter.core.GameActionWindowSignature;
 import p1.component.agent.gamer.adapter.core.GameOperation;
-import p1.component.agent.gamer.adapter.core.GameOperationPrecondition;
 import p1.component.agent.gamer.adapter.core.GameStateSnapshot;
 import p1.component.agent.gamer.adapter.core.QueuedGameOperation;
 import p1.component.agent.gamer.adapter.STS2Adapter;
@@ -121,24 +120,50 @@ class STS2AdapterTest {
     }
 
     @Test
-    void shouldRenderFlattenedStateForRp() throws Exception {
+    void shouldRenderCombatMarkdownForRpWithoutExecutionIds() throws Exception {
         GameStateSnapshot state = state("""
                 {
-                  "state_type":"card_select",
-                  "battle":{"turn":"player","is_play_phase":true,"enemies":[]},
-                  "player":{"hp":60,"max_hp":70,"energy":3,"max_energy":3,"hand":[
-                    {"index":0,"name":"打击","cost":"1","description":"造成6点伤害。"},
-                    {"index":1,"name":"打击","cost":"1","description":"造成6点伤害。"},
-                    {"index":2,"name":"防御","cost":"1","description":"获得5点格挡。"},
-                    {"index":3,"name":"贪婪","cost":"0","description":"不能被打出。永恒。","keywords":[
-                      {"name":"永恒","description":"无法从你的牌组中移除或变化。"}
-                    ]}
-                  ]},
-                  "card_select":{
-                    "type":"discard",
-                    "cards":[
-                      {"name":"打击","cost":"1","description":"造成6点伤害。"},
-                      {"name":"防御","cost":"1","description":"获得5点格挡。"}
+                  "game_mode":"multiplayer",
+                  "state_type":"monster",
+                  "run":{"act":1,"floor":3,"ascension":0},
+                  "battle":{
+                    "round":1,
+                    "turn":"player",
+                    "is_play_phase":true,
+                    "all_players_ready":false,
+                    "enemies":[{
+                      "entity_id":"JAW_WORM_0",
+                      "combat_id":42,
+                      "name":"Jaw Worm",
+                      "hp":44,
+                      "max_hp":44,
+                      "block":0,
+                      "intents":[{"type":"Attack","label":"11","description":"Deals 11 damage."}]
+                    }]
+                  },
+                  "players":[{
+                    "character":"The Ironclad","hp":72,"max_hp":80,"gold":99,"is_alive":true,"is_local":true,"is_ready_to_end_turn":false
+                  },{
+                    "character":"The Necrobinder","hp":60,"max_hp":66,"block":0,"gold":80,"is_alive":true,"is_local":false,"is_ready_to_end_turn":false,
+                    "pets":[{"id":"OSTY","name":"Otsy","alive":true,"hp":12,"max_hp":12,"block":0}]
+                  }],
+                  "player":{
+                    "character":"The Ironclad",
+                    "hp":72,
+                    "max_hp":80,
+                    "block":0,
+                    "energy":3,
+                    "max_energy":3,
+                    "gold":99,
+                    "draw_pile_count":15,
+                    "discard_pile_count":3,
+                    "exhaust_pile_count":1,
+                    "relics":[{"id":"BURNING_BLOOD","name":"Burning Blood","description":"At the end of combat, heal 6 HP.","counter":null}],
+                    "potions":[{"id":"SWIFT_POTION","name":"Swift Potion","description":"Draw 3 cards.","slot":0,"can_use_in_combat":true,"target_type":"None"}],
+                    "hand":[
+                      {"index":0,"name":"Strike","type":"Attack","cost":"1","target_type":"AnyEnemy","can_play":true,"description":"Deal 6 damage."},
+                      {"index":1,"name":"Defend","type":"Skill","cost":"1","target_type":"Self","can_play":true,"description":"Gain 5 Block."},
+                      {"index":2,"name":"Bash","type":"Attack","cost":"2","target_type":"AnyEnemy","can_play":false,"unplayable_reason":"NotEnoughEnergy","description":"Deal 8 damage. Apply Vulnerable."}
                     ]
                   }
                 }
@@ -146,23 +171,43 @@ class STS2AdapterTest {
 
         String rendered = adapter.renderStateForAgent(state);
 
-        assertTrue(rendered.contains("state.type=card_select"));
-        assertTrue(rendered.contains("player.hp=60/70"));
-        assertTrue(rendered.contains("hand:"));
-        assertTrue(rendered.contains("card_select="));
+        assertTrue(rendered.contains("## 当前局面"));
+        assertTrue(rendered.contains("- game_mode：multiplayer"));
+        assertTrue(rendered.contains("- state_type：monster"));
+        assertTrue(rendered.contains("- The Ironclad：HP 72/80，格挡 0，能量 3，金币 99"));
+        assertTrue(rendered.contains("- The Necrobinder：HP 60/66，格挡 0，金币 80，alive=true，ready=false"));
+        assertTrue(rendered.contains("- Otsy：HP 12/12，格挡 0，alive=true"));
+        assertTrue(rendered.contains("- Jaw Worm：HP 44/44，格挡 0"));
+        assertTrue(rendered.contains("intent：Attack 11；Deals 11 damage."));
+        assertTrue(rendered.contains("- Bash：cost 2，Attack，target AnyEnemy，can_play false，unplayable_reason NotEnoughEnergy。Deal 8 damage. Apply Vulnerable."));
+        assertTrue(rendered.contains("- 敌方即将造成伤害：11"));
+        assertTrue(rendered.contains("- 当前格挡缺口：11"));
+        assertTrue(rendered.contains("- 当前可用能量：3"));
+        assertTrue(rendered.contains("- 不可打的牌：Bash(NotEnoughEnergy)"));
+        assertTrue(rendered.contains("- 牌堆：draw 15，discard 3，exhaust 1"));
         assertFalse(rendered.trim().startsWith("{"));
         assertFalse(rendered.contains("\"player\""));
-        assertFalse(rendered.contains("index=0"));
+        assertFalse(rendered.contains("index"));
+        assertFalse(rendered.contains("entity_id"));
+        assertFalse(rendered.contains("combat_id"));
+        assertFalse(rendered.contains("max_energy"));
+        assertFalse(rendered.contains("slot"));
     }
 
     @Test
-    void shouldRenderEventOptionTitleAsNameForRp() throws Exception {
+    void shouldRenderEventMarkdownForRpWithoutOptionIndex() throws Exception {
         GameStateSnapshot state = state("""
                 {
                   "state_type":"event",
+                  "run":{"act":1,"floor":2,"ascension":0},
                   "event":{
+                    "event_id":"NEOW",
+                    "event_name":"Neow",
+                    "is_ancient":true,
+                    "in_dialogue":false,
+                    "body":"Choose a blessing.",
                     "options":[
-                      {"index":0,"title":"获得涅奥护符","description":"升级你的1张打击和1张防御。"}
+                      {"index":0,"title":"Obtain a rare card","description":"Choose 1 of 3 rare cards.","is_locked":false,"is_proceed":false,"relic_name":"Tiny House","relic_description":"Obtain rewards."}
                     ]
                   }
                 }
@@ -170,17 +215,20 @@ class STS2AdapterTest {
 
         String rendered = adapter.renderStateForAgent(state);
 
-        assertTrue(rendered.contains("event.options:"));
-        assertTrue(rendered.contains("name=获得涅奥护符"));
-        assertTrue(rendered.contains("description=升级你的1张打击和1张防御。"));
-        assertFalse(rendered.contains("index=0"));
+        assertTrue(rendered.contains("## 事件"));
+        assertTrue(rendered.contains("- event_id：NEOW"));
+        assertTrue(rendered.contains("- event_name：Neow"));
+        assertTrue(rendered.contains("- body：Choose a blessing."));
+        assertTrue(rendered.contains("- Obtain a rare card：Choose 1 of 3 rare cards.，locked=false，proceed=false，relic=Tiny House：Obtain rewards."));
+        assertFalse(rendered.contains("index"));
     }
 
     @Test
-    void shouldRenderRewardDetailsForRp() throws Exception {
+    void shouldRenderRewardMarkdownForRpWithoutRewardIndexes() throws Exception {
         GameStateSnapshot state = state("""
                 {
                   "state_type":"card_reward",
+                  "player":{"character":"The Ironclad","hp":65,"max_hp":80,"block":0,"gold":124},
                   "rewards":{
                     "items":[
                       {"index":0,"type":"gold","description":"Obtain 25 gold.","gold_amount":25},
@@ -201,32 +249,98 @@ class STS2AdapterTest {
 
         String rendered = adapter.renderStateForAgent(state);
 
-        assertTrue(rendered.contains("rewards.items:"));
-        assertTrue(rendered.contains("index=1 type=card description=Add a card to your deck."));
+        assertTrue(rendered.contains("## 可选奖励牌"));
+        assertTrue(rendered.contains("- Burning Pact：cost 1，Skill，Uncommon。Exhaust 1 card. Draw 2 cards."));
+        assertTrue(rendered.contains("- Limit Break：cost 1，Skill，Rare。Double your Strength."));
+        assertTrue(rendered.contains("- 可以跳过奖励：true"));
+        assertTrue(rendered.contains("- 当前金币：124"));
+        assertTrue(rendered.contains("- 当前生命：65/80"));
+        assertFalse(rendered.contains("index"));
+        assertFalse(rendered.contains("card_index"));
         assertFalse(rendered.contains("can_proceed"));
-        assertTrue(rendered.contains("card_reward.cards:"));
-        assertTrue(rendered.contains("index=2 name=Limit Break type=Skill cost=1 rarity=Rare description=Double your Strength."));
-        assertTrue(rendered.contains("card_reward.can_skip=true"));
     }
 
     @Test
-    void shouldHideCanProceedFromRpStateSummary() throws Exception {
+    void shouldRenderMapVotesAndHideNodeIndexesForRp() throws Exception {
         GameStateSnapshot state = state("""
                 {
-                  "state_type":"shop",
-                  "shop":{
-                    "items":[{"index":0,"name":"黑洞","price":36}],
-                    "can_proceed":false
+                  "game_mode":"multiplayer",
+                  "state_type":"map",
+                  "run":{"act":1,"floor":6,"ascension":0},
+                  "player":{"character":"The Ironclad","hp":41,"max_hp":80,"block":0,"gold":143,
+                    "relics":[{"name":"Burning Blood","description":"At the end of combat, heal 6 HP."},{"name":"Anchor","description":"Start each combat with 10 Block."}]},
+                  "players":[
+                    {"character":"The Ironclad","hp":41,"max_hp":80,"gold":143,"is_alive":true,"is_local":true},
+                    {"character":"The Necrobinder","hp":60,"max_hp":66,"gold":80,"is_alive":true,"is_local":false}
+                  ],
+                  "map":{
+                    "current_position":{"col":3,"row":6,"type":"Monster"},
+                    "next_options":[
+                      {"index":0,"col":2,"row":7,"type":"RestSite","leads_to":[{"col":1,"row":8,"type":"Elite"},{"col":3,"row":8,"type":"Shop"}]},
+                      {"index":1,"col":3,"row":7,"type":"Monster","leads_to":[{"col":3,"row":8,"type":"Event"}]}
+                    ],
+                    "votes":[
+                      {"player":"The Ironclad","is_local":true,"voted":true,"vote_col":2,"vote_row":7},
+                      {"player":"The Necrobinder","is_local":false,"voted":false}
+                    ],
+                    "all_voted":false,
+                    "nodes":[{"col":0,"row":0,"type":"Start"}]
                   }
                 }
                 """);
 
         String rendered = adapter.renderStateForAgent(state);
 
-        assertFalse(rendered.contains("can_proceed"));
-        assertTrue(rendered.contains("state.type=shop"));
+        assertTrue(rendered.contains("## 地图"));
+        assertTrue(rendered.contains("- 当前位置：(3,6)，Monster"));
+        assertTrue(rendered.contains("- RestSite，坐标 (2,7)，后续 Elite / Shop"));
+        assertTrue(rendered.contains("- The Ironclad：voted=true，vote=(2,7)"));
+        assertTrue(rendered.contains("- The Necrobinder：voted=false"));
+        assertTrue(rendered.contains("- all_voted：false"));
+        assertTrue(rendered.contains("- 可选节点类型：RestSite，Monster"));
+        assertTrue(rendered.contains("- 已投票人数：1/2"));
+        assertFalse(rendered.contains("index"));
+        assertFalse(rendered.contains("nodes"));
+        assertFalse(rendered.contains("local_player_slot"));
     }
 
+    @Test
+    void shouldRenderShopRestTreasureAndSelectionFieldsWithoutHiddenFields() throws Exception {
+        GameStateSnapshot state = state("""
+                {
+                  "state_type":"shop",
+                  "player":{"character":"The Ironclad","hp":50,"max_hp":80,"block":0,"gold":99},
+                  "shop":{
+                    "items":[
+                      {"index":0,"category":"card","price":75,"is_stocked":true,"can_afford":true,"card_name":"Offering","card_type":"Skill","card_cost":"1","card_rarity":"Rare","card_description":"Lose 6 HP. Gain 2 Energy. Draw 3 cards."},
+                      {"index":1,"category":"card_removal","price":100,"is_stocked":true,"can_afford":false}
+                    ],
+                    "can_proceed":false
+                  },
+                  "rest_site":{"options":[{"index":0,"name":"Rest","description":"Heal 30% of max HP.","is_enabled":true}]},
+                  "treasure":{"relics":[{"index":0,"name":"Lantern","description":"Start each combat with 1 Energy.","rarity":"Common"}],"is_bidding_phase":true,"bids":[{"player":"The Ironclad","voted":true,"vote_relic_index":0}],"all_bid":false},
+                  "card_select":{"screen_type":"transform","prompt":"Choose a card.","cards":[{"index":0,"name":"Strike","type":"Attack","cost":"1","rarity":"Basic","description":"Deal 6 damage."}],"can_confirm":true,"can_cancel":true}
+                }
+                """);
+
+        String rendered = adapter.renderStateForAgent(state);
+
+        assertTrue(rendered.contains("## 商店"));
+        assertTrue(rendered.contains("- card Offering：price 75，stocked=true，afford=true，cost 1，Skill，Rare。Lose 6 HP. Gain 2 Energy. Draw 3 cards."));
+        assertTrue(rendered.contains("- card_removal：price 100，stocked=true，afford=false"));
+        assertTrue(rendered.contains("## 休息点"));
+        assertTrue(rendered.contains("- Rest：Heal 30% of max HP.，enabled=true"));
+        assertTrue(rendered.contains("## 宝箱"));
+        assertTrue(rendered.contains("- Lantern：Common。Start each combat with 1 Energy."));
+        assertTrue(rendered.contains("- is_bidding_phase：true"));
+        assertTrue(rendered.contains("- The Ironclad：voted=true"));
+        assertTrue(rendered.contains("## 选牌"));
+        assertTrue(rendered.contains("- screen_type：transform"));
+        assertTrue(rendered.contains("- Strike：cost 1，Attack，Basic。Deal 6 damage."));
+        assertFalse(rendered.contains("can_proceed"));
+        assertFalse(rendered.contains("index"));
+        assertFalse(rendered.contains("vote_relic_index"));
+    }
     @Test
     void shouldKeepOverBudgetPlayForMcpJudgement() throws Exception {
         GameStateSnapshot planned = state("""
@@ -362,17 +476,17 @@ class STS2AdapterTest {
     }
 
     @Test
-    void shouldRepairCombatSelectionByCardName() throws Exception {
+    void shouldAcceptCombatSelectionByCardIndex() throws Exception {
         GameStateSnapshot current = state("""
                 {
                   "state_type":"hand_select",
                   "hand_select":{"cards":[
-                    {"name":"打击","index":0},
-                    {"name":"防御","index":1}
+                    {"name":"Strike","index":0},
+                    {"name":"Defend","index":1}
                   ]}
                 }
                 """);
-        GameOperation operation = new GameOperation("combat_select_card", objectMapper.readTree("{\"card\":\"防御\"}"));
+        GameOperation operation = new GameOperation("combat_select_card", objectMapper.readTree("{\"card_index\":1}"));
         QueuedGameOperation queued = QueuedGameOperation.from(operation, current);
 
         ToolExecutionRequest repaired = adapter.repairBeforeExecute(context(), queued, current);
@@ -836,48 +950,6 @@ class STS2AdapterTest {
     }
 
     @Test
-    void shouldFailPreconditionWhenPlannedTargetDisappears() throws Exception {
-        GameStateSnapshot planned = state("""
-                {
-                  "state_type":"monster",
-                  "battle":{"enemies":[{"entity_id":"NIBBIT_0","name":"小啃兽"}]},
-                  "player":{"hand":[{"name":"打击","target_type":"Enemy"}]}
-                }
-                """);
-        GameStateSnapshot current = state("""
-                {
-                  "state_type":"monster",
-                  "battle":{"enemies":[{"entity_id":"CULTIST_0","name":"邪教徒"}]},
-                  "player":{"hand":[{"name":"打击","target_type":"Enemy"}]}
-                }
-                """);
-        GameOperation operation = new GameOperation("combat_play_card", objectMapper.readTree("{\"card_index\":0,\"target\":\"NIBBIT_0\"}"));
-        QueuedGameOperation queued = adapter.prepareOperation(operation, planned);
-
-        GameOperationPrecondition precondition = adapter.checkOperationPrecondition(queued, current);
-
-        assertFalse(precondition.satisfied());
-        assertTrue(precondition.reason().contains("目标"));
-    }
-
-    @Test
-    void shouldFailPreconditionWhenPlannedHandCardIsGone() throws Exception {
-        GameStateSnapshot planned = state("""
-                {"state_type":"monster","player":{"hand":[{"name":"打击"},{"name":"防御"}]}}
-                """);
-        GameStateSnapshot current = state("""
-                {"state_type":"monster","player":{"hand":[{"name":"打击"}]}}
-                """);
-        GameOperation operation = new GameOperation("combat_play_card", objectMapper.readTree("{\"card_index\":1}"));
-        QueuedGameOperation queued = adapter.prepareOperation(operation, planned);
-
-        GameOperationPrecondition precondition = adapter.checkOperationPrecondition(queued, current);
-
-        assertFalse(precondition.satisfied());
-        assertTrue(precondition.reason().contains("手牌"));
-    }
-
-    @Test
     void shouldRepairIndexOnlyEventOptionByPlannedLabelAfterReorder() throws Exception {
         GameStateSnapshot planned = state("""
                 {
@@ -909,34 +981,6 @@ class STS2AdapterTest {
     }
 
     @Test
-    void shouldFailPreconditionWhenPlannedEventOptionIsGone() throws Exception {
-        GameStateSnapshot planned = state("""
-                {
-                  "state_type":"event",
-                  "options":[
-                    {"index":0,"name":"小型扭蛋"},
-                    {"index":1,"name":"巨大扭蛋"}
-                  ]
-                }
-                """);
-        GameStateSnapshot current = state("""
-                {
-                  "state_type":"event",
-                  "options":[
-                    {"index":0,"name":"离开"}
-                  ]
-                }
-                """);
-        GameOperation operation = new GameOperation("event_choose_option", objectMapper.readTree("{\"option_index\":0}"));
-        QueuedGameOperation queued = adapter.prepareOperation(operation, planned);
-
-        GameOperationPrecondition precondition = adapter.checkOperationPrecondition(queued, current);
-
-        assertFalse(precondition.satisfied());
-        assertTrue(precondition.reason().contains("选项"));
-    }
-
-    @Test
     void shouldAcceptRestSiteOptionIndexFromRestSiteOptions() throws Exception {
         GameStateSnapshot restSite = state("""
                 {
@@ -952,10 +996,8 @@ class STS2AdapterTest {
         GameOperation operation = new GameOperation("rest_choose_option", objectMapper.readTree("{\"option_index\":0}"));
         QueuedGameOperation queued = adapter.prepareOperation(operation, restSite);
 
-        GameOperationPrecondition precondition = adapter.checkOperationPrecondition(queued, restSite);
         ToolExecutionRequest repaired = adapter.repairBeforeExecute(context(), queued, restSite);
 
-        assertTrue(precondition.satisfied(), precondition.reason());
         assertEquals(
                 objectMapper.readTree("{\"option_index\":0}"),
                 objectMapper.readTree(repaired.arguments())
@@ -983,8 +1025,8 @@ class STS2AdapterTest {
     }
 
     @Test
-    void shouldRepairRewardPickIndexByPlannedCardNameAfterReorder() throws Exception {
-        GameStateSnapshot planned = state("""
+    void shouldKeepRewardPickCardIndexOnly() throws Exception {
+        GameStateSnapshot current = state("""
                 {
                   "state_type":"card_reward",
                   "card_reward":{"cards":[
@@ -994,55 +1036,15 @@ class STS2AdapterTest {
                   ]}
                 }
                 """);
-        GameStateSnapshot current = state("""
-                {
-                  "state_type":"card_reward",
-                  "card_reward":{"cards":[
-                    {"index":0,"name":"Limit Break"},
-                    {"index":1,"name":"Burning Pact"},
-                    {"index":2,"name":"Bloodletting"}
-                  ]}
-                }
-                """);
         GameOperation operation = new GameOperation("rewards_pick_card", objectMapper.readTree("{\"card_index\":2}"));
-        QueuedGameOperation queued = adapter.prepareOperation(operation, planned);
+        QueuedGameOperation queued = adapter.prepareOperation(operation, current);
 
         ToolExecutionRequest repaired = adapter.repairBeforeExecute(context(), queued, current);
 
         assertEquals(
-                objectMapper.readTree("{\"card_index\":0}"),
+                objectMapper.readTree("{\"card_index\":2}"),
                 objectMapper.readTree(repaired.arguments())
         );
-    }
-
-    @Test
-    void shouldFailPreconditionWhenPlannedRewardCardIsGone() throws Exception {
-        GameStateSnapshot planned = state("""
-                {
-                  "state_type":"card_reward",
-                  "card_reward":{"cards":[
-                    {"index":0,"name":"Burning Pact"},
-                    {"index":1,"name":"Bloodletting"},
-                    {"index":2,"name":"Limit Break"}
-                  ]}
-                }
-                """);
-        GameStateSnapshot current = state("""
-                {
-                  "state_type":"card_reward",
-                  "card_reward":{"cards":[
-                    {"index":0,"name":"Burning Pact"},
-                    {"index":1,"name":"Bloodletting"}
-                  ]}
-                }
-                """);
-        GameOperation operation = new GameOperation("rewards_pick_card", objectMapper.readTree("{\"card_index\":2}"));
-        QueuedGameOperation queued = adapter.prepareOperation(operation, planned);
-
-        GameOperationPrecondition precondition = adapter.checkOperationPrecondition(queued, current);
-
-        assertFalse(precondition.satisfied());
-        assertTrue(precondition.reason().contains("卡牌"));
     }
 
     @Test

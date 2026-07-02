@@ -12,7 +12,6 @@ import p1.component.agent.gamer.GamerMCPClientFactory;
 import p1.component.agent.gamer.adapter.GameAdapter;
 import p1.component.agent.gamer.adapter.core.GameAdapterContext;
 import p1.component.agent.gamer.adapter.core.GameAdapterRegistry;
-import p1.component.agent.gamer.adapter.core.GameStateJsonSanitizer;
 import p1.component.agent.gamer.adapter.core.GameStateSnapshot;
 import p1.config.mcp.MCPProperties;
 
@@ -53,7 +52,8 @@ public class RpCurrentGameContextService {
             GameAdapterContext context = new GameAdapterContext(gameName, memoryId, tools, config);
             GameStateSnapshot state = adapter.fetchState(context);
             String actionSummary = adapter.renderAvailableOperationSummary(context, state);
-            return render(state, actionSummary);
+            String stateSummary = adapter.renderStateForAgent(state);
+            return render(actionSummary, stateSummary);
         } catch (Exception e) {
             log.warn("[RP游戏状态] 获取当前游戏状态失败: game={}, session={}, reason={}",
                     gameName, sessionId, e.getMessage());
@@ -64,25 +64,21 @@ public class RpCurrentGameContextService {
     /**
      * 渲染 RP 侧游戏状态文本。
      *
-     * @param state         最新游戏状态
      * @param actionSummary RP 可见的中文动作摘要
+     * @param stateSummary  RP 可见的关键局面 Markdown
      * @return RP 状态上下文
      */
-    private String render(GameStateSnapshot state, String actionSummary) {
+    private String render(String actionSummary, String stateSummary) {
         StringBuilder sb = new StringBuilder();
         sb.append("<current_game_state>\n")
-                .append("<current_game_state_json>\n")
-                .append(rawStateJson(state))
-                .append("\n</current_game_state_json>\n")
                 .append("<available_actions>\n")
                 .append(actionSummary == null || actionSummary.isBlank() ? "(没有可用动作)" : actionSummary)
-                .append("\n</available_actions>\n");
+                .append("\n</available_actions>\n")
+                .append("<key_game_state_markdown>\n")
+                .append(stateSummary == null || stateSummary.isBlank() ? "(未能获取 STS2 状态)" : stateSummary)
+                .append("\n</key_game_state_markdown>\n");
         sb.append("</current_game_state>");
         return sb.toString();
-    }
-
-    private String rawStateJson(GameStateSnapshot state) {
-        return GameStateJsonSanitizer.sanitizeToString(state);
     }
 
     /**

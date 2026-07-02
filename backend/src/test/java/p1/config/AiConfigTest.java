@@ -17,7 +17,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class AiConfigTest {
 
     @Test
-    void shouldDisableThinkingForRpStreamingModelWithoutMutatingChatModelConfig() {
+    void shouldBuildRpStreamingModelWithConfiguredThinkingWithoutMutatingChatModelConfig() {
         AssistantProperties properties = new AssistantProperties();
         properties.setMode(AssistantProperties.Mode.API);
         AssistantProperties.ProviderConfig provider = new AssistantProperties.ProviderConfig();
@@ -31,10 +31,10 @@ class AiConfigTest {
 
         aiConfig.rpStreamingChatModel();
 
-        assertFalse(factory.config.isReturnThinking());
-        assertFalse(factory.config.isSendThinking());
-        assertNull(factory.config.getReasoningEffort());
-        assertEquals("disabled", factory.config.getThinkingType());
+        assertTrue(factory.config.isReturnThinking());
+        assertTrue(factory.config.isSendThinking());
+        assertEquals("high", factory.config.getReasoningEffort());
+        assertEquals("enabled", factory.config.getThinkingType());
         assertEquals(0.8, factory.temperature);
 
         assertTrue(heavyModel.isReturnThinking());
@@ -58,10 +58,10 @@ class AiConfigTest {
         aiConfig.parserChatModel();
 
         assertEquals("light-parser", factory.config.getModelName());
-        assertFalse(factory.config.isReturnThinking());
-        assertFalse(factory.config.isSendThinking());
-        assertNull(factory.config.getReasoningEffort());
-        assertEquals("disabled", factory.config.getThinkingType());
+        assertTrue(factory.config.isReturnThinking());
+        assertTrue(factory.config.isSendThinking());
+        assertEquals("high", factory.config.getReasoningEffort());
+        assertEquals("enabled", factory.config.getThinkingType());
         assertEquals(0.0, factory.temperature);
     }
 
@@ -80,10 +80,10 @@ class AiConfigTest {
         aiConfig.parserStreamingChatModel();
 
         assertEquals("light-parser", factory.config.getModelName());
-        assertFalse(factory.config.isReturnThinking());
-        assertFalse(factory.config.isSendThinking());
-        assertNull(factory.config.getReasoningEffort());
-        assertEquals("disabled", factory.config.getThinkingType());
+        assertTrue(factory.config.isReturnThinking());
+        assertTrue(factory.config.isSendThinking());
+        assertEquals("high", factory.config.getReasoningEffort());
+        assertEquals("enabled", factory.config.getThinkingType());
         assertEquals(0.0, factory.temperature);
     }
 

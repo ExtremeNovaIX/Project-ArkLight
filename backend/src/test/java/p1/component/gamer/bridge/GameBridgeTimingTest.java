@@ -12,6 +12,7 @@ import dev.langchain4j.service.tool.ToolProviderResult;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import p1.component.agent.gamer.adapter.core.GameAdapterContext;
 import p1.component.agent.gamer.adapter.core.GameStateSnapshot;
 import p1.component.agent.gamer.adapter.STS2Adapter;
@@ -29,6 +30,7 @@ import java.util.List;
  * 需要游戏 + MCP mod 正在运行，否则状态查询会返回错误文本。
  */
 @Tag("manual")
+@EnabledIfSystemProperty(named = "run.gamer.bridge.timing.tests", matches = "true")
 class GameBridgeTimingTest {
 
     private static final String STS2_SERVER_DIR =

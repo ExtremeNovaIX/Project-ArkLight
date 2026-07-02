@@ -1,5 +1,6 @@
 package p1.component.agent.rp.core;
 
+import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.model.chat.response.ChatResponse;
 import dev.langchain4j.model.chat.response.PartialResponse;
 import dev.langchain4j.model.chat.response.PartialResponseContext;
@@ -77,6 +78,39 @@ class RpSpeechTurnServiceTest {
         assertEquals("打出防御", blockCaptor.getAllValues().get(1).doText());
     }
 
+    @Test
+    void shouldExecuteCommittedActFromCompleteResponseWhenPartialMissesTail() {
+        RpGameControlBlockExecutor controlBlockExecutor = mock(RpGameControlBlockExecutor.class);
+        when(controlBlockExecutor.hasActiveGame("rp-session")).thenReturn(true);
+        when(controlBlockExecutor.execute(eq("rp-session"), any(RpControlBlock.class))).thenReturn(Optional.empty());
+        RpSpeechTurnService service = new RpSpeechTurnService(
+                assistantProperties(),
+                mock(TtsSpeechService.class),
+                controlBlockExecutor,
+                mock(RpGameInterruptionService.class),
+                new RpGameControlTurnLockService(),
+                mock(GamerDecisionTraceService.class));
+
+        String completeResponse = """
+                <turn>
+                <plan>End the turn.</plan>
+                <event 1>
+                {"type":"act","do":"end turn","check":"legal","progress":"done","next":"","commit":true}
+                </event 1>
+                </turn>
+                """;
+
+        String text = service.collect(
+                "rp-session",
+                "game-loop",
+                ChunkTokenStream.withCompleteResponse(completeResponse, "<turn><plan>End"));
+
+        assertEquals("", text);
+        ArgumentCaptor<RpControlBlock> blockCaptor = ArgumentCaptor.forClass(RpControlBlock.class);
+        verify(controlBlockExecutor).execute(eq("rp-session"), blockCaptor.capture());
+        assertTrue(blockCaptor.getValue().isCommittedAction());
+        assertEquals("end turn", blockCaptor.getValue().doText());
+    }
     @Test
     void shouldStopGameStreamAfterAskAndIgnoreFollowingActions() {
         RpGameControlBlockExecutor controlBlockExecutor = mock(RpGameControlBlockExecutor.class);
@@ -202,6 +236,7 @@ class RpSpeechTurnServiceTest {
 
     private static final class ChunkTokenStream implements TokenStream {
         private final List<String> chunks;
+        private final ChatResponse completeResponse;
         private final TestStreamingHandle handle = new TestStreamingHandle();
         private Consumer<ChatResponse> onComplete = ignored -> {
         };
@@ -211,7 +246,18 @@ class RpSpeechTurnServiceTest {
         };
 
         private ChunkTokenStream(String... chunks) {
-            this.chunks = List.of(chunks);
+            this(null, List.of(chunks));
+        }
+
+        private ChunkTokenStream(ChatResponse completeResponse, List<String> chunks) {
+            this.completeResponse = completeResponse;
+            this.chunks = chunks;
+        }
+
+        private static ChunkTokenStream withCompleteResponse(String completeResponse, String... chunks) {
+            return new ChunkTokenStream(
+                    ChatResponse.builder().aiMessage(AiMessage.from(completeResponse)).build(),
+                    List.of(chunks));
         }
 
         private boolean cancelled() {
@@ -270,7 +316,7 @@ class RpSpeechTurnServiceTest {
                     onPartialWithContext.accept(new PartialResponse(chunk), new PartialResponseContext(handle));
                 }
                 if (!handle.isCancelled()) {
-                    onComplete.accept(null);
+                    onComplete.accept(completeResponse);
                 }
             } catch (Throwable throwable) {
                 onError.accept(throwable);

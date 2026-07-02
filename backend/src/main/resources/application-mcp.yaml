@@ -1,39 +1,25 @@
 mcp:
-  # MCP server 自动发现目录。
-  servers-directory: ${MCP_SERVERS_DIR:../mcp-servers}
-  # MCP server 注册表文件位置。
-  registry-file: ${MCP_REGISTRY_FILE:config/mcp-registry.json}
+  # Directory scanned for MCP server manifests.
+  servers-directory: ../mcp-servers
+  # Local registry file used by the simple MCP registry path.
+  registry-file: config/mcp-registry.json
   client:
-    # 单次 MCP 工具调用超时时间，单位秒。
     tool-timeout-seconds: 120
-    # MCP 客户端允许同时保留的连接数。
     max-connections: 4
 
 game:
-  # 请求未显式指定游戏时使用的默认游戏名。
-  default-game-name: ${GAME_DEFAULT_GAME:}
-  # 请求未显式指定 session 时使用的默认游戏 session。
-  default-session-id: ${GAME_DEFAULT_SESSION:default}
-  # 游戏 MCP 客户端连接时上报的客户端名称。
-  client-name: ${GAME_MCP_CLIENT_NAME:ArcLight-GameAgent}
-  # 游戏 MCP 客户端连接时上报的客户端版本。
-  client-version: ${GAME_MCP_CLIENT_VERSION:1.0}
+  default-game-name: ""
+  default-session-id: default
+  client-name: ArcLight-GameAgent
+  client-version: "1.0"
   loop:
-    # 游戏循环定时轮询当前是否可行动的间隔，单位毫秒。
     poll-interval-ms: 500
     slow-observe:
-      # 是否启用无有效动作时的慢观察退避，用于多人等待队友或敌方回合时减少空转。
       enabled: true
-      # 连续多少次没有有效动作后开始放慢单会话观察频率。
       threshold: 2
-      # 首次慢观察间隔，单位毫秒。
       initial-ms: 1000
-      # 每次继续无有效动作时增加的观察间隔，单位毫秒。
       step-ms: 1000
-      # 慢观察最大间隔，单位毫秒。
       max-ms: 3000
   trace:
-    # 是否写游戏操作复盘 markdown。
     trace-enabled: true
-    # 游戏操作复盘 markdown 输出目录。
     trace-directory: data/game-traces

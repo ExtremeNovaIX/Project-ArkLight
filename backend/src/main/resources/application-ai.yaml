@@ -1,31 +1,31 @@
 assistant:
-  # api 使用远端 OpenAI-compatible 服务，local 使用本地 OpenAI-compatible 服务。
+  # api uses remote OpenAI-compatible services; local uses local OpenAI-compatible services.
   mode: api
 
   api:
     light-model:
-      api-key: ${DEEPSEEK_API_KEY:default_value}
+      api-key: ""
       base-url: https://api.deepseek.com
       model-name: deepseek-v4-flash
       timeout-seconds: 300
       log-enabled: false
       return-thinking: true
       send-thinking: true
-      reasoning-effort: ${LLM_REASONING_EFFORT:}
-      thinking-type: ${LLM_THINKING_TYPE:enabled}
+      reasoning-effort: ""
+      thinking-type: enabled
     heavy-model:
-      # 留空字段会从 light-model 继承，用户通常只需要改 model-name。
-      api-key: ${HEAVY_MODEL_API_KEY:}
-      base-url: ${HEAVY_MODEL_BASE_URL:}
-      model-name: ${HEAVY_MODEL_NAME:deepseek-v4-flash}
+      # Blank fields inherit from light-model through AssistantProperties.
+      api-key: ""
+      base-url: ""
+      model-name: deepseek-v4-pro
       timeout-seconds: 300
       log-enabled: false
       return-thinking: true
       send-thinking: true
-      reasoning-effort: ${HEAVY_MODEL_REASONING_EFFORT:}
-      thinking-type: ${HEAVY_MODEL_THINKING_TYPE:enabled}
+      reasoning-effort: medium
+      thinking-type: enabled
     embedding-model:
-      api-key: ${DASHSCOPE_API_KEY:default_value}
+      api-key: ""
       base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
       model-name: text-embedding-v3
 
@@ -37,17 +37,17 @@ assistant:
       log-enabled: false
       return-thinking: true
       send-thinking: true
-      reasoning-effort: ${LLM_REASONING_EFFORT:}
-      thinking-type: ${LLM_THINKING_TYPE:enabled}
+      reasoning-effort: ""
+      thinking-type: enabled
     heavy-model:
-      base-url: ${LOCAL_HEAVY_MODEL_BASE_URL:}
-      model-name: ${LOCAL_HEAVY_MODEL_NAME:}
+      base-url: ""
+      model-name: ""
       timeout-seconds: 600
       log-enabled: false
       return-thinking: true
       send-thinking: true
-      reasoning-effort: ${LOCAL_HEAVY_MODEL_REASONING_EFFORT:}
-      thinking-type: ${LOCAL_HEAVY_MODEL_THINKING_TYPE:enabled}
+      reasoning-effort: medium
+      thinking-type: enabled
     embedding-model:
       base-url: http://127.0.0.1:1234/v1
       model-name: text-embedding-embedding

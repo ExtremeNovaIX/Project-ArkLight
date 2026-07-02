@@ -100,21 +100,6 @@ public class STS2OperationRepairer {
         JsonNode args = parseArgs(operation.request().arguments());
         JsonNode cards = handSelectCards(currentState);
         int cardCount = cards.isArray() ? cards.size() : 0;
-        String requestedCardName = firstNonBlank(
-                readCardName(args),
-                metadata(operation, STS2OperationMetadata.PLANNED_CARD_NAME));
-        if (!requestedCardName.isBlank()) {
-            int foundByName = findCardByName(cards, requestedCardName);
-            if (foundByName >= 0) {
-                ObjectNode repairedArgs = args.deepCopy();
-                removeVirtualCardNameFields(repairedArgs);
-                writeMcpCardIndex(repairedArgs, foundByName);
-                return operation.request().toBuilder()
-                        .arguments(repairedArgs.toString())
-                        .build();
-            }
-        }
-
         Integer requestedIndex = readCardIndex(args);
         if (requestedIndex != null && requestedIndex >= 0 && requestedIndex < cardCount) {
             ObjectNode repairedArgs = args.deepCopy();
@@ -124,7 +109,7 @@ public class STS2OperationRepairer {
                     .build();
         }
 
-        throw new GameBridgeException("STS2 战斗内选牌缺少可匹配的 card 牌名或 card_index。当前可选牌: "
+        throw new GameBridgeException("STS2 战斗内选牌缺少有效 card_index。当前可选牌: "
                 + renderHandNames(cards));
     }
 
@@ -132,21 +117,6 @@ public class STS2OperationRepairer {
         JsonNode args = parseArgs(operation.request().arguments());
         JsonNode cards = cardRewardCards(currentState);
         int cardCount = cards.isArray() ? cards.size() : 0;
-        String requestedCardName = firstNonBlank(
-                readCardName(args),
-                metadata(operation, STS2OperationMetadata.PLANNED_CARD_NAME));
-        if (!requestedCardName.isBlank()) {
-            int foundByName = findCardByName(cards, requestedCardName);
-            if (foundByName >= 0) {
-                ObjectNode repairedArgs = args.deepCopy();
-                removeVirtualCardNameFields(repairedArgs);
-                writeMcpCardIndex(repairedArgs, foundByName);
-                return operation.request().toBuilder()
-                        .arguments(repairedArgs.toString())
-                        .build();
-            }
-        }
-
         Integer requestedIndex = readCardIndex(args);
         if (requestedIndex != null && requestedIndex >= 0 && requestedIndex < cardCount) {
             ObjectNode repairedArgs = args.deepCopy();
@@ -156,7 +126,7 @@ public class STS2OperationRepairer {
                     .build();
         }
 
-        throw new GameBridgeException("STS2 奖励选牌缺少可匹配的 card 牌名或 card_index。当前奖励牌: "
+        throw new GameBridgeException("STS2 奖励选牌缺少有效 card_index。当前奖励牌: "
                 + renderHandNames(cards));
     }
 

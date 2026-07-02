@@ -12,13 +12,11 @@ import p1.component.agent.gamer.adapter.core.GameActionability;
 import p1.component.agent.gamer.adapter.core.GameAdapterContext;
 import p1.component.agent.gamer.adapter.core.GameBridgeException;
 import p1.component.agent.gamer.adapter.core.GameOperation;
-import p1.component.agent.gamer.adapter.core.GameOperationPrecondition;
 import p1.component.agent.gamer.adapter.core.GameStateSnapshot;
 import p1.component.agent.gamer.adapter.core.QueuedGameOperation;
 import p1.component.agent.gamer.adapter.sts2.STS2ActionWindowAnalyzer;
 import p1.component.agent.gamer.adapter.sts2.STS2ModeDetector;
 import p1.component.agent.gamer.adapter.sts2.STS2OperationPlanCompiler;
-import p1.component.agent.gamer.adapter.sts2.STS2OperationPreconditionChecker;
 import p1.component.agent.gamer.adapter.sts2.STS2OperationRepairer;
 import p1.component.agent.gamer.adapter.sts2.STS2OperationToolRenderer;
 import p1.component.agent.gamer.adapter.sts2.STS2StateMonitor;
@@ -52,7 +50,6 @@ public class STS2Adapter extends GameAdapter {
     private final STS2OperationToolRenderer operationToolRenderer = new STS2OperationToolRenderer(modeDetector);
     private final STS2OperationPlanCompiler operationPlanCompiler = new STS2OperationPlanCompiler();
     private final STS2ActionWindowAnalyzer actionWindowAnalyzer = new STS2ActionWindowAnalyzer();
-    private final STS2OperationPreconditionChecker preconditionChecker = new STS2OperationPreconditionChecker();
     private final STS2StateMonitor stateMonitor = new STS2StateMonitor();
     private final STS2OperationRepairer operationRepairer = new STS2OperationRepairer(modeDetector);
 
@@ -176,12 +173,6 @@ public class STS2Adapter extends GameAdapter {
     @Override
     public GameActionWindowSignature actionWindowSignature(GameStateSnapshot state) {
         return actionWindowAnalyzer.signature(state, modeDetector.modePrefix(state));
-    }
-
-    @Override
-    public GameOperationPrecondition checkOperationPrecondition(QueuedGameOperation operation,
-                                                                GameStateSnapshot currentState) {
-        return preconditionChecker.check(operation, currentState);
     }
 
     @Override

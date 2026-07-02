@@ -144,6 +144,91 @@ class GamerDecisionTraceServiceTest {
         assertTrue(content.contains("RP 事件"), "应包含 RP 事件 section");
     }
 
+    @Test
+    void shouldAttachRpVisibleContextToQueueTrace() throws Exception {
+        Path traceDir = Path.of("target", "test-game-traces", UUID.randomUUID().toString());
+        Files.createDirectories(traceDir);
+        GameTraceProperties properties = new GameTraceProperties();
+        properties.setTraceEnabled(true);
+        properties.setTraceDirectory(traceDir.toString());
+        GamerDecisionTraceService traceService = new GamerDecisionTraceService(properties);
+
+        String gameName = "STS2MCP";
+        String memoryId = "session-visible";
+        Path tracePath = traceService.initSession(gameName, memoryId);
+        String visibleContext = """
+                <game_mode>
+                <current_game_state>
+                <available_actions>
+                - 打出手牌
+                </available_actions>
+                <key_game_state_markdown>
+                ## 当前局面
+                - state_type：monster
+                ## 本步决策重点
+                - 敌方即将造成伤害：11
+                </key_game_state_markdown>
+                </current_game_state>
+                </game_mode>
+                """;
+        traceService.recordRpVisibleContext(gameName, memoryId, visibleContext);
+
+        traceService.appendQueueTrace(
+                gameName,
+                memoryId,
+                "",
+                "打出防御",
+                "",
+                0,
+                false,
+                false,
+                List.of(),
+                "已成功执行 1/1 条操作。",
+                "",
+                null,
+                "",
+                "",
+                "",
+                "",
+                true);
+
+        String content = Files.readString(tracePath);
+
+        assertTrue(content.contains("RP 可见上下文"), "应记录 RP 当时看到的上下文");
+        assertTrue(content.contains("<current_game_state>"), "应包含当前游戏状态上下文");
+        assertTrue(content.contains("<available_actions>"), "应包含 RP 可见动作摘要");
+        assertTrue(content.contains("<key_game_state_markdown>"), "应包含 RP 可见关键局面 Markdown");
+        assertTrue(content.contains("敌方即将造成伤害：11"), "应保留决策关键字段");
+        assertTrue(content.contains("执行结果"), "应记录 RP 命令执行结果 section");
+        assertTrue(content.contains("已成功执行 1/1 条操作。"), "应记录执行反馈文本");
+    }
+
+    @Test
+    void shouldRecordRpCommandFailureWithVisibleContext() throws Exception {
+        Path traceDir = Path.of("target", "test-game-traces", UUID.randomUUID().toString());
+        Files.createDirectories(traceDir);
+        GameTraceProperties properties = new GameTraceProperties();
+        properties.setTraceEnabled(true);
+        properties.setTraceDirectory(traceDir.toString());
+        GamerDecisionTraceService traceService = new GamerDecisionTraceService(properties);
+
+        String gameName = "STS2MCP";
+        String memoryId = "session-failure";
+        Path tracePath = traceService.initSession(gameName, memoryId);
+        traceService.recordRpVisibleContext(gameName, memoryId, "<current_game_state><key_game_state_markdown>## 当前局面</key_game_state_markdown></current_game_state>");
+
+        traceService.appendRpCommandFailureTrace(gameName, memoryId, "选择左边事件", "底层执行失败：目标不存在");
+
+        String content = Files.readString(tracePath);
+
+        assertTrue(content.contains("rp_command_failure"), "应记录 RP 命令失败 step");
+        assertTrue(content.contains("RP 可见上下文"), "异常也应带上 RP 当时看到的上下文");
+        assertTrue(content.contains("<key_game_state_markdown>"), "异常 trace 应保留关键局面 Markdown");
+        assertTrue(content.contains("选择左边事件"), "应记录失败的 RP 命令");
+        assertTrue(content.contains("执行异常"), "应记录执行异常 section");
+        assertTrue(content.contains("底层执行失败：目标不存在"), "应记录异常反馈");
+    }
+
     private p1.component.agent.gamer.adapter.core.GameStateSnapshot state(String raw) throws Exception {
         return new p1.component.agent.gamer.adapter.core.GameStateSnapshot(
                 raw,

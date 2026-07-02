@@ -19,14 +19,12 @@ class StoryMarkdownChunkerTest {
 
     @Test
     void shouldSplitByNearestSentenceEndingWithinExpectedRange() {
-        String text = """
-                第一段故事从一场仓促的夜雨开始，林迟背着旧包穿过码头，满脑子都在想昨晚那封没写完的信。她本来只想去仓库取回留下的黑伞，却在拐角处撞见了多年未见的沈砚，对方像是等了她很久，开口第一句就问她，还记不记得白塔下那次没有赴约的黄昏。林迟愣了一下，嘴上说不记得，脚步却慢了下来。沈砚没有继续追问，只把伞递到她手里，说今晚风大，别再淋病了。
-                """;
+        String text = "a".repeat(299) + "!" + "b".repeat(250) + "!";
 
         List<String> chunks = chunker.chunkText(text);
 
         assertTrue(chunks.size() >= 2);
-        assertTrue(chunks.stream().allMatch(chunk -> chunk.length() >= 60 && chunk.length() <= 100));
+        assertTrue(chunks.stream().allMatch(chunk -> chunk.length() >= 200 && chunk.length() <= 400));
         assertTrue(chunks.stream().allMatch(chunk -> chunk.equals(chunk.trim())));
     }
 

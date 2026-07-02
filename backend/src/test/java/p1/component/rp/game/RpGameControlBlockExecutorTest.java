@@ -13,6 +13,7 @@ import p1.component.agent.rp.game.control.RpGameControlBlockExecutor;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -62,6 +63,28 @@ class RpGameControlBlockExecutorTest {
 
         assertTrue(result.isEmpty());
         verify(actionParserService, never()).execute(any(), any(), any());
+    }
+
+    @Test
+    void shouldTraceCommittedActException() throws Exception {
+        ActiveGameRegistry activeGameRegistry = new ActiveGameRegistry();
+        activeGameRegistry.register("STS2", "game-session", "rp-session");
+        RpActionParserService actionParserService = mock(RpActionParserService.class);
+        when(actionParserService.execute("STS2", "game-session", "选择左边事件"))
+                .thenThrow(new RuntimeException("底层执行失败"));
+        GamerDecisionTraceService traceService = mock(GamerDecisionTraceService.class);
+        RpGameControlBlockExecutor executor = new RpGameControlBlockExecutor(
+                activeGameRegistry,
+                actionParserService,
+                mock(GamerPendingQuestionService.class),
+                traceService);
+
+        RuntimeException thrown = assertThrows(RuntimeException.class, () -> executor.execute("rp-session", block("""
+                {"type":"act","do":"选择左边事件","check":"合法","progress":"","next":"","commit":true}
+                """)));
+
+        assertEquals("底层执行失败", thrown.getMessage());
+        verify(traceService).appendRpCommandFailureTrace("STS2", "game-session", "选择左边事件", "底层执行失败");
     }
 
     @Test

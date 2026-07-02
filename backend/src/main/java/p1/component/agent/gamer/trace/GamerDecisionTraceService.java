@@ -45,6 +45,8 @@ public class GamerDecisionTraceService {
     private final Map<String, String> pendingPlans = new ConcurrentHashMap<>();
     /** sessionKey → 最近一次 act block 的 check/progress/next/commit */
     private final Map<String, ActBlockContext> pendingActContexts = new ConcurrentHashMap<>();
+    /** sessionKey → RP 本轮实际看到的游戏动态上下文 */
+    private final Map<String, String> pendingRpVisibleContexts = new ConcurrentHashMap<>();
     /** sessionKey → 会话统计（供摘要） */
     private final Map<String, SessionStats> sessionStatsMap = new ConcurrentHashMap<>();
 
@@ -91,6 +93,16 @@ public class GamerDecisionTraceService {
             return;
         }
         pendingPlans.put(sessionKey(gameName, memoryId), planText.trim());
+    }
+
+    /**
+     * 暂存 RP 本轮实际看到的游戏上下文，供下一次 committed act 的复盘日志消费。
+     */
+    public void recordRpVisibleContext(String gameName, String memoryId, String visibleContext) {
+        if (!properties.isTraceEnabled() || visibleContext == null || visibleContext.isBlank()) {
+            return;
+        }
+        pendingRpVisibleContexts.put(sessionKey(gameName, memoryId), visibleContext.trim());
     }
 
     /**
@@ -216,6 +228,7 @@ public class GamerDecisionTraceService {
         }
 
         try {
+            String visibleContext = consumePendingRpVisibleContext(gameName, memoryId);
             Path path = sessionPaths.get(sessionKey(gameName, memoryId));
             if (path == null) {
                 return;
@@ -235,6 +248,7 @@ public class GamerDecisionTraceService {
                             executionResult,
                             interruptReason,
                             executionTrace,
+                            visibleContext,
                             planText,
                             check,
                             progress,
@@ -244,6 +258,34 @@ public class GamerDecisionTraceService {
                     StandardOpenOption.APPEND);
         } catch (IOException e) {
             log.warn("[游戏复盘] 写入操作队列复盘失败: game={}, memoryId={}, reason={}",
+                    gameName, memoryId, e.getMessage());
+        }
+    }
+
+    public void appendRpCommandFailureTrace(String gameName,
+                                                String memoryId,
+                                                String rpDo,
+                                                String reason) {
+        if (!properties.isTraceEnabled()) {
+            return;
+        }
+        String visibleContext = consumePendingRpVisibleContext(gameName, memoryId);
+        if (!hasText(visibleContext)) {
+            return;
+        }
+
+        try {
+            Path path = sessionPaths.get(sessionKey(gameName, memoryId));
+            if (path == null) {
+                return;
+            }
+            Files.writeString(
+                    path,
+                    renderRpCommandFailure(gameName, memoryId, visibleContext, rpDo, reason),
+                    StandardCharsets.UTF_8,
+                    StandardOpenOption.APPEND);
+        } catch (IOException e) {
+            log.warn("[游戏复盘] 写入 RP 命令失败复盘失败: game={}, memoryId={}, reason={}",
                     gameName, memoryId, e.getMessage());
         }
     }
@@ -289,6 +331,10 @@ public class GamerDecisionTraceService {
         return pendingActContexts.remove(sessionKey(gameName, memoryId));
     }
 
+    private String consumePendingRpVisibleContext(String gameName, String memoryId) {
+        return pendingRpVisibleContexts.remove(sessionKey(gameName, memoryId));
+    }
+
     // ── 渲染 ──
 
     private String renderRpControlBlock(RpControlBlock block) {
@@ -317,6 +363,24 @@ public class GamerDecisionTraceService {
             sb.append("- commit=").append(block.commit()).append("\n");
         }
         sb.append("\n");
+        return sb.toString();
+    }
+
+    private String renderRpCommandFailure(String gameName,
+                                          String memoryId,
+                                          String visibleContext,
+                                          String rpDo,
+                                          String reason) {
+        long step = nextStep(gameName, memoryId);
+        recordStep(gameName, memoryId, step, compactDo(rpDo), true, 0, reason);
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("## Step ").append(step).append(" | rp_command_failure · ❌\n\n");
+        appendRpVisibleContext(sb, visibleContext);
+        if (hasText(rpDo)) {
+            sb.append("### RP do\n\n").append(rpDo.trim()).append("\n\n");
+        }
+        sb.append("### 执行异常\n\n").append(nullToBlank(reason)).append("\n\n");
         return sb.toString();
     }
 
@@ -351,6 +415,7 @@ public class GamerDecisionTraceService {
                                String executionResult,
                                String interruptReason,
                                GameQueueExecutionTrace executionTrace,
+                               String rpVisibleContext,
                                String planText,
                                String check,
                                String progress,
@@ -372,6 +437,8 @@ public class GamerDecisionTraceService {
             sb.append(" · ").append(elapsedMs).append("ms");
         }
         sb.append("\n\n");
+
+        appendRpVisibleContext(sb, rpVisibleContext);
 
         // 局面分析
         if (hasText(planText)) {
@@ -442,6 +509,14 @@ public class GamerDecisionTraceService {
         }
 
         return sb.toString();
+    }
+
+    private void appendRpVisibleContext(StringBuilder sb, String visibleContext) {
+        if (!hasText(visibleContext)) {
+            return;
+        }
+        sb.append("### RP 可见上下文\n\n");
+        sb.append("```xml\n").append(visibleContext.trim()).append("\n```\n\n");
     }
 
     private void appendExecutionTrace(StringBuilder sb, GameQueueExecutionTrace trace) {

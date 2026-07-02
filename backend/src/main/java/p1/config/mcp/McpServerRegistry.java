@@ -1,6 +1,5 @@
 package p1.config.mcp;
 
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import jakarta.annotation.PostConstruct;
@@ -19,6 +18,8 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import p1.config.mcp.registry.McpRegistryFileStore;
+import p1.config.mcp.registry.McpTemplateResolver;
 import java.util.stream.Stream;
 
 /**
@@ -52,6 +53,8 @@ public class McpServerRegistry {
      * 运行时注册条目（来自 mcp-registry.json），用于持久化
      */
     private final Map<String, MCPProperties.GameMCPConfig> registered = new LinkedHashMap<>();
+    private final McpTemplateResolver templateResolver = new McpTemplateResolver();
+    private final McpRegistryFileStore registryFileStore = new McpRegistryFileStore(objectMapper);
     /**
      * mcp-servers/ 自动发现的条目
      */
@@ -63,7 +66,7 @@ public class McpServerRegistry {
         scanServersDirectory();
         loadRegistryFile();
         resolveCatalog();
-        mergeAll();
+        mergeConfigs();
 
         log.info("[MCP] 注册表已初始化: catalog={}, discovered={}, configured={}, registered={}, total={}",
                 properties.getCatalog().size(),
@@ -234,27 +237,6 @@ public class McpServerRegistry {
     /**
      * 将 .mcp.json 中的服务器字段映射为 GameMCPConfig
      */
-    private MCPProperties.GameMCPConfig mapStandardServerConfig(Map<String, Object> fields) {
-        MCPProperties.GameMCPConfig config = new MCPProperties.GameMCPConfig();
-        config.setTransport("stdio");
-        if (fields.get("command") != null) config.setCommand(fields.get("command").toString());
-        if (fields.get("type") instanceof String t && t.equalsIgnoreCase("sse")) {
-            config.setTransport("sse");
-        }
-        if (fields.get("url") != null) config.setUrl(fields.get("url").toString());
-        if (fields.get("display-name") != null) config.setDisplayName(fields.get("display-name").toString());
-        if (fields.get("description") != null) config.setDescription(fields.get("description").toString());
-        if (fields.get("adapter") != null) config.setAdapter(fields.get("adapter").toString());
-        if (fields.get("state-tool-name") != null) config.setStateToolName(fields.get("state-tool-name").toString());
-        if (fields.get("stateToolName") != null) config.setStateToolName(fields.get("stateToolName").toString());
-        applyStateSettleConfig(fields, config);
-        config.setGameplayGuidelines(readGuidelines(fields));
-        if (fields.get("args") instanceof List<?> list) {
-            config.setArgs(list.stream().map(Object::toString).toArray(String[]::new));
-        }
-        return config;
-    }
-
     // ── 格式解析：manifest.yaml ──
 
     private boolean tryManifestFormat(Path manifest, String gameName, Path baseDir) {
@@ -470,31 +452,12 @@ public class McpServerRegistry {
 
     private void loadRegistryFile() {
         Path registryFile = resolvePath(properties.getRegistryFile());
-        if (!Files.exists(registryFile)) return;
-        try {
-            String json = Files.readString(registryFile);
-            Map<String, MCPProperties.GameMCPConfig> entries = objectMapper.readValue(
-                    json, new TypeReference<LinkedHashMap<String, MCPProperties.GameMCPConfig>>() {
-                    });
-            registered.putAll(entries);
-            log.info("[MCP] 加载注册表: {} 个条目", registered.size());
-        } catch (IOException e) {
-            log.error("[MCP] 读取注册表文件失败: {}", e.toString());
-        }
+        registered.putAll(registryFileStore.load(registryFile));
     }
 
     private void saveRegistryFile() {
         Path registryFile = resolvePath(properties.getRegistryFile());
-        try {
-            Path parent = registryFile.getParent();
-            if (parent != null) {
-                Files.createDirectories(parent);
-            }
-            objectMapper.writeValue(registryFile.toFile(), registered);
-            log.debug("[MCP] 注册表已保存: {} 个条目", registered.size());
-        } catch (IOException e) {
-            log.error("[MCP] 保存注册表文件失败: {}", e.toString());
-        }
+        registryFileStore.save(registryFile, registered);
     }
 
     private Path resolvePath(String value) {
@@ -515,7 +478,7 @@ public class McpServerRegistry {
                 log.warn("[MCP] 找不到目录模板: name={}", gameName);
                 continue;
             }
-            MCPProperties.GameMCPConfig resolved = resolveTemplate(template, userConfig.getInstallPath());
+            MCPProperties.GameMCPConfig resolved = templateResolver.resolveTemplate(template, userConfig.getInstallPath());
             resolved.setDisplayName(userConfig.getDisplayName() != null
                     ? userConfig.getDisplayName() : template.getDisplayName());
             resolved.setDescription(template.getDescription());
@@ -525,69 +488,40 @@ public class McpServerRegistry {
         }
     }
 
-    private MCPProperties.GameMCPConfig resolveTemplate(MCPProperties.GameMCPConfig template, String installPath) {
-        MCPProperties.GameMCPConfig resolved = template.copy();
-        if (resolved.getArgs() != null) {
-            String[] resolvedArgs = new String[resolved.getArgs().length];
-            for (int i = 0; i < resolved.getArgs().length; i++) {
-                resolvedArgs[i] = resolved.getArgs()[i].replace("{{installPath}}", installPath);
-            }
-            resolved.setArgs(resolvedArgs);
-        }
-        if (resolved.getUrl() != null) {
-            resolved.setUrl(resolved.getUrl().replace("{{installPath}}", installPath));
-        }
-        if (resolved.getCommand() != null) {
-            resolved.setCommand(resolved.getCommand().replace("{{installPath}}", installPath));
-        }
-        return resolved;
-    }
-
-    // ── 合并 ──
 
     /**
-     * 合并优先级（低 → 高）：
-     * 1. 用户显式配置（application-mcp.yaml 中的 mcp.games.*）
-     * 2. mcp-servers/ 自动发现
-     * 3. 运行时注册表（mcp-registry.json）
-     * <p>
-     * 后写入的覆盖先写入的。
+     * 当前只需要把用户配置、自动发现和运行时注册合成到 games；不再为未完成的多 MCP 注册路径保留独立合并器。
      */
-    private void mergeAll() {
-        // 用户显式配置保留命令/路径等字段，但默认 adapter/state tool 从 catalog 继承。
+    private void mergeConfigs() {
         for (Map.Entry<String, MCPProperties.GameMCPConfig> entry : new LinkedHashMap<>(properties.getGames()).entrySet()) {
             if (!entry.getValue().isRegistered()) {
                 properties.putGame(entry.getKey(), withCatalogDefaults(entry.getKey(), entry.getValue()));
             }
         }
 
-        // 首先：自动发现的条目作为基础
         for (Map.Entry<String, MCPProperties.GameMCPConfig> entry : discovered.entrySet()) {
             if (!properties.getGames().containsKey(entry.getKey())) {
                 properties.putGame(entry.getKey(), withCatalogDefaults(entry.getKey(), entry.getValue()));
             }
-            // 如果用户已配置同名游戏，保留用户配置
         }
 
-        // 然后：注册条目覆盖同名配置
         for (Map.Entry<String, MCPProperties.GameMCPConfig> entry : registered.entrySet()) {
             MCPProperties.GameMCPConfig config = withCatalogDefaults(entry.getKey(), entry.getValue());
             config.setRegistered(true);
             properties.putGame(entry.getKey(), config);
         }
 
-        // 清理未解析的 installPath 占位条目
-        List<String> toRemove = new ArrayList<>();
+        List<String> unresolvedInstallPathEntries = new ArrayList<>();
         for (Map.Entry<String, MCPProperties.GameMCPConfig> entry : properties.getGames().entrySet()) {
             MCPProperties.GameMCPConfig config = entry.getValue();
             if (config.getInstallPath() != null
                     && config.getCommand() == null
                     && config.getUrl() == null
                     && !config.isRegistered()) {
-                toRemove.add(entry.getKey());
+                unresolvedInstallPathEntries.add(entry.getKey());
             }
         }
-        toRemove.forEach(properties::removeGame);
+        unresolvedInstallPathEntries.forEach(properties::removeGame);
     }
 
     private MCPProperties.GameMCPConfig withCatalogDefaults(String gameName, MCPProperties.GameMCPConfig source) {
@@ -613,28 +547,33 @@ public class McpServerRegistry {
         if (isBlank(merged.getGameplayGuidelines()) && !isBlank(catalogConfig.getGameplayGuidelines())) {
             merged.setGameplayGuidelines(catalogConfig.getGameplayGuidelines());
         }
-        if (merged.getStateSettleMaxAttempts() == new MCPProperties.GameMCPConfig().getStateSettleMaxAttempts()) {
+
+        MCPProperties.GameMCPConfig defaults = new MCPProperties.GameMCPConfig();
+        if (merged.getStateSettleMaxAttempts() == defaults.getStateSettleMaxAttempts()) {
             merged.setStateSettleMaxAttempts(catalogConfig.getStateSettleMaxAttempts());
         }
-        if (merged.getStateSettleDelayMs() == new MCPProperties.GameMCPConfig().getStateSettleDelayMs()) {
+        if (merged.getStateSettleDelayMs() == defaults.getStateSettleDelayMs()) {
             merged.setStateSettleDelayMs(catalogConfig.getStateSettleDelayMs());
         }
         return merged;
     }
 
-    private boolean isBlank(String value) {
-        return value == null || value.isBlank();
-    }
-
-    private void resolveAndMergeCatalogEntry(String gameName) {
-        // 当注销注册条目时，如果存在同名的目录配置，不做自动回退
-        // 用户需要重新 POST 来手动启用
-    }
-
     private int countConfigured() {
         return (int) properties.getGames().values().stream()
-                .filter(c -> !c.isRegistered())
+                .filter(config -> !config.isRegistered())
                 .count();
+    }
+
+    private MCPProperties.GameMCPConfig mapStandardServerConfig(Map<String, Object> fields) {
+        MCPProperties.GameMCPConfig config = new MCPProperties.GameMCPConfig();
+        config.setTransport("stdio");
+        if (fields.get("command") != null) config.setCommand(fields.get("command").toString());
+        if (fields.get("type") instanceof String type && type.equalsIgnoreCase("sse")) {
+            config.setTransport("sse");
+        }
+        if (fields.get("url") != null) config.setUrl(fields.get("url").toString());
+        applyCommonConfigFields(fields, config);
+        return config;
     }
 
     private MCPProperties.GameMCPConfig mapToConfig(Map<String, Object> fields) {
@@ -642,6 +581,15 @@ public class McpServerRegistry {
         if (fields.get("transport") != null) config.setTransport(fields.get("transport").toString());
         if (fields.get("command") != null) config.setCommand(fields.get("command").toString());
         if (fields.get("url") != null) config.setUrl(fields.get("url").toString());
+        if (fields.get("enabled") instanceof Boolean enabled) config.setEnabled(enabled);
+        if (fields.get("connect-timeout-seconds") instanceof Number timeout) {
+            config.setConnectTimeoutSeconds(timeout.longValue());
+        }
+        applyCommonConfigFields(fields, config);
+        return config;
+    }
+
+    private void applyCommonConfigFields(Map<String, Object> fields, MCPProperties.GameMCPConfig config) {
         if (fields.get("display-name") != null) config.setDisplayName(fields.get("display-name").toString());
         if (fields.get("description") != null) config.setDescription(fields.get("description").toString());
         if (fields.get("adapter") != null) config.setAdapter(fields.get("adapter").toString());
@@ -649,25 +597,22 @@ public class McpServerRegistry {
         if (fields.get("stateToolName") != null) config.setStateToolName(fields.get("stateToolName").toString());
         applyStateSettleConfig(fields, config);
         config.setGameplayGuidelines(readGuidelines(fields));
-        if (fields.get("enabled") instanceof Boolean b) config.setEnabled(b);
-        if (fields.get("connect-timeout-seconds") instanceof Number n)
-            config.setConnectTimeoutSeconds(n.longValue());
-        if (fields.get("args") instanceof List<?> list) {
-            config.setArgs(list.stream().map(Object::toString).toArray(String[]::new));
+        if (fields.get("args") instanceof List<?> args) {
+            config.setArgs(args.stream().map(Object::toString).toArray(String[]::new));
         }
-        return config;
     }
 
     private void applyStateSettleConfig(Map<String, Object> fields, MCPProperties.GameMCPConfig config) {
         Object attempts = fields.get("state-settle-max-attempts");
         if (attempts == null) attempts = fields.get("stateSettleMaxAttempts");
-        if (attempts instanceof Number n) {
-            config.setStateSettleMaxAttempts(n.intValue());
+        if (attempts instanceof Number value) {
+            config.setStateSettleMaxAttempts(value.intValue());
         }
+
         Object delay = fields.get("state-settle-delay-ms");
         if (delay == null) delay = fields.get("stateSettleDelayMs");
-        if (delay instanceof Number n) {
-            config.setStateSettleDelayMs(n.longValue());
+        if (delay instanceof Number value) {
+            config.setStateSettleDelayMs(value.longValue());
         }
     }
 
@@ -676,15 +621,27 @@ public class McpServerRegistry {
         if (value == null) value = fields.get("gameplayGuidelines");
         if (value == null) value = fields.get("strategy-guidelines");
         if (value == null) value = fields.get("strategyGuidelines");
-        if (value instanceof List<?> list) {
-            List<String> lines = list.stream()
+        if (value instanceof List<?> lines) {
+            return lines.stream()
                     .map(Object::toString)
                     .map(String::trim)
-                    .filter(s -> !s.isBlank())
-                    .map(s -> s.startsWith("-") ? s : "- " + s)
-                    .toList();
-            return String.join("\n", lines);
+                    .filter(line -> !line.isBlank())
+                    .map(line -> line.startsWith("-") ? line : "- " + line)
+                    .reduce((left, right) -> left + "\n" + right)
+                    .orElse(null);
         }
         return value != null ? value.toString() : null;
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.isBlank();
+    }
+
+    /**
+     * 注销运行时注册项后不自动回退到 catalog 占位配置；需要用户重新通过 REST 注册。
+     */
+    private void resolveAndMergeCatalogEntry(String gameName) {
+        // 当注销注册条目时，如果存在同名的目录配置，不做自动回退
+        // 用户需要重新 POST 来手动启用
     }
 }
