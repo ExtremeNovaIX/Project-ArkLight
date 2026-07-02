@@ -16,6 +16,7 @@ find_package(Qt6 6.5 REQUIRED COMPONENTS
     Qml
     Quick
     QuickControls2
+    Test
 )
 
 qt_standard_project_setup(REQUIRES 6.5)
@@ -33,6 +34,8 @@ qt_add_executable(arklight_qt
     src/app/ChatSessionController.h
     src/app/ConfigCatalogController.cpp
     src/app/ConfigCatalogController.h
+    src/app/config/ConfigCatalogSupport.cpp
+    src/app/config/ConfigCatalogSupport.h
     src/app/DoctorController.cpp
     src/app/DoctorController.h
     src/app/FrontendSettings.cpp
@@ -43,6 +46,10 @@ qt_add_executable(arklight_qt
     src/app/SttAudioController.h
     src/app/TtsAudioController.cpp
     src/app/TtsAudioController.h
+    src/app/audio/SttAudioProcessing.cpp
+    src/app/audio/SttAudioProcessing.h
+    src/app/tts/TtsAudioCodecSupport.cpp
+    src/app/tts/TtsAudioCodecSupport.h
 )
 
 qt_add_qml_module(arklight_qt
@@ -63,6 +70,19 @@ qt_add_qml_module(arklight_qt
         qml/IconUser.qml
         qml/Main.qml
         qml/SettingsCompatDialog.qml
+        qml/SettingsBlackToggle.qml
+        qml/SettingsConfigFieldEditor.qml
+        qml/SettingsConfigPanel.qml
+        qml/SettingsFrontendPanel.qml
+        qml/SettingsGamePanel.qml
+        qml/SettingsNav.qml
+        qml/SettingsNavButton.qml
+        qml/SettingsSectionTitle.qml
+        qml/SettingsUiButton.qml
+        qml/SettingsUiCard.qml
+        qml/SettingsUiCombo.qml
+        qml/SettingsUiField.qml
+        qml/SettingsVoicePanel.qml
         qml/StatusStrip.qml
         qml/SurfaceTexture.qml
 )
@@ -79,6 +99,59 @@ target_link_libraries(arklight_qt
         Qt6::Quick
         Qt6::QuickControls2
 )
+
+
+enable_testing()
+function(arklight_copy_runtime_dlls target_name)
+    if(WIN32)
+        add_custom_command(TARGET ${target_name} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    $<TARGET_RUNTIME_DLLS:${target_name}>
+                    $<TARGET_FILE_DIR:${target_name}>
+            COMMAND_EXPAND_LISTS
+            VERBATIM
+        )
+    endif()
+endfunction()
+
+qt_add_executable(arklight_qt_tests
+    tests/ConfigCatalogSupportTest.cpp
+    src/app/config/ConfigCatalogSupport.cpp
+    src/app/config/ConfigCatalogSupport.h
+)
+
+target_include_directories(arklight_qt_tests PRIVATE src/app)
+
+target_link_libraries(arklight_qt_tests
+    PRIVATE
+        Qt6::Core
+        Qt6::Test
+)
+
+arklight_copy_runtime_dlls(arklight_qt_tests)
+
+add_test(NAME arklight_qt_tests COMMAND arklight_qt_tests)
+
+qt_add_executable(arklight_audio_tests
+    tests/AudioSupportTest.cpp
+    src/app/audio/SttAudioProcessing.cpp
+    src/app/audio/SttAudioProcessing.h
+    src/app/tts/TtsAudioCodecSupport.cpp
+    src/app/tts/TtsAudioCodecSupport.h
+)
+
+target_include_directories(arklight_audio_tests PRIVATE src/app)
+
+target_link_libraries(arklight_audio_tests
+    PRIVATE
+        Qt6::Core
+        Qt6::Multimedia
+        Qt6::Test
+)
+
+arklight_copy_runtime_dlls(arklight_audio_tests)
+
+add_test(NAME arklight_audio_tests COMMAND arklight_audio_tests)
 
 set_target_properties(arklight_qt PROPERTIES
     WIN32_EXECUTABLE TRUE
