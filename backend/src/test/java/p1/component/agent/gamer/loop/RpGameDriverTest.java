@@ -107,7 +107,7 @@ class RpGameDriverTest {
     }
 
     @Test
-    void shouldSkipRpWakeupWhenRpSpokeAndNoUserOrStateChanged() {
+    void shouldWakeRpAgainWhenRpSpokeAndStateDidNotChange() {
         ActiveGameRegistry registry = new ActiveGameRegistry();
         registry.register("STS2MCP", "game-session", "rp-session");
 
@@ -132,7 +132,7 @@ class RpGameDriverTest {
         driver.pollTick();
         driver.pollTick();
 
-        verify(turnService, times(1)).play(any(ActiveGameSession.class), anyString(), anyBoolean());
+        verify(turnService, times(2)).play(any(ActiveGameSession.class), anyString(), anyBoolean());
     }
 
     @Test

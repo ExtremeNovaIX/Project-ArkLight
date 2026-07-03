@@ -229,6 +229,18 @@ class GamerDecisionTraceServiceTest {
         assertTrue(content.contains("底层执行失败：目标不存在"), "应记录异常反馈");
     }
 
+    @Test
+    void shouldConsumePendingRpReasoning() {
+        GameTraceProperties properties = new GameTraceProperties();
+        properties.setTraceEnabled(true);
+        GamerDecisionTraceService traceService = new GamerDecisionTraceService(properties);
+
+        traceService.recordTurnReasoning("STS2MCP", "game-session", "hidden reasoning");
+
+        org.junit.jupiter.api.Assertions.assertEquals(
+                "hidden reasoning",
+                traceService.consumePendingReasoning("STS2MCP", "game-session"));
+    }
     private p1.component.agent.gamer.adapter.core.GameStateSnapshot state(String raw) throws Exception {
         return new p1.component.agent.gamer.adapter.core.GameStateSnapshot(
                 raw,

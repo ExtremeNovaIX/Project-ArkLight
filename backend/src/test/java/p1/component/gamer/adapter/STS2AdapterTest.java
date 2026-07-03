@@ -1,5 +1,6 @@
 package p1.component.gamer.adapter;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.agent.tool.ToolSpecification;
@@ -194,6 +195,94 @@ class STS2AdapterTest {
         assertFalse(rendered.contains("slot"));
     }
 
+    @Test
+    void shouldUseNativeMcpMarkdownForRpAndSanitizeExecutionFields() throws Exception {
+        String rawJson = """
+                {
+                  "state_type":"monster",
+                  "battle":{
+                    "turn":"player",
+                    "is_play_phase":true,
+                    "enemies":[{
+                      "entity_id":"CORPSE_SLUG_0",
+                      "name":"噬尸蛞蝓",
+                      "hp":26,
+                      "max_hp":26,
+                      "block":0,
+                      "status":[{"name":"饥饿","amount":4,"description":"当有敌人死亡时，噬尸蛞蝓会立即吃下尸体，在本回合被击晕然后获得4点力量。","keywords":[{"name":"击晕","description":"这个敌人在其下一回合无法行动。"}]}],
+                      "intents":[{"type":"Attack","label":"7×2","description":"这个敌人将要攻击造成7点伤害2次。"}]
+                    }]
+                  },
+                  "player":{
+                    "character":"铁甲战士",
+                    "hp":63,
+                    "max_hp":80,
+                    "block":0,
+                    "energy":3,
+                    "max_energy":3,
+                    "draw_pile_count":3,
+                    "discard_pile_count":0,
+                    "exhaust_pile_count":0,
+                    "hand":[{"index":0,"name":"防御","type":"Skill","cost":"1","can_play":true,"description":"获得3点格挡。"}],
+                    "draw_pile":[{"name":"打击","description":"造成9点伤害。"}]
+                  }
+                }
+                """;
+        String nativeMarkdown = """
+                # Game State: monster
+
+                **Round 3** | Turn: player | Play Phase: True
+
+                ## Player (You)
+                **铁甲战士** - HP: 63/80 | Block: 0 | Energy: 3/3 | Gold: 99
+
+                ### Hand
+                - [0] **防御** (1 energy) [Skill] ✓ - 获得3点格挡。 (target: Self)
+
+                ### Deck Information
+
+                #### Draw Pile (3 cards, sorted by rarity)
+                - 打击 (1): 造成9点伤害。
+
+                #### Discard Pile (0 cards)
+                - *(empty)*
+
+                #### Exhaust Pile (0 cards)
+                - *(empty)*
+
+                ## Enemies
+                ### 噬尸蛞蝓 (`CORPSE_SLUG_0`)
+                HP: 26/26 | Block: 0
+                **Intent:** 攻势 (Attack) 7×2 - 这个敌人将要攻击造成7点伤害2次。
+                ### Status
+                  - **饥饿** (4): 当有敌人死亡时，噬尸蛞蝓会立即吃下尸体，在本回合被击晕然后获得4点力量。
+
+                ## Keyword Glossary
+                - **击晕**: 这个敌人在其下一回合无法行动。
+                """;
+        JsonNode root = objectMapper.readTree(rawJson);
+        GameStateSnapshot state = new GameStateSnapshot(rawJson, root, root.path("state_type").asText(""), nativeMarkdown);
+
+        String rendered = adapter.renderStateForAgent(state);
+
+        assertTrue(rendered.contains("当有敌人死亡时，噬尸蛞蝓会立即吃下尸体"));
+        assertTrue(rendered.contains("## Keyword Glossary"));
+        assertTrue(rendered.contains("这个敌人在其下一回合无法行动。"));
+        assertTrue(rendered.contains("Energy: 3"));
+        assertTrue(rendered.contains("draw 3"));
+        assertTrue(rendered.contains("discard 0"));
+        assertTrue(rendered.contains("exhaust 0"));
+        assertFalse(rendered.contains("### 数值说明"));
+        assertFalse(rendered.contains("当前展示的伤害、格挡、费用、意图等数值已经是游戏在当前 buff/debuff 下计算后的结果"));
+        assertTrue(rendered.contains("## 本步决策重点"));
+        assertTrue(rendered.contains("当前可用能量"));
+        assertFalse(rendered.contains("[0]"));
+        assertFalse(rendered.contains("`CORPSE_SLUG_0`"));
+        assertFalse(rendered.contains("Energy: 3/3"));
+        assertFalse(rendered.contains("Draw Pile"));
+        assertFalse(rendered.contains("造成9点伤害。"));
+        assertFalse(rendered.contains("max_energy"));
+    }
     @Test
     void shouldRenderEventMarkdownForRpWithoutOptionIndex() throws Exception {
         GameStateSnapshot state = state("""
@@ -601,6 +690,33 @@ class STS2AdapterTest {
         assertFalse(availableOperations.contains("- map_choose_node:"));
     }
 
+    @Test
+    void shouldFetchNativeMarkdownTogetherWithJsonState() {
+        List<String> arguments = new ArrayList<>();
+        ToolSpecification spec = ToolSpecification.builder()
+                .name("get_game_state")
+                .description("state")
+                .parameters(JsonObjectSchema.builder().build())
+                .build();
+        ToolProviderResult tools = ToolProviderResult.builder()
+                .add(spec, (request, memoryId) -> {
+                    arguments.add(request.arguments());
+                    if (request.arguments().contains("markdown")) {
+                        return "# Game State: map\n\n## Player";
+                    }
+                    return "{\"state_type\":\"map\"}";
+                })
+                .build();
+        MCPProperties.GameMCPConfig config = new MCPProperties.GameMCPConfig();
+        config.setStateToolName("get_game_state");
+
+        GameStateSnapshot fetched = adapter.fetchState(new GameAdapterContext("STS2MCP", "session", tools, config));
+
+        assertEquals("map", fetched.stateType());
+        assertEquals("# Game State: map\n\n## Player", fetched.rawMarkdown());
+        assertTrue(arguments.contains("{\"format\":\"json\"}"));
+        assertTrue(arguments.contains("{\"format\":\"markdown\"}"));
+    }
     @Test
     void shouldNotLeakDetectedModeBetweenSessions() throws Exception {
         String multiplayerMap = """

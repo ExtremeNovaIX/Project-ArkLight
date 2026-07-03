@@ -60,6 +60,8 @@ public class RpSystemPromptService {
                 不要在 `<turn>` 外输出任何文字、台词、解释或 JSON；任何在 `<turn>` 外的内容都会被忽略。
                 具体台词只能写在 type=voice 的 event 中。
                 具体操作只能写在 type=act 的 event 中。
+                Reasoning effort upgrade exception: when the current effort is not enough for reliable play, output only `<reasoning_effort_request level="medium|high|xhigh">one sentence reason</reasoning_effort_request>` and no `<turn>`, voice, act, JSON, or explanation.
+                The reasoning effort request is parsed only from visible final output, never from reasoning_content / thinking.
                 </game_output_lock>
                 """.trim();
     }

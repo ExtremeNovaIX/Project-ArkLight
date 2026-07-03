@@ -42,9 +42,16 @@ class ResourceYamlDefaultsTest {
         String content = Files.readString(RESOURCE_DIR.resolve("application-ai.yaml"));
 
         assertTrue(content.contains("api-key: \"\""), "API keys should be blank in resource defaults");
-        assertTrue(content.contains("reasoning-effort: medium"), "heavy model should default to medium reasoning effort");
+        assertTrue(content.contains("reasoning-effort: low"), "heavy model should default to low reasoning effort");
         assertTrue(content.contains("thinking-type: enabled"), "thinking should be enabled by default");
         assertFalse(content.contains("default_value"), "resource defaults should not contain placeholder secret defaults");
         assertFalse(content.contains("${"), "application-ai.yaml should not contain Spring placeholders");
+    }
+    @Test
+    void mcpCatalogShouldUseTipsInsteadOfGameplayGuidelines() throws Exception {
+        String content = Files.readString(RESOURCE_DIR.resolve("mcp-catalog.yaml"));
+
+        assertTrue(content.contains("tips:"), "mcp-catalog.yaml should put RP guidance under tips");
+        assertFalse(content.contains("gameplay-guidelines"), "mcp-catalog.yaml should not keep the old gameplay-guidelines key");
     }
 }

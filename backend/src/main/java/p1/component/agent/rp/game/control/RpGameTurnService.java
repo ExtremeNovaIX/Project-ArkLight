@@ -7,7 +7,9 @@ import p1.component.agent.gamer.loop.ActiveGameSession;
 import p1.component.agent.memory.ChatMemoryWritePolicy;
 import p1.component.agent.rp.context.SummaryCacheManager;
 import p1.component.agent.rp.core.CharacterPromptRegistry;
-import p1.component.agent.rp.core.RpAgent;
+import p1.component.agent.rp.core.RpGameReasoningEffort;
+import p1.component.agent.rp.core.RpGameReasoningUpgradeException;
+import p1.component.agent.rp.core.RpReasoningAgentFactory;
 import p1.component.agent.rp.core.RpSpeechTurnService;
 import p1.component.agent.rp.core.RpSystemPromptService;
 import p1.component.agent.rp.game.context.RpGameRuntimeInstructionContext;
@@ -27,7 +29,7 @@ public class RpGameTurnService {
     public static final String GAME_LOOP_MESSAGE_NAME = "system_game_loop";
     public static final String GAME_REPLAN_MESSAGE_NAME = "system_game_replan";
 
-    private final RpAgent rpAgent;
+    private final RpReasoningAgentFactory rpReasoningAgentFactory;
     private final CharacterPromptRegistry characterPromptRegistry;
     private final SummaryCacheManager summaryCacheManager;
     private final RpSystemPromptService rpSystemPromptService;
@@ -65,19 +67,56 @@ public class RpGameTurnService {
         String rolePrompt = characterPromptRegistry.getPrompt(snapshot.characterName());
         String summary = summaryCacheManager.getSummary(session.getRpSessionId());
         String systemPrompt = rpSystemPromptService.build(session.getRpSessionId(), rolePrompt, summary);
-        String userMessage = ".";
-        String speech = runtimeInstructionContext.withInstruction(prompt, () ->
-                memoryWritePolicy.suppressUserMessage(session.getRpSessionId(), null, () ->
-                        rpSpeechTurnService.collect(
-                                session.getRpSessionId(),
-                                source,
-                                rpAgent.chatWithName(session.getRpSessionId(), messageName, userMessage, systemPrompt),
-                                session.getGameName(),
-                                session.getSessionId())));
+        String speech = playLockedWithEffort(
+                session,
+                source,
+                messageName,
+                systemPrompt,
+                prompt,
+                RpGameReasoningEffort.LOW,
+                false);
         if (speech != null && !speech.isBlank()) {
             sessionRegistry.observeRpSpeech(session.getRpSessionId());
             liveMessageHub.publish(session.getRpSessionId(), source, speech, snapshot.shortMode());
         }
         return speech == null ? "" : speech;
+    }
+
+    private String playLockedWithEffort(ActiveGameSession session,
+                                        String source,
+                                        String messageName,
+                                        String systemPrompt,
+                                        String prompt,
+                                        RpGameReasoningEffort effort,
+                                        boolean upgraded) {
+        String userMessage = ".";
+        var agent = rpReasoningAgentFactory.create(effort);
+        String effectivePrompt = upgraded
+                ? prompt + "\nReasoning effort has been successfully raised to " + effort.apiValue() + ". Continue from the latest game context."
+                : prompt;
+        try {
+            return runtimeInstructionContext.withInstruction(effectivePrompt, () ->
+                    memoryWritePolicy.suppressUserMessage(session.getRpSessionId(), null, () ->
+                            rpSpeechTurnService.collect(
+                                    session.getRpSessionId(),
+                                    source,
+                                    agent.chatWithName(session.getRpSessionId(), messageName, userMessage, systemPrompt),
+                                    session.getGameName(),
+                                    session.getSessionId())));
+        } catch (RpGameReasoningUpgradeException upgrade) {
+            if (upgraded) {
+                throw upgrade;
+            }
+            log.info("[RP游戏回合] RP requested reasoning effort upgrade: game={}, session={}, effort={}, reason={}",
+                    session.getGameName(), session.getSessionId(), upgrade.effort().apiValue(), upgrade.reason());
+            return playLockedWithEffort(
+                    session,
+                    source,
+                    messageName,
+                    systemPrompt,
+                    prompt,
+                    upgrade.effort(),
+                    true);
+        }
     }
 }

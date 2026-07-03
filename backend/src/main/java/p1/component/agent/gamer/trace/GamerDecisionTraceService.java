@@ -43,6 +43,7 @@ public class GamerDecisionTraceService {
     private final Map<String, Path> sessionPaths = new ConcurrentHashMap<>();
     /** sessionKey → 最近一次 LLM 输出的 plan 块文本 */
     private final Map<String, String> pendingPlans = new ConcurrentHashMap<>();
+    private final Map<String, String> pendingReasonings = new ConcurrentHashMap<>();
     /** sessionKey → 最近一次 act block 的 check/progress/next/commit */
     private final Map<String, ActBlockContext> pendingActContexts = new ConcurrentHashMap<>();
     /** sessionKey → RP 本轮实际看到的游戏动态上下文 */
@@ -93,6 +94,13 @@ public class GamerDecisionTraceService {
             return;
         }
         pendingPlans.put(sessionKey(gameName, memoryId), planText.trim());
+    }
+
+    public void recordTurnReasoning(String gameName, String memoryId, String reasoningText) {
+        if (!properties.isTraceEnabled() || reasoningText == null || reasoningText.isBlank()) {
+            return;
+        }
+        pendingReasonings.put(sessionKey(gameName, memoryId), reasoningText.trim());
     }
 
     /**
@@ -322,6 +330,10 @@ public class GamerDecisionTraceService {
      */
     public String consumePendingPlan(String gameName, String memoryId) {
         return pendingPlans.remove(sessionKey(gameName, memoryId));
+    }
+
+    public String consumePendingReasoning(String gameName, String memoryId) {
+        return pendingReasonings.remove(sessionKey(gameName, memoryId));
     }
 
     /**

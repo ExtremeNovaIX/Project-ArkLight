@@ -22,7 +22,7 @@ assistant:
       log-enabled: false
       return-thinking: true
       send-thinking: true
-      reasoning-effort: medium
+      reasoning-effort: low
       thinking-type: enabled
     embedding-model:
       api-key: ""
@@ -46,7 +46,7 @@ assistant:
       log-enabled: false
       return-thinking: true
       send-thinking: true
-      reasoning-effort: medium
+      reasoning-effort: low
       thinking-type: enabled
     embedding-model:
       base-url: http://127.0.0.1:1234/v1

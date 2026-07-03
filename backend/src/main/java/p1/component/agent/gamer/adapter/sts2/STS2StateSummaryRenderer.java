@@ -24,8 +24,56 @@ public class STS2StateSummaryRenderer {
         if (state == null || state.json() == null) {
             return "(未能获取 STS2 状态)";
         }
+        if (hasText(state.rawMarkdown())) {
+            String rendered = renderNativeMarkdownForRp(state);
+            return rendered.isBlank() ? "(未能获取 STS2 状态)" : rendered.trim();
+        }
         String rendered = renderRpStateSummary(state);
         return rendered.isBlank() ? "(未能获取 STS2 状态)" : rendered.trim();
+    }
+
+    private String renderNativeMarkdownForRp(GameStateSnapshot state) {
+        JsonNode root = state.json();
+        StringBuilder sb = new StringBuilder();
+        String sanitized = sanitizeNativeMarkdown(state.rawMarkdown());
+        if (!sanitized.isBlank()) {
+            sb.append(sanitized.trim()).append("\n\n");
+        }
+        appendNativePileCounts(sb, root.path("player"));
+        appendDecisionFocus(sb, root);
+        return sb.toString();
+    }
+
+    private String sanitizeNativeMarkdown(String markdown) {
+        if (markdown == null || markdown.isBlank()) {
+            return "";
+        }
+        String sanitized = markdown.replace("\r\n", "\n").replace('\r', '\n');
+        sanitized = sanitized.replaceAll("(?m)^([ \\t]*[-*] )\\[[0-9]+\\]\\s+", "$1");
+        sanitized = sanitized.replaceAll("\\s+\\(`[^`]+`\\)", "");
+        sanitized = sanitized.replaceAll("Energy:\\s*([0-9]+)\\s*/\\s*[0-9]+", "Energy: $1");
+        sanitized = sanitized.replaceAll("(?ms)^### Deck Information\\n.*?(?=^##\\s|\\z)", "");
+        return sanitized.trim();
+    }
+
+
+    private void appendNativePileCounts(StringBuilder sb, JsonNode player) {
+        if (!player.isObject()) {
+            return;
+        }
+        List<String> parts = new ArrayList<>();
+        addRaw(parts, prefix("draw ", text(player.path("draw_pile_count"))));
+        addRaw(parts, prefix("discard ", text(player.path("discard_pile_count"))));
+        addRaw(parts, prefix("exhaust ", text(player.path("exhaust_pile_count"))));
+        if (parts.isEmpty()) {
+            return;
+        }
+        sb.append("### Pile Counts\n");
+        sb.append("- ").append(String.join("; ", parts)).append("\n\n");
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.isBlank();
     }
 
     private String renderRpStateSummary(GameStateSnapshot state) {

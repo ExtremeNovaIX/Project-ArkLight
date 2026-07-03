@@ -93,27 +93,12 @@ public class AiConfig {
     }
 
     private AssistantProperties.ChatModelConfig parserChatModelConfig() {
-        AssistantProperties.ChatModelConfig copy = copyChatModelConfig(props.activeParserModel());
-        disableThinking(copy);
-        return copy;
+        return copyChatModelConfig(props.activeParserModel());
     }
 
     private AssistantProperties.ChatModelConfig rpChatModelConfig() {
-        AssistantProperties.ChatModelConfig copy = copyChatModelConfig(props.activeRpModel());
-        disableThinking(copy);
-        return copy;
+        return copyChatModelConfig(props.activeRpModel());
     }
-
-    /**
-     * parser 和 RP 流式模型只消费可见文本，关闭 thinking 可以减少延迟和协议污染。
-     */
-    private void disableThinking(AssistantProperties.ChatModelConfig copy) {
-        copy.setReturnThinking(false);
-        copy.setSendThinking(false);
-        copy.setReasoningEffort(null);
-        copy.setThinkingType("disabled");
-    }
-
     private AssistantProperties.ChatModelConfig copyChatModelConfig(AssistantProperties.ChatModelConfig source) {
         AssistantProperties.ChatModelConfig copy = new AssistantProperties.ChatModelConfig();
         copy.setApiKey(source.getApiKey());

@@ -544,8 +544,8 @@ public class McpServerRegistry {
                 && !isBlank(catalogConfig.getStateToolName())) {
             merged.setStateToolName(catalogConfig.getStateToolName());
         }
-        if (isBlank(merged.getGameplayGuidelines()) && !isBlank(catalogConfig.getGameplayGuidelines())) {
-            merged.setGameplayGuidelines(catalogConfig.getGameplayGuidelines());
+        if (isBlank(merged.getTips()) && !isBlank(catalogConfig.getTips())) {
+            merged.setTips(catalogConfig.getTips());
         }
 
         MCPProperties.GameMCPConfig defaults = new MCPProperties.GameMCPConfig();
@@ -596,7 +596,7 @@ public class McpServerRegistry {
         if (fields.get("state-tool-name") != null) config.setStateToolName(fields.get("state-tool-name").toString());
         if (fields.get("stateToolName") != null) config.setStateToolName(fields.get("stateToolName").toString());
         applyStateSettleConfig(fields, config);
-        config.setGameplayGuidelines(readGuidelines(fields));
+        config.setTips(readTips(fields));
         if (fields.get("args") instanceof List<?> args) {
             config.setArgs(args.stream().map(Object::toString).toArray(String[]::new));
         }
@@ -616,11 +616,8 @@ public class McpServerRegistry {
         }
     }
 
-    private String readGuidelines(Map<String, Object> fields) {
-        Object value = fields.get("gameplay-guidelines");
-        if (value == null) value = fields.get("gameplayGuidelines");
-        if (value == null) value = fields.get("strategy-guidelines");
-        if (value == null) value = fields.get("strategyGuidelines");
+    private String readTips(Map<String, Object> fields) {
+        Object value = fields.get("tips");
         if (value instanceof List<?> lines) {
             return lines.stream()
                     .map(Object::toString)

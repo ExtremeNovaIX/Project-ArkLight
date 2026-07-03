@@ -100,9 +100,6 @@ public class RpGameDriver {
 
         GameStateProbe probe = bridgeService.probeState(session.getGameName(), session.getSessionId());
         GameLoopUserSpeechSignal userSpeechSignal = consumeUserSpeechSignal(session);
-        if (userSpeechSignal.hasFreshUserSpeech()) {
-            session.clearUserOrStateWait();
-        }
         SameStateDecision sameStateDecision = evaluateSameStateObservation(session, probe.stateFingerprint());
         if (sameStateDecision.waitCurrentTick()) {
             session.touch();
@@ -126,21 +123,12 @@ public class RpGameDriver {
             session.touch();
             return;
         }
-        if (!userSpeechSignal.hasFreshUserSpeech()
-                && !sameStateDecision.replan()
-                && session.isWaitingForUserOrStateChange(probe.stateFingerprint())) {
-            log.debug("[RP游戏驱动] 用户没有新发言且游戏状态未变化，跳过本轮 RP 唤醒: game={}, session={}",
-                    session.getGameName(), session.getSessionId());
-            session.touch();
-            return;
-        }
-
         observationBackoffService.reset(session);
         int totalSteps = session.incrementAndGetTotalSteps();
         try {
-            String speech = rpGameTurnService.play(session, gameLoopInstruction(userSpeechSignal), sameStateDecision.replan());
+            rpGameTurnService.play(session, gameLoopInstruction(userSpeechSignal), sameStateDecision.replan());
             session.resetFailures();
-            updateUserOrStateWaitAfterTurn(session, probe.stateFingerprint(), speech);
+            clearSameStateObservation(session);
             log.debug("[RP游戏驱动] 本轮 RP 决策完成: game={}, session={}, totalStep={}",
                     session.getGameName(), session.getSessionId(), totalSteps);
         } catch (RpGameActionExecutionException e) {
@@ -214,22 +202,6 @@ public class RpGameDriver {
         return "用户没有新的发言，不要重复同一句话，除非当前游戏状态发生了新的可决策变化。";
     }
 
-    private void updateUserOrStateWaitAfterTurn(ActiveGameSession session, String beforeFingerprint, String speech) {
-        GameStateProbe afterProbe = bridgeService.probeState(session.getGameName(), session.getSessionId());
-        if (!normalizeFingerprint(beforeFingerprint).equals(normalizeFingerprint(afterProbe.stateFingerprint()))) {
-            session.clearUserOrStateWait();
-            clearSameStateObservation(session);
-            return;
-        }
-        if (speech != null && !speech.isBlank()) {
-            session.waitForUserOrStateChange(beforeFingerprint);
-            clearSameStateObservation(session);
-            return;
-        }
-        session.clearUserOrStateWait();
-        clearSameStateObservation(session);
-    }
-
     private String sessionKey(ActiveGameSession session) {
         return GameSessionKey.of(session.getGameName(), session.getSessionId());
     }
@@ -271,7 +243,6 @@ public class RpGameDriver {
         ActiveGameSession existing = registry.get(gameName, sessionId);
         if (existing != null && existing.getState() == ActiveGameSession.State.RUNNING) {
             rememberSessionContext(existing, characterName, shortMode);
-            existing.clearUserOrStateWait();
             observationBackoffService.reset(existing);
             return existing;
         }
@@ -325,7 +296,6 @@ public class RpGameDriver {
         ActiveGameSession session = registry.get(gameName, sessionId);
         if (session != null) {
             rememberSessionContext(session, characterName, shortMode);
-            session.clearUserOrStateWait();
             session.setState(ActiveGameSession.State.RUNNING);
             observationBackoffService.reset(session);
             clearSameStateObservation(session);

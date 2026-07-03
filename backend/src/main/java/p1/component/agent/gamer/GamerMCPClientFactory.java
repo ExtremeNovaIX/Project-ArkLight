@@ -134,8 +134,8 @@ public class GamerMCPClientFactory {
 
     public String getGameGuidelines(String gameName) {
         MCPProperties.GameMCPConfig config = mcpProperties.getGames().get(gameName);
-        if (config != null && StringUtils.hasText(config.getGameplayGuidelines())) {
-            return config.getGameplayGuidelines();
+        if (config != null && StringUtils.hasText(config.getTips())) {
+            return config.getTips();
         }
         return """
                 - 优先基于系统注入的最新状态行动，不基于猜测行动。

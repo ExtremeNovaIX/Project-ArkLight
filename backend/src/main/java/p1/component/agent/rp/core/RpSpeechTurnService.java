@@ -23,6 +23,7 @@ import p1.config.prop.AssistantProperties;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -87,6 +88,7 @@ public class RpSpeechTurnService {
         private final AtomicReference<StreamingHandle> streamingHandle = new AtomicReference<>();
         private final StringBuilder rawResponse = new StringBuilder();
         private final StringBuilder visibleResponse = new StringBuilder();
+        private final ReasoningTextStripper reasoningTextStripper = new ReasoningTextStripper();
         private final boolean gameMode;
         private final StreamingJsonInstructionParser controlParser =
                 new StreamingJsonInstructionParser(objectMapper, 4096);
@@ -117,15 +119,26 @@ public class RpSpeechTurnService {
             if (text == null || text.isEmpty()) {
                 return;
             }
-            rawResponse.append(text);
+            ReasoningTextStripper.Result stripped = reasoningTextStripper.strip(text);
+            recordReasoning(stripped.reasoningText());
+            String visibleText = stripped.visibleText();
+            if (visibleText == null || visibleText.isEmpty()) {
+                return;
+            }
+            rawResponse.append(visibleText);
             if (gameMode) {
-                handleGameModeChunk(text);
+                handleGameModeChunk(visibleText);
             } else {
-                acceptSpeech(text);
+                acceptSpeech(visibleText);
             }
         }
 
         private void handleGameModeChunk(String text) {
+            Optional<RpGameReasoningUpgradeRequest> upgradeRequest = RpGameReasoningUpgradeRequest.parse(text);
+            if (upgradeRequest.isPresent()) {
+                requestReasoningUpgrade(upgradeRequest.get());
+                return;
+            }
             String planText = planCapture.accept(text);
             if (planText != null && !planText.isBlank()) {
                 traceService.recordTurnPlan(planCapture.gameName(), planCapture.sessionId(), planText);
@@ -235,6 +248,26 @@ public class RpSpeechTurnService {
             }
         }
 
+        private void recordCompleteReasoning(ChatResponse response) {
+            if (response == null || response.aiMessage() == null) {
+                return;
+            }
+            recordReasoning(response.aiMessage().thinking());
+        }
+
+        private void recordReasoning(String reasoningText) {
+            if (!gameMode || reasoningText == null || reasoningText.isBlank()) {
+                return;
+            }
+            traceService.recordTurnReasoning(planCapture.gameName(), planCapture.sessionId(), reasoningText);
+        }
+
+        private void requestReasoningUpgrade(RpGameReasoningUpgradeRequest request) {
+            RpGameReasoningUpgradeException upgrade = new RpGameReasoningUpgradeException(request.effort(), request.reason());
+            error = upgrade;
+            cancelStream(upgrade.getMessage());
+            finish();
+        }
         private void acceptSpeech(String text) {
             if (text == null || text.isEmpty()) {
                 return;
@@ -262,6 +295,7 @@ public class RpSpeechTurnService {
         }
 
         private synchronized void onCompleteResponse(ChatResponse response) {
+            recordCompleteReasoning(response);
             appendCompleteResponseTail(response);
             finish();
         }
@@ -274,7 +308,9 @@ public class RpSpeechTurnService {
             if (completeText == null || completeText.isEmpty()) {
                 return;
             }
-            String tail = missingCompleteTail(completeText);
+            ReasoningTextStripper.Result stripped = reasoningTextStripper.strip(completeText);
+            recordReasoning(stripped.reasoningText());
+            String tail = missingCompleteTail(stripped.visibleText());
             if (tail.isEmpty()) {
                 return;
             }

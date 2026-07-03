@@ -93,9 +93,9 @@ public class MCPProperties {
          */
         private String stateToolName = "get_state";
         /**
-         * 该游戏的策略提示。不同游戏可在 catalog、manifest 或运行时注册配置中覆盖。
+         * 注入到 RP 当前游戏上下文 tips 块的游戏提示。不同游戏可在 catalog、manifest 或运行时注册配置中覆盖。
          */
-        private String gameplayGuidelines;
+        private String tips;
         /**
          * MCP 工具名前缀。用于区分单人/多人模式（如 STS2 的 mp_ 前缀）。
          * 由具体适配器（如 STS2Adapter）读取使用，通用桥接层不感知此字段。
@@ -124,7 +124,7 @@ public class MCPProperties {
             c.installPath = this.installPath;
             c.adapter = this.adapter;
             c.stateToolName = this.stateToolName;
-            c.gameplayGuidelines = this.gameplayGuidelines;
+            c.tips = this.tips;
             c.toolPrefix = this.toolPrefix;
             c.stateSettleMaxAttempts = this.stateSettleMaxAttempts;
             c.stateSettleDelayMs = this.stateSettleDelayMs;

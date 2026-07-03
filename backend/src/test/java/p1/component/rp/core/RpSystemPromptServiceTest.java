@@ -33,5 +33,6 @@ class RpSystemPromptServiceTest {
         assertTrue(prompt.contains("\"type\": \"act\""));
         assertTrue(prompt.contains("<turn>"));
         assertTrue(prompt.contains("<game_output_lock>"));
+        assertTrue(prompt.contains("reasoning_effort_request"));
     }
 }

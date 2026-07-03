@@ -226,6 +226,83 @@ class RpSpeechTurnServiceTest {
         assertEquals("", text);
         verify(traceService).recordTurnPlan("STS2MCP", "game-session", "Alpha");
     }
+    @Test
+    void shouldStripVisibleReasoningFromSpeech() {
+        RpGameControlBlockExecutor controlBlockExecutor = mock(RpGameControlBlockExecutor.class);
+        when(controlBlockExecutor.hasActiveGame("rp-session")).thenReturn(false);
+        TtsSpeechService ttsSpeechService = mock(TtsSpeechService.class);
+        TtsSpeechSession ttsSession = mock(TtsSpeechSession.class);
+        when(ttsSpeechService.open("rp-session", "chat")).thenReturn(ttsSession);
+        RpSpeechTurnService service = new RpSpeechTurnService(
+                assistantProperties(),
+                ttsSpeechService,
+                controlBlockExecutor,
+                mock(RpGameInterruptionService.class),
+                new RpGameControlTurnLockService(),
+                mock(GamerDecisionTraceService.class));
+
+        String text = service.collect(
+                "rp-session",
+                "chat",
+                new ChunkTokenStream("<think>internal reasoning</think>Hello"));
+
+        assertEquals("Hello", text);
+        verify(ttsSession).accept("Hello");
+        verify(ttsSession, org.mockito.Mockito.never()).accept(org.mockito.Mockito.contains("internal reasoning"));
+    }
+
+    @Test
+    void shouldRecordHiddenReasoningForGameTrace() {
+        RpGameControlBlockExecutor controlBlockExecutor = mock(RpGameControlBlockExecutor.class);
+        when(controlBlockExecutor.hasActiveGame("rp-session")).thenReturn(true);
+        when(controlBlockExecutor.execute(eq("rp-session"), any(RpControlBlock.class))).thenReturn(Optional.empty());
+        GamerDecisionTraceService traceService = mock(GamerDecisionTraceService.class);
+        RpSpeechTurnService service = new RpSpeechTurnService(
+                assistantProperties(),
+                mock(TtsSpeechService.class),
+                controlBlockExecutor,
+                mock(RpGameInterruptionService.class),
+                new RpGameControlTurnLockService(),
+                traceService);
+
+        ChatResponse completeResponse = ChatResponse.builder()
+                .aiMessage(AiMessage.builder()
+                        .text("<turn><event 1>{\"type\":\"act\",\"do\":\"end turn\",\"commit\":true}</event 1></turn>")
+                        .thinking("hidden reasoning")
+                        .build())
+                .build();
+
+        String text = service.collect(
+                "rp-session",
+                "game-loop",
+                new ChunkTokenStream(completeResponse, List.of()),
+                "STS2MCP",
+                "game-session");
+
+        assertEquals("", text);
+        verify(traceService).recordTurnReasoning("STS2MCP", "game-session", "hidden reasoning");
+    }
+
+    @Test
+    void shouldInterruptWhenReasoningEffortUpgradeIsRequested() {
+        RpGameControlBlockExecutor controlBlockExecutor = mock(RpGameControlBlockExecutor.class);
+        when(controlBlockExecutor.hasActiveGame("rp-session")).thenReturn(true);
+        RpSpeechTurnService service = new RpSpeechTurnService(
+                assistantProperties(),
+                mock(TtsSpeechService.class),
+                controlBlockExecutor,
+                mock(RpGameInterruptionService.class),
+                new RpGameControlTurnLockService(),
+                mock(GamerDecisionTraceService.class));
+        ChunkTokenStream stream = new ChunkTokenStream("<reasoning_effort_request level=\"xhigh\">Need deeper reasoning.</reasoning_effort_request>");
+
+        RpGameReasoningUpgradeException error = org.junit.jupiter.api.Assertions.assertThrows(
+                RpGameReasoningUpgradeException.class,
+                () -> service.collect("rp-session", "game-loop", stream, "STS2MCP", "game-session"));
+
+        assertEquals(RpGameReasoningEffort.XHIGH, error.effort());
+        assertTrue(stream.cancelled());
+    }
     private AssistantProperties assistantProperties() {
         AssistantProperties assistantProperties = mock(AssistantProperties.class);
         AssistantProperties.ChatModelConfig chatModelConfig = new AssistantProperties.ChatModelConfig();

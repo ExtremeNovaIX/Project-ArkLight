@@ -246,14 +246,37 @@ public class STS2Adapter extends GameAdapter {
             throw new GameBridgeException("状态工具不存在: " + toolName
                     + (availableTools.isBlank() ? "" : "；可用工具: " + availableTools));
         }
-        ToolExecutionRequest request = ToolExecutionRequest.builder()
+        ToolExecutionRequest jsonRequest = ToolExecutionRequest.builder()
                 .name(toolName)
-                .arguments(stateToolArguments(context))
+                .arguments(stateToolArgumentsForFormat("json"))
                 .build();
-        String raw = executor.execute(request, context.sessionId());
-        return parseState(raw);
+        String rawJson = executor.execute(jsonRequest, context.sessionId());
+        GameStateSnapshot parsed = parseState(rawJson);
+        String rawMarkdown = fetchStateMarkdown(executor, toolName, context);
+        return new GameStateSnapshot(parsed.rawJson(), parsed.json(), parsed.stateType(), rawMarkdown);
     }
 
+    private String fetchStateMarkdown(ToolExecutor executor, String toolName, GameAdapterContext context) {
+        try {
+            ToolExecutionRequest markdownRequest = ToolExecutionRequest.builder()
+                    .name(toolName)
+                    .arguments(stateToolArgumentsForFormat("markdown"))
+                    .build();
+            String markdown = executor.execute(markdownRequest, context.sessionId());
+            String trimmed = markdown == null ? "" : markdown.trim();
+            if (trimmed.isBlank() || trimmed.startsWith("Error:") || trimmed.startsWith("{") || trimmed.startsWith("[")) {
+                return "";
+            }
+            return markdown;
+        } catch (Exception e) {
+            log.debug("[STS2] Markdown state fetch failed: tool={}, reason={}", toolName, e.getMessage());
+            return "";
+        }
+    }
+
+    private String stateToolArgumentsForFormat(String format) {
+        return "{\"format\":\"" + format + "\"}";
+    }
     private GameStateSnapshot parseState(String raw) {
         try {
             JsonNode json = objectMapper.readTree(raw);

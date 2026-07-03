@@ -76,10 +76,11 @@ public class GameOperationQueueProcessor {
                                   ToolProviderResult rawTools,
                                   String rawArguments) {
         String key = memoryId == null || memoryId.isBlank() ? gameName : memoryId;
+        String traceSessionId = traceSessionId(gameName, key);
         String queueId = UUID.randomUUID().toString();
         GameQueueExecutionTraceBuilder traceBuilder = new GameQueueExecutionTraceBuilder(queueId);
         GameAdapterContext context = new GameAdapterContext(gameName, key, rawTools, config);
-        String reasoningContent = resultRecorder.consumeReasoningContent(key);
+        String reasoningContent = reasoningContent(gameName, traceSessionId, key);
         List<GameOperation> operations = List.of();
         ParsedGameOperationBatch batch = null;
         try {
@@ -106,17 +107,17 @@ public class GameOperationQueueProcessor {
                     batch.ignoreRpSpeaking(),
                     traceBuilder);
             String result = resultRenderer.renderDrainResult(operations.size(), drainResult);
-            recordOutcome(gameName, key, reasoningContent, batch, operations, result, null, drainResult.trace());
+            recordOutcome(gameName, traceSessionId, reasoningContent, batch, operations, result, null, drainResult.trace());
             return result;
         } catch (GameBridgeExecutionException e) {
-            recordOutcome(gameName, key, reasoningContent, batch, operations, e.feedback(), e.feedback(), traceBuilder.build());
+            recordOutcome(gameName, traceSessionId, reasoningContent, batch, operations, e.feedback(), e.feedback(), traceBuilder.build());
             throw e;
         } catch (GameBridgeException e) {
             log.warn("[游戏桥接] 操作队列中断: game={}, memoryId={}, executed={}, reason={}",
                     gameName, key, e.getExecutedCount(), e.getMessage());
             String cleanReason = resultRenderer.compactInterruptReason(e.getMessage());
             String result = "操作队列中断，已执行 " + e.getExecutedCount() + " 条操作，剩余操作已丢弃。";
-            recordOutcome(gameName, key, reasoningContent, batch, operations, result, cleanReason, traceBuilder.build());
+            recordOutcome(gameName, traceSessionId, reasoningContent, batch, operations, result, cleanReason, traceBuilder.build());
             GameBridgeExecutionException.Kind kind = e.getKind() == GameBridgeException.Kind.INTERACTION_DEFERRED
                     ? GameBridgeExecutionException.Kind.INTERACTION_DEFERRED
                     : GameBridgeExecutionException.Kind.FAILURE;
@@ -124,7 +125,7 @@ public class GameOperationQueueProcessor {
         } catch (Exception e) {
             log.error("[游戏桥接] 操作队列处理失败: game={}, memoryId={}", gameName, key, e);
             String result = "桥接层处理操作队列失败，队列已丢弃。";
-            recordOutcome(gameName, key, reasoningContent, batch, operations, result, e.getMessage(), traceBuilder.build());
+            recordOutcome(gameName, traceSessionId, reasoningContent, batch, operations, result, e.getMessage(), traceBuilder.build());
             throw new GameBridgeExecutionException(result + " 原因：" + e.getMessage(), e);
         }
     }
@@ -166,6 +167,24 @@ public class GameOperationQueueProcessor {
                 commit);
     }
 
+    private String reasoningContent(String gameName, String traceSessionId, String executionKey) {
+        String pending = traceService == null ? "" : traceService.consumePendingReasoning(gameName, traceSessionId);
+        if (pending != null && !pending.isBlank()) {
+            return pending;
+        }
+        return resultRecorder.consumeReasoningContent(executionKey);
+    }
+
+    private String traceSessionId(String gameName, String executionKey) {
+        if (executionKey == null || executionKey.isBlank()) {
+            return gameName;
+        }
+        String prefix = gameName == null || gameName.isBlank() ? "" : gameName + "-";
+        if (!prefix.isBlank() && executionKey.startsWith(prefix) && executionKey.length() > prefix.length()) {
+            return executionKey.substring(prefix.length());
+        }
+        return executionKey;
+    }
     private String rpDo(ParsedGameOperationBatch batch) {
         return batch == null ? "" : batch.rpDo();
     }

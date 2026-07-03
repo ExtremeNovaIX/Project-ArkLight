@@ -26,6 +26,9 @@ import p1.config.mcp.MCPProperties;
 @Slf4j
 public class RpCurrentGameContextService {
 
+    private static final String COMPUTED_VALUE_TIP = "- 当前展示的伤害、格挡、费用、意图等数值已经是游戏在当前 buff/debuff 下计算后的结果。";
+    private static final String DECISION_FOCUS_HEADING = "## 本步决策重点";
+
     private final GamerMCPClientFactory mcpClientFactory;
     private final MCPProperties mcpProperties;
     private final GameAdapterRegistry adapterRegistry;
@@ -53,7 +56,7 @@ public class RpCurrentGameContextService {
             GameStateSnapshot state = adapter.fetchState(context);
             String actionSummary = adapter.renderAvailableOperationSummary(context, state);
             String stateSummary = adapter.renderStateForAgent(state);
-            return render(actionSummary, stateSummary);
+            return render(actionSummary, config.getTips(), stateSummary);
         } catch (Exception e) {
             log.warn("[RP游戏状态] 获取当前游戏状态失败: game={}, session={}, reason={}",
                     gameName, sessionId, e.getMessage());
@@ -68,19 +71,40 @@ public class RpCurrentGameContextService {
      * @param stateSummary  RP 可见的关键局面 Markdown
      * @return RP 状态上下文
      */
-    private String render(String actionSummary, String stateSummary) {
+    private String render(String actionSummary, String tips, String stateSummary) {
         StringBuilder sb = new StringBuilder();
         sb.append("<current_game_state>\n")
                 .append("<available_actions>\n")
                 .append(actionSummary == null || actionSummary.isBlank() ? "(没有可用动作)" : actionSummary)
                 .append("\n</available_actions>\n")
                 .append("<key_game_state_markdown>\n")
-                .append(stateSummary == null || stateSummary.isBlank() ? "(未能获取 STS2 状态)" : stateSummary)
+                .append(insertTipsBeforeDecisionFocus(stateSummary, tips))
                 .append("\n</key_game_state_markdown>\n");
         sb.append("</current_game_state>");
         return sb.toString();
     }
 
+    private String insertTipsBeforeDecisionFocus(String stateSummary, String tips) {
+        String renderedState = stateSummary == null || stateSummary.isBlank() ? "(未能获取 STS2 状态)" : stateSummary;
+        String tipsBlock = renderTips(tips);
+        int decisionFocusStart = renderedState.indexOf(DECISION_FOCUS_HEADING);
+        if (decisionFocusStart < 0) {
+            return renderedState.stripTrailing() + "\n\n" + tipsBlock;
+        }
+        String beforeDecisionFocus = renderedState.substring(0, decisionFocusStart).stripTrailing();
+        String decisionFocus = renderedState.substring(decisionFocusStart).stripLeading();
+        return beforeDecisionFocus + "\n\n" + tipsBlock + "\n" + decisionFocus;
+    }
+
+    private String renderTips(String tips) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("<tips>\n");
+        if (tips != null && !tips.isBlank()) {
+            sb.append(tips.trim()).append("\n");
+        }
+        sb.append(COMPUTED_VALUE_TIP).append("\n</tips>\n");
+        return sb.toString();
+    }
     /**
      * 获取并校验游戏 MCP 配置。
      *
