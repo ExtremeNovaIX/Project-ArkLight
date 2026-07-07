@@ -4,17 +4,13 @@ import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.service.tool.ToolProvider;
 import dev.langchain4j.service.tool.ToolProviderRequest;
 import dev.langchain4j.service.tool.ToolProviderResult;
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import p1.component.agent.gamer.GameSessionKey;
 import p1.component.agent.gamer.GamerMCPClientFactory;
 import p1.component.agent.gamer.adapter.GameAdapter;
-import p1.component.agent.gamer.adapter.core.GameActionability;
-import p1.component.agent.gamer.adapter.core.GameAdapterContext;
-import p1.component.agent.gamer.adapter.core.GameAdapterRegistry;
-import p1.component.agent.gamer.adapter.core.GameStateJsonSanitizer;
-import p1.component.agent.gamer.adapter.core.GameStateSnapshot;
+import p1.component.agent.gamer.adapter.core.*;
 import p1.component.agent.gamer.bridge.queue.GameOperationQueueProcessor;
 import p1.component.agent.gamer.loop.GameSessionExecutionLockService;
 import p1.config.mcp.MCPProperties;
@@ -27,7 +23,7 @@ import java.util.stream.Collectors;
  */
 @Service
 @RequiredArgsConstructor
-@Slf4j
+@CustomLog
 public class GameBridgeService {
 
     private final GamerMCPClientFactory mcpClientFactory;

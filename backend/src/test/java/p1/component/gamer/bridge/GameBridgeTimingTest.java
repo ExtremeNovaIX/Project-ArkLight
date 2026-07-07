@@ -13,9 +13,9 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
+import p1.component.agent.gamer.adapter.STS2Adapter;
 import p1.component.agent.gamer.adapter.core.GameAdapterContext;
 import p1.component.agent.gamer.adapter.core.GameStateSnapshot;
-import p1.component.agent.gamer.adapter.STS2Adapter;
 import p1.component.agent.gamer.adapter.core.SchemaNormalizingMcpTransport;
 import p1.component.agent.gamer.bridge.queue.GameOperationQueueProcessor;
 import p1.config.mcp.MCPProperties;
@@ -50,7 +50,7 @@ class GameBridgeTimingTest {
 
         // 1. 启动 stdio MCP transport → Python server
         StdioMcpTransport transport = new StdioMcpTransport.Builder()
-                .command(List.of("uv", "run", "--directory", STS2_SERVER_DIR, "python", "server.py"))
+                .command(List.of("uv", "run", "--directory", STS2_SERVER_DIR, "python", "server.py", "--no-trust-env"))
                 .logEvents(false)
                 .build();
 

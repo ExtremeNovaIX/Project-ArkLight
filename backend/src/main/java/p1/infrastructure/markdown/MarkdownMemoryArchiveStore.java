@@ -1,7 +1,7 @@
 package p1.infrastructure.markdown;
 
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import p1.config.prop.AssistantProperties;
@@ -21,7 +21,7 @@ import java.util.concurrent.atomic.AtomicLong;
 
 @Component
 @RequiredArgsConstructor
-@Slf4j
+@CustomLog
 public class MarkdownMemoryArchiveStore implements MemoryArchiveStore {
 
     private final AssistantProperties props;

@@ -2,16 +2,13 @@ package p1.component.agent.gamer.bridge.queue;
 
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.service.tool.ToolExecutor;
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import p1.infrastructure.logging.LogDomain;
+import p1.infrastructure.logging.LogOutcome;
 import p1.component.agent.gamer.adapter.GameAdapter;
-import p1.component.agent.gamer.adapter.core.GameAdapterContext;
-import p1.component.agent.gamer.adapter.core.GameActionWindowSignature;
-import p1.component.agent.gamer.adapter.core.GameBridgeException;
-import p1.component.agent.gamer.adapter.core.GameOperationPrecondition;
-import p1.component.agent.gamer.adapter.core.GameStateSnapshot;
-import p1.component.agent.gamer.adapter.core.QueuedGameOperation;
+import p1.component.agent.gamer.adapter.core.*;
 import p1.component.agent.gamer.interrupt.GameInterruptService;
 import p1.component.agent.gamer.trace.GameQueueExecutionTraceBuilder;
 import p1.component.agent.interaction.InteractionCoordinator;
@@ -26,7 +23,7 @@ import java.util.ArrayDeque;
  */
 @Component
 @RequiredArgsConstructor
-@Slf4j
+@CustomLog
 public class GameQueueDrainService {
 
     private final GameInterruptService interruptService;
@@ -309,8 +306,7 @@ public class GameQueueDrainService {
             try {
                 adapter.monitorAfterExecute(context, operation, beforeState, afterState, toolResult);
                 if (attempt > 1) {
-                    log.info("[游戏桥接] 状态延迟重读后通过监视: memoryId={}, attempt={}/{}",
-                            key, attempt, maxAttempts);
+                    log.info(LogDomain.GAME, "game.queue_retry_succeeded", LogOutcome.SUCCEEDED, "key", key, "attempt", attempt, "maxAttempts", maxAttempts);
                 }
                 return afterState;
             } catch (GameBridgeException e) {

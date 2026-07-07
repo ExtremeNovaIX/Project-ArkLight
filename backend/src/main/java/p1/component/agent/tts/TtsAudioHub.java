@@ -1,6 +1,6 @@
 package p1.component.agent.tts;
 
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -22,7 +22,7 @@ import static p1.utils.SessionUtil.normalizeSessionId;
  * 该组件只处理音频事件，不参与文本显示和 RP 主动发言调度。
  */
 @Component
-@Slf4j
+@CustomLog
 public class TtsAudioHub {
 
     private static final long EMITTER_TIMEOUT_MS = 0L;

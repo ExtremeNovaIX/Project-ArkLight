@@ -5,10 +5,12 @@ import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.memory.ChatMemory;
 import dev.langchain4j.memory.chat.ChatMemoryProvider;
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
+import p1.infrastructure.logging.LogDomain;
+import p1.infrastructure.logging.LogOutcome;
 import p1.component.agent.gamer.loop.ActiveGameRegistry;
 import p1.component.agent.gamer.loop.ActiveGameSession;
 import p1.component.agent.gamer.loop.GameLoopObservationBackoffService;
@@ -19,11 +21,7 @@ import p1.component.agent.tts.TtsSpeechSession;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
@@ -40,7 +38,7 @@ import static p1.utils.SessionUtil.normalizeSessionId;
  */
 @Service
 @RequiredArgsConstructor
-@Slf4j
+@CustomLog
 public class GamerPendingQuestionService {
 
     private static final Duration QUESTION_TIMEOUT = Duration.ofSeconds(15);
@@ -112,8 +110,7 @@ public class GamerPendingQuestionService {
         scheduleTimeout(pending);
         touchSession(pending);
 
-        log.info("[游戏询问] 已登记战术询问: game={}, session={}, rpSession={}, questionId={}, question={}",
-                gameName, sessionId, rpSessionId, pending.questionId(), pending.question());
+        log.info(LogDomain.GAME, "question.pending_created", LogOutcome.SUCCEEDED, "gameName", gameName, "sessionId", sessionId, "rpSessionId", rpSessionId, "questionId", pending.questionId(), "question", pending.question());
         return Optional.of(pending);
     }
 
@@ -136,8 +133,7 @@ public class GamerPendingQuestionService {
         appendUserAnswerMemory(pending, answer, resolved);
         resumeGame(pending);
 
-        log.info("[游戏询问] 已消费用户回答: game={}, session={}, rpSession={}, questionId={}, answer={}",
-                pending.gameName(), pending.sessionId(), pending.rpSessionId(), pending.questionId(), answer);
+        log.info(LogDomain.GAME, "question.answered", LogOutcome.SUCCEEDED, "gameName", pending.gameName(), "sessionId", pending.sessionId(), "rpSessionId", pending.rpSessionId(), "questionId", pending.questionId(), "answer", answer);
         return Optional.of("""
                 <game_ask_answer>
                 你刚才向用户提出了战术询问，现在用户已经回答。请基于用户回答和最新游戏状态继续亲自行动，不要重复等待。
@@ -180,8 +176,7 @@ public class GamerPendingQuestionService {
 
         appendTimeoutMemory(expected);
         resumeGame(expected);
-        log.info("[游戏询问] 询问超时，已解除等待并写入 RP 记忆: game={}, session={}, rpSession={}, questionId={}",
-                expected.gameName(), expected.sessionId(), expected.rpSessionId(), expected.questionId());
+        log.info(LogDomain.GAME, "question.cancelled", LogOutcome.SUCCEEDED, "gameName", expected.gameName(), "sessionId", expected.sessionId(), "rpSessionId", expected.rpSessionId(), "questionId", expected.questionId());
     }
 
     private void resumeGame(PendingQuestion pending) {
@@ -208,8 +203,7 @@ public class GamerPendingQuestionService {
             speech.finish();
             sessionRegistry.observeRpSpeech(pending.rpSessionId());
         } catch (Exception e) {
-            log.warn("[游戏询问] 战术询问 TTS 投递失败: rpSession={}, questionId={}, reason={}",
-                    pending.rpSessionId(), pending.questionId(), e.getMessage());
+            log.warn(LogDomain.GAME, "question.answer_publish_failed", LogOutcome.DEGRADED, "rpSessionId", pending.rpSessionId(), "questionId", pending.questionId(), "reason", e.getMessage());
         }
     }
 
@@ -253,7 +247,7 @@ public class GamerPendingQuestionService {
                 memory.add(AiMessage.from(text.trim()));
             }
         } catch (Exception e) {
-            log.warn("[游戏询问] 写入 RP AI 记忆失败: rpSession={}, reason={}", rpSessionId, e.getMessage());
+            log.warn(LogDomain.GAME, "question.reminder_failed", LogOutcome.DEGRADED, "rpSessionId", rpSessionId, "reason", e.getMessage());
         }
     }
 
@@ -264,7 +258,7 @@ public class GamerPendingQuestionService {
                 memory.add(UserMessage.from(name, text.trim()));
             }
         } catch (Exception e) {
-            log.warn("[游戏询问] 写入 RP 用户记忆失败: rpSession={}, reason={}", rpSessionId, e.getMessage());
+            log.warn(LogDomain.GAME, "question.cancel_publish_failed", LogOutcome.DEGRADED, "rpSessionId", rpSessionId, "reason", e.getMessage());
         }
     }
 

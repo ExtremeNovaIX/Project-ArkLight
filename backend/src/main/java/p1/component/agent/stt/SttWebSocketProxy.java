@@ -2,8 +2,10 @@ package p1.component.agent.stt;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 
+import p1.infrastructure.logging.LogDomain;
+import p1.infrastructure.logging.LogOutcome;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.WebSocket;
@@ -22,7 +24,7 @@ import java.util.function.Consumer;
  *   <li>接收识别结果并通过回调通知上层</li>
  * </ol>
  */
-@Slf4j
+@CustomLog
 public class SttWebSocketProxy implements AutoCloseable {
 
     private static final HttpClient SHARED_HTTP_CLIENT = HttpClient.newBuilder()
@@ -98,7 +100,7 @@ public class SttWebSocketProxy implements AutoCloseable {
 
         @Override
         public void onOpen(WebSocket webSocket) {
-            log.info("[STT] 已连接到 ASR sidecar WebSocket");
+            log.info(LogDomain.STT, "stt.proxy_opened", LogOutcome.SUCCEEDED);
             webSocket.request(1);
         }
 
@@ -117,14 +119,14 @@ public class SttWebSocketProxy implements AutoCloseable {
 
         @Override
         public CompletionStage<?> onClose(WebSocket webSocket, int statusCode, String reason) {
-            log.info("[STT] ASR sidecar WebSocket 连接关闭: status={}, reason={}", statusCode, reason);
+            log.info(LogDomain.STT, "stt.proxy_closed", LogOutcome.SUCCEEDED, "statusCode", statusCode, "reason", reason);
             onStreamEnd.run();
             return null;
         }
 
         @Override
         public void onError(WebSocket webSocket, Throwable error) {
-            log.warn("[STT] ASR sidecar WebSocket 错误: {}", error.getMessage());
+            log.warn(LogDomain.STT, "stt.proxy_error", LogOutcome.DEGRADED, "reason", error.getMessage());
             onError.accept(error);
         }
     }

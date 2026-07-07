@@ -1,7 +1,9 @@
 package p1.component.agent.gamer.loop;
 
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 import org.springframework.stereotype.Component;
+import p1.infrastructure.logging.LogDomain;
+import p1.infrastructure.logging.LogOutcome;
 
 import java.util.Collection;
 import java.util.Comparator;
@@ -15,7 +17,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * 该组件只保存当前进程内的循环会话状态，不负责持久化。
  */
 @Component
-@Slf4j
+@CustomLog
 public class ActiveGameRegistry {
 
     /**
@@ -58,10 +60,10 @@ public class ActiveGameRegistry {
         ActiveGameSession existing = sessions.putIfAbsent(key(gameName, sessionId), session);
         if (existing != null) {
             // start 语义是重新开始循环，因此同名会话存在时用新会话覆盖旧会话。
-            log.warn("[游戏循环] 会话已存在，覆盖: game={}, session={}", gameName, sessionId);
+            log.warn(LogDomain.GAME, "session.overwritten", LogOutcome.DEGRADED, fields(gameName, sessionId));
             sessions.put(key(gameName, sessionId), session);
         }
-        log.info("[游戏循环] 会话已注册: game={}, session={}, rpSession={}", gameName, sessionId, session.getRpSessionId());
+        log.info(LogDomain.GAME, "session.registered", LogOutcome.SUCCEEDED, fields(gameName, sessionId, "rpSession", session.getRpSessionId()));
         return session;
     }
 
@@ -75,7 +77,7 @@ public class ActiveGameRegistry {
         ActiveGameSession removed = sessions.remove(key(gameName, sessionId));
         if (removed != null) {
             removed.setState(ActiveGameSession.State.STOPPED);
-            log.info("[游戏循环] 会话已注销: game={}, session={}", gameName, sessionId);
+            log.info(LogDomain.GAME, "session.unregistered", LogOutcome.SUCCEEDED, fields(gameName, sessionId));
         }
     }
 
@@ -145,5 +147,14 @@ public class ActiveGameRegistry {
      */
     public Collection<ActiveGameSession> listAll() {
         return sessions.values();
+    }
+    private Map<String, Object> fields(String gameName, String sessionId, Object... keyValues) {
+        Map<String, Object> fields = new java.util.LinkedHashMap<>();
+        fields.put("game", gameName);
+        fields.put("session", sessionId);
+        for (int i = 0; i + 1 < keyValues.length; i += 2) {
+            fields.put(String.valueOf(keyValues[i]), keyValues[i + 1]);
+        }
+        return fields;
     }
 }

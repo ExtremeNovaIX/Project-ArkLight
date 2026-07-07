@@ -1,17 +1,14 @@
 package p1.component.agent.rp.game.control;
 
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import p1.infrastructure.logging.LogDomain;
+import p1.infrastructure.logging.LogOutcome;
 import p1.component.agent.gamer.loop.ActiveGameSession;
 import p1.component.agent.memory.ChatMemoryWritePolicy;
 import p1.component.agent.rp.context.SummaryCacheManager;
-import p1.component.agent.rp.core.CharacterPromptRegistry;
-import p1.component.agent.rp.core.RpGameReasoningEffort;
-import p1.component.agent.rp.core.RpGameReasoningUpgradeException;
-import p1.component.agent.rp.core.RpReasoningAgentFactory;
-import p1.component.agent.rp.core.RpSpeechTurnService;
-import p1.component.agent.rp.core.RpSystemPromptService;
+import p1.component.agent.rp.core.*;
 import p1.component.agent.rp.game.context.RpGameRuntimeInstructionContext;
 import p1.component.agent.rp.proactive.RpLiveMessageHub;
 import p1.component.agent.rp.proactive.RpProactiveSessionRegistry;
@@ -23,7 +20,7 @@ import java.util.Optional;
  */
 @Service
 @RequiredArgsConstructor
-@Slf4j
+@CustomLog
 public class RpGameTurnService {
 
     public static final String GAME_LOOP_MESSAGE_NAME = "system_game_loop";
@@ -107,8 +104,7 @@ public class RpGameTurnService {
             if (upgraded) {
                 throw upgrade;
             }
-            log.info("[RP游戏回合] RP requested reasoning effort upgrade: game={}, session={}, effort={}, reason={}",
-                    session.getGameName(), session.getSessionId(), upgrade.effort().apiValue(), upgrade.reason());
+            log.info(LogDomain.GAME, "reasoning.effort_upgraded", LogOutcome.SUCCEEDED, "gameName", session.getGameName(), "sessionId", session.getSessionId(), "reasoningEffort", upgrade.effort().apiValue(), "reason", upgrade.reason());
             return playLockedWithEffort(
                     session,
                     source,

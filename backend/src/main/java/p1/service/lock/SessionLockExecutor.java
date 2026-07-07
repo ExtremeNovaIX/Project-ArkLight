@@ -1,8 +1,10 @@
 package p1.service.lock;
 
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import p1.infrastructure.logging.LogDomain;
+import p1.infrastructure.logging.LogOutcome;
 import p1.config.prop.LockProperties;
 
 import java.util.concurrent.ConcurrentHashMap;
@@ -12,7 +14,7 @@ import java.util.function.Supplier;
 
 @Component
 @RequiredArgsConstructor
-@Slf4j
+@CustomLog
 public class SessionLockExecutor {
 
     private final LockProperties lockProperties;
@@ -41,8 +43,7 @@ public class SessionLockExecutor {
                 }
             }
 
-            log.warn("[对话批次锁] 获取锁超时，sessionId={}，operation={}，attempt={}/{}，waitTimeoutMs={}",
-                    sessionId, operation, attempt, retryCount, waitTimeoutMs);
+            log.warn(LogDomain.MEMORY, "session.lock_wait_retry", LogOutcome.DEGRADED, "sessionId", sessionId, "operation", operation, "attempt", attempt, "retryCount", retryCount, "waitTimeoutMs", waitTimeoutMs);
 
             if (attempt < retryCount && retryDelayMs > 0) {
                 try {

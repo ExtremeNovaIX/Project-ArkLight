@@ -1,12 +1,13 @@
 package p1.controller;
 
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import p1.component.agent.gamer.GamerMCPClientFactory;
 import p1.config.mcp.MCPProperties;
 import p1.config.mcp.McpServerRegistry;
+import p1.infrastructure.logging.LogDomain;
+import p1.infrastructure.logging.LoggedOperation;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -15,7 +16,6 @@ import java.util.Map;
 @CrossOrigin
 @RequestMapping("/api/mcp")
 @RequiredArgsConstructor
-@Slf4j
 public class McpRegistryController {
 
     private final McpServerRegistry registry;
@@ -70,6 +70,7 @@ public class McpRegistryController {
     /**
      * 注册或更新一个 MCP 服务器
      */
+    @LoggedOperation(domain = LogDomain.MCP, operation = "mcp.registry.register")
     @PostMapping("/register")
     public ResponseEntity<?> register(@RequestBody McpRegisterRequest request) {
         if (request.gameName == null || request.gameName.isBlank()) {
@@ -91,8 +92,6 @@ public class McpRegistryController {
 
         registry.register(request.gameName, config);
         clientFactory.refresh(request.gameName);
-
-        log.info("[MCP-API] 注册服务器: name={}, transport={}", request.gameName, config.getTransport());
         return ResponseEntity.ok(Map.of(
                 "message", "服务器已注册: " + request.gameName,
                 "server", serverToMap(request.gameName, config)
@@ -102,12 +101,12 @@ public class McpRegistryController {
     /**
      * 删除一个运行时注册的服务器
      */
+    @LoggedOperation(domain = LogDomain.MCP, operation = "mcp.registry.delete")
     @DeleteMapping("/servers/{name}")
     public ResponseEntity<?> deleteServer(@PathVariable String name) {
         boolean removed = registry.unregister(name);
         if (removed) {
             clientFactory.close(name);
-            log.info("[MCP-API] 删除服务器: name={}", name);
             return ResponseEntity.ok(Map.of("message", "服务器已删除: " + name));
         }
         return ResponseEntity.badRequest().body(Map.of(

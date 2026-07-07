@@ -2,7 +2,9 @@ package p1.component.agent.memory;
 
 import dev.langchain4j.data.message.*;
 import dev.langchain4j.memory.ChatMemory;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
+import p1.infrastructure.logging.LogDomain;
+import p1.infrastructure.logging.LogOutcome;
 import p1.component.agent.memory.model.DialogueBatch;
 import p1.config.prop.AssistantProperties;
 import p1.config.prop.LockProperties;
@@ -19,7 +21,7 @@ import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicReference;
 
-@Slf4j
+@CustomLog
 public class ArchivableChatMemory implements ChatMemory {
 
     private final String sessionId;
@@ -123,8 +125,7 @@ public class ArchivableChatMemory implements ChatMemory {
         // lease 的作用是避免同一个 session 同时生成多个 processing 批次。
         CompressionLease lease = tryAcquireCompressionLease();
         if (lease == null) return;
-        log.info("[记忆压缩触发] 准备压缩，sessionId={}，leaseId={}，windowCount={}，collectingCount={}，threshold={}，hasProcessingBatch={}",
-                sessionId, lease.leaseId(), windowCount, collectingCount, triggerThreshold, hasProcessingBatch);
+        log.info(LogDomain.MEMORY, "memory.compress.triggered", LogOutcome.SUCCEEDED, "sessionId", sessionId, "leaseId", lease.leaseId(), "windowCount", windowCount, "collectingCount", collectingCount, "triggerThreshold", triggerThreshold, "hasProcessingBatch", hasProcessingBatch);
 
         DialogueBatch processingBatch;
         try {
@@ -133,15 +134,13 @@ public class ArchivableChatMemory implements ChatMemory {
                     .map(batch -> new DialogueBatch(batch.id(), batch.sessionId(), batch.messages()))
                     .orElse(null);
         } catch (Exception e) {
-            log.error("[记忆压缩失败] 准备 processing 批次时发生异常，sessionId={}，leaseId={}",
-                    sessionId, lease.leaseId(), e);
+            log.error(LogDomain.MEMORY, "memory.compress.processing_prepare_failed", LogOutcome.FAILED, e, "sessionId", sessionId, "leaseId", lease.leaseId());
             releaseCompressionLease(lease, "准备 processing 失败");
             return;
         }
 
         if (processingBatch == null) {
-            log.warn("[记忆压缩] 没有可处理的 processing 批次，释放租约，sessionId={}，leaseId={}，windowCount={}，collectingCount={}",
-                    sessionId, lease.leaseId(), windowCount, collectingCount);
+            log.warn(LogDomain.MEMORY, "memory.compress.processing_missing", LogOutcome.DEGRADED, "sessionId", sessionId, "leaseId", lease.leaseId(), "windowCount", windowCount, "collectingCount", collectingCount);
             releaseCompressionLease(lease, "没有 processing 批次");
             return;
         }
@@ -153,19 +152,17 @@ public class ArchivableChatMemory implements ChatMemory {
 
         compressor.compressAsync(sessionId, toCompress, () -> onCompressionSuccess(lease, processingBatch), () -> {
             if (isLeaseCurrent(lease)) {
-                log.warn("[记忆压缩失败] 后台压缩失败，释放锁，sessionId={}，batchId={}，leaseId={}",
-                        sessionId, processingBatch.batchId(), lease.leaseId());
+                log.warn(LogDomain.MEMORY, "memory.compress.background_failed", LogOutcome.DEGRADED, "sessionId", sessionId, "batchId", processingBatch.batchId(), "leaseId", lease.leaseId());
                 releaseCompressionLease(lease, "后台压缩失败");
             } else {
-                log.warn("[记忆压缩] 收到过期失败回调，已忽略，sessionId={}，batchId={}，leaseId={}",
-                        sessionId, processingBatch.batchId(), lease.leaseId());
+                log.warn(LogDomain.MEMORY, "memory.compress.processing_missing", LogOutcome.DEGRADED, "sessionId", sessionId, "batchId", processingBatch.batchId(), "leaseId", lease.leaseId());
             }
         });
     }
 
     private void onCompressionSuccess(CompressionLease lease, DialogueBatch processingBatch) {
         if (!isLeaseCurrent(lease)) {
-            log.warn("[记忆压缩] 收到过期成功回调，忽略后续收尾，sessionId={}，leaseId={}", sessionId, lease.leaseId());
+            log.warn(LogDomain.MEMORY, "memory.compress.background_failed", LogOutcome.DEGRADED, "sessionId", sessionId, "leaseId", lease.leaseId());
             return;
         }
 
@@ -173,11 +170,9 @@ public class ArchivableChatMemory implements ChatMemory {
             // 只有压缩链路整体成功后，才正式确认 processing 并从窗口中扣减对应消息。
             rawMdService.acknowledgeProcessing(sessionId);
             int removedCount = removeProcessedMessagesFromWindow(processingBatch);
-            log.info("[记忆压缩完成] 当前内存窗口剩余 {} 条消息，已扣减 {} 条已持久化消息，sessionId={}，batchId={}，leaseId={}",
-                    contextWindow.size(), removedCount, sessionId, processingBatch.batchId(), lease.leaseId());
+            log.info(LogDomain.MEMORY, "memory.compress.completed", LogOutcome.SUCCEEDED, "contextWindowCount", contextWindow.size(), "removedCount", removedCount, "sessionId", sessionId, "batchId", processingBatch.batchId(), "leaseId", lease.leaseId());
         } catch (Exception e) {
-            log.error("[记忆压缩失败] 压缩成功后的确认阶段异常，sessionId={}，leaseId={}",
-                    sessionId, lease.leaseId(), e);
+            log.error(LogDomain.MEMORY, "memory.compress.processing_prepare_failed", LogOutcome.FAILED, e, "sessionId", sessionId, "leaseId", lease.leaseId());
         } finally {
             releaseCompressionLease(lease, "压缩流程结束");
         }
@@ -200,8 +195,7 @@ public class ArchivableChatMemory implements ChatMemory {
         }
 
         if (removedCount < targetCount) {
-            log.warn("[记忆压缩] 内存窗口扣减数量少于 processing 批次消息数，sessionId={}，batchId={}，expected={}，actual={}",
-                    sessionId, processingBatch.batchId(), targetCount, removedCount);
+            log.warn(LogDomain.MEMORY, "memory.compress.stale_failure_ignored", LogOutcome.DEGRADED, "sessionId", sessionId, "batchId", processingBatch.batchId(), "targetCount", targetCount, "removedCount", removedCount);
         }
         return removedCount;
     }
@@ -223,12 +217,7 @@ public class ArchivableChatMemory implements ChatMemory {
         // 超时接管只替换 lease，不会直接覆盖 processing；真正状态恢复仍由 markdown 批次状态决定。
         CompressionLease replacement = new CompressionLease(UUID.randomUUID().toString(), now);
         if (activeCompression.compareAndSet(current, replacement)) {
-            log.warn("[记忆压缩] sessionId={} 当前已超时，执行接管。oldLeaseId={}，newLeaseId={}，startedAt={}，timeoutMs={}",
-                    sessionId,
-                    current.leaseId(),
-                    replacement.leaseId(),
-                    current.startedAt(),
-                    compressionLeaseTimeout.toMillis());
+            log.warn(LogDomain.MEMORY, "memory.compress.stale_success_ignored", LogOutcome.DEGRADED, "sessionId", sessionId, "leaseId", current.leaseId(), "leaseId2", replacement.leaseId(), "startedAt", current.startedAt(), "toMillis", compressionLeaseTimeout.toMillis());
             return replacement;
         }
 
@@ -249,8 +238,7 @@ public class ArchivableChatMemory implements ChatMemory {
         }
 
         if (activeCompression.compareAndSet(lease, null)) {
-            log.info("[记忆压缩] sessionId={} 已释放锁，leaseId={}，reason={}",
-                    sessionId, lease.leaseId(), reason);
+            log.info(LogDomain.MEMORY, "memory.compress.lease_released", LogOutcome.SUCCEEDED, "sessionId", sessionId, "leaseId", lease.leaseId(), "reason", reason);
         }
     }
 
@@ -267,7 +255,7 @@ public class ArchivableChatMemory implements ChatMemory {
                 break;
             }
         }
-        log.info("[上下文清理] 清理完成，当前窗口剩余 {} 条消息。", contextWindow.size());
+        log.info(LogDomain.MEMORY, "memory.context.purified", LogOutcome.SUCCEEDED, "contextWindowCount", contextWindow.size());
     }
 
     @Override

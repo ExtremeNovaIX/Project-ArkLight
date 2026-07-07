@@ -8,10 +8,12 @@ import dev.langchain4j.mcp.client.transport.McpTransport;
 import dev.langchain4j.mcp.client.transport.http.HttpMcpTransport;
 import dev.langchain4j.mcp.client.transport.stdio.StdioMcpTransport;
 import dev.langchain4j.service.tool.ToolProvider;
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
+import p1.infrastructure.logging.LogDomain;
+import p1.infrastructure.logging.LogOutcome;
 import p1.component.agent.gamer.adapter.core.SchemaNormalizingMcpTransport;
 import p1.config.mcp.GameProperties;
 import p1.config.mcp.MCPProperties;
@@ -28,7 +30,7 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 @Component
 @RequiredArgsConstructor
-@Slf4j
+@CustomLog
 public class GamerMCPClientFactory {
 
     private final MCPProperties mcpProperties;
@@ -46,7 +48,7 @@ public class GamerMCPClientFactory {
                     .mcpClients(List.of(client))
                     .failIfOneServerFails(false)
                     .build();
-            log.info("[MCP] ToolProvider 已创建: game={}", name);
+            log.info(LogDomain.MCP, "mcp.tool_provider_created", LogOutcome.SUCCEEDED, "name", name);
             return tp;
         });
     }
@@ -71,7 +73,7 @@ public class GamerMCPClientFactory {
                                 mcpProperties.getClient().getToolTimeoutSeconds()))
                         .logHandler(new DefaultMcpLogMessageHandler())
                         .build();
-                log.info("[MCP] MCP 客户端已创建: game={}", name);
+                log.info(LogDomain.MCP, "mcp.client_created", LogOutcome.SUCCEEDED, "name", name);
                 return client;
             } catch (RuntimeException e) {
                 try {
@@ -94,7 +96,7 @@ public class GamerMCPClientFactory {
             if (!StringUtils.hasText(config.getUrl())) {
                 throw new IllegalStateException("MCP SSE 配置缺少 url: " + gameName);
             }
-            log.info("[MCP] 使用 SSE 传输: game={}, url={}", gameName, config.getUrl());
+            log.info(LogDomain.MCP, "mcp.sse_transport_created", LogOutcome.SUCCEEDED, "gameName", gameName, "url", config.getUrl());
             transport = new HttpMcpTransport.Builder()
                     .sseUrl(config.getUrl())
                     .timeout(Duration.ofSeconds(config.getConnectTimeoutSeconds()))
@@ -111,7 +113,7 @@ public class GamerMCPClientFactory {
             if (config.getArgs() != null) {
                 command.addAll(Arrays.asList(config.getArgs()));
             }
-            log.info("[MCP] 使用 Stdio 传输: game={}, command={}", gameName, command);
+            log.info(LogDomain.MCP, "mcp.stdio_transport_created", LogOutcome.SUCCEEDED, "gameName", gameName, "command", command);
             transport = new StdioMcpTransport.Builder()
                     .command(command)
                     .logEvents(false)
@@ -132,18 +134,6 @@ public class GamerMCPClientFactory {
         return config.getDisplayName() != null ? config.getDisplayName() : gameName;
     }
 
-    public String getGameGuidelines(String gameName) {
-        MCPProperties.GameMCPConfig config = mcpProperties.getGames().get(gameName);
-        if (config != null && StringUtils.hasText(config.getTips())) {
-            return config.getTips();
-        }
-        return """
-                - 优先基于系统注入的最新状态行动，不基于猜测行动。
-                - 优先选择合法、可验证、收益明确且风险可控的操作。
-                - 如果目标、规则或可用动作不明确，选择等待或提交保守操作。
-                - 避免重复无效操作；连续失败时保守等待，让 Bridge 在下一轮注入新状态。
-                """;
-    }
 
     /**
      * 强制刷新某个游戏的连接和工具列表。
@@ -162,7 +152,7 @@ public class GamerMCPClientFactory {
             try {
                 oldClient.close();
             } catch (Exception e) {
-                log.warn("[MCP] 关闭旧客户端失败: {}", e.toString());
+                log.warn(LogDomain.MCP, "mcp.client_close_failed", LogOutcome.DEGRADED, "exception", e.toString());
             }
         }
         providerCache.remove(gameName);

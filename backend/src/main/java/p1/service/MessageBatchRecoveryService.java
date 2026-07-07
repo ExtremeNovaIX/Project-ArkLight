@@ -1,11 +1,13 @@
 package p1.service;
 
 import dev.langchain4j.data.message.ChatMessage;
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
+import p1.infrastructure.logging.LogDomain;
+import p1.infrastructure.logging.LogOutcome;
 import p1.component.agent.memory.MemoryAsyncCompressor;
 import p1.component.agent.memory.model.DialogueBatch;
 import p1.config.prop.AssistantProperties;
@@ -18,7 +20,7 @@ import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
-@Slf4j
+@CustomLog
 public class MessageBatchRecoveryService {
 
     private final MemoryAsyncCompressor memoryAsyncCompressor;
@@ -41,7 +43,7 @@ public class MessageBatchRecoveryService {
             return;
         }
 
-        log.info("[对话恢复] 发现 {} 个 session 存在未完成的对话批次，正在恢复...", sessionIds.size());
+        log.info(LogDomain.MEMORY, "batch.recovery_started", LogOutcome.SUCCEEDED, "sessionCount", sessionIds.size());
         for (String sessionId : sessionIds) {
             DialogueBatch processingBatch = rawMdService.findProcessing(sessionId)
                     .map(this::toDialogueBatch)
@@ -67,20 +69,17 @@ public class MessageBatchRecoveryService {
             return;
         }
         if (!canRecoverWithCurrentSettings()) {
-            log.warn("[对话恢复] sessionId={}, batchId={} 暂停启动恢复，yaml 中默认 AI 配置不可用，修正配置后再触发",
-                    batch.sessionId(), batch.batchId());
+            log.warn(LogDomain.MEMORY, "batch.recovery_model_unavailable", LogOutcome.DEGRADED, "sessionId", batch.sessionId(), "batchId", batch.batchId());
             return;
         }
 
         List<ChatMessage> chatMessages = toChatMessages(batch.messages());
         if (chatMessages.isEmpty()) {
-            log.warn("[对话恢复] sessionId={}, batchId={}, 没有消息恢复，跳过压缩",
-                    batch.sessionId(), batch.batchId());
+            log.warn(LogDomain.MEMORY, "batch.recovery_model_unavailable", LogOutcome.DEGRADED, "sessionId", batch.sessionId(), "batchId", batch.batchId());
             return;
         }
 
-        log.info("[对话恢复] sessionId={}, batchId={}, 待恢复消息数={}",
-                batch.sessionId(), batch.batchId(), chatMessages.size());
+        log.info(LogDomain.MEMORY, "batch.recovery_submitted", LogOutcome.SUCCEEDED, "sessionId", batch.sessionId(), "batchId", batch.batchId(), "messageCount", chatMessages.size());
 
         memoryAsyncCompressor.compressAsync(batch.sessionId(), chatMessages, () -> {
             rawMdService.acknowledgeProcessing(batch.sessionId());
@@ -92,8 +91,7 @@ public class MessageBatchRecoveryService {
                     )
                     .map(this::toDialogueBatch)
                     .ifPresent(this::submitRecoveryCompression);
-        }, () -> log.warn("[对话恢复] sessionId={}, batchId={} 压缩失败，保留 processing 等待下次恢复",
-                batch.sessionId(), batch.batchId()));
+        }, () -> log.warn(LogDomain.MEMORY, "batch.recovery_empty", LogOutcome.SKIPPED, "sessionId", batch.sessionId(), "batchId", batch.batchId()));
     }
 
     private DialogueBatch toDialogueBatch(RawBatchDocument document) {

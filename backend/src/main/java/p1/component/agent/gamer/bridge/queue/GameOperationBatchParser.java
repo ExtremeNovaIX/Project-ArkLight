@@ -2,7 +2,7 @@ package p1.component.agent.gamer.bridge.queue;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 import org.springframework.stereotype.Component;
 import p1.component.agent.gamer.adapter.core.GameBridgeException;
 import p1.component.agent.gamer.adapter.core.GameOperation;
@@ -14,7 +14,7 @@ import java.util.List;
  * 解析 RP 动作 parser 产出的操作队列 JSON。
  */
 @Component
-@Slf4j
+@CustomLog
 public class GameOperationBatchParser {
 
     private final ObjectMapper objectMapper = new ObjectMapper();

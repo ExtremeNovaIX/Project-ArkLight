@@ -1,10 +1,12 @@
 package p1.component.log;
 
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.stereotype.Component;
 
+import p1.infrastructure.logging.LogDomain;
+import p1.infrastructure.logging.LogOutcome;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -14,7 +16,7 @@ import java.util.List;
 import java.util.stream.Stream;
 
 @Component
-@Slf4j
+@CustomLog
 public class LogFileCleanupRunner implements ApplicationRunner {
 
     private static final Path LOG_DIR = Paths.get("logs");
@@ -42,10 +44,10 @@ public class LogFileCleanupRunner implements ApplicationRunner {
             for (int i = MAX_LOG_FILES; i < logFiles.size(); i++) {
                 Path logFile = logFiles.get(i);
                 Files.deleteIfExists(logFile);
-                log.info("已删除旧日志文件：{}", logFile.getFileName());
+                log.info(LogDomain.RUNTIME, "log.file_deleted", LogOutcome.SUCCEEDED, "fileName", logFile.getFileName());
             }
         } catch (IOException e) {
-            log.warn("清理旧日志文件失败", e);
+            log.warn(LogDomain.RUNTIME, "log.cleanup_failed", LogOutcome.DEGRADED, e);
         }
     }
 

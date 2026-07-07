@@ -8,10 +8,12 @@ import dev.langchain4j.model.chat.response.PartialResponse;
 import dev.langchain4j.model.chat.response.PartialResponseContext;
 import dev.langchain4j.model.chat.response.StreamingHandle;
 import dev.langchain4j.service.TokenStream;
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
+import p1.infrastructure.logging.LogDomain;
+import p1.infrastructure.logging.LogOutcome;
 import p1.component.agent.gamer.GameSessionKey;
 import p1.component.agent.gamer.bridge.GameAvailableOperations;
 import p1.component.agent.gamer.bridge.GameBridgeExecutionException;
@@ -21,8 +23,8 @@ import p1.component.agent.gamer.trace.GamerDecisionTraceService;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -33,7 +35,7 @@ import java.util.function.Supplier;
  */
 @Service
 @RequiredArgsConstructor
-@Slf4j
+@CustomLog
 public class RpActionParserService {
 
     private static final long PARSER_STREAM_WAIT_SECONDS = 120L;
@@ -70,21 +72,18 @@ public class RpActionParserService {
             raw = e.rawOutput().isBlank() ? raw : e.rawOutput();
             completeExecutionTicket(executionKey, executionTicket);
             traceService.appendActionParserFailureTrace(gameName, executionKey, rpDo, raw, e.getMessage());
-            log.warn("[RP动作解析] 解析失败: game={}, session={}, do={}, reason={}",
-                    gameName, sessionId, rpDo, e.getMessage());
+            log.warn(LogDomain.GAME, "action.parser_failed", LogOutcome.DEGRADED, "gameName", gameName, "sessionId", sessionId, "rpDo", rpDo, "reason", e.getMessage());
             throw new RpGameActionExecutionException("RP 动作解析失败，未执行动作：" + e.getMessage(), e);
         } catch (Exception e) {
             completeExecutionTicket(executionKey, executionTicket);
             traceService.appendActionParserFailureTrace(gameName, executionKey, rpDo, raw, e.getMessage());
-            log.warn("[RP动作解析] parser 调用异常: game={}, session={}, do={}, reason={}",
-                    gameName, sessionId, rpDo, e.getMessage(), e);
+            log.warn(LogDomain.GAME, "action.parser_invocation_failed", LogOutcome.DEGRADED, e, "gameName", gameName, "sessionId", sessionId, "rpDo", rpDo, "reason", e.getMessage());
             throw new RpGameActionExecutionException("RP 动作解析器调用失败，未执行动作：" + e.getMessage(), e);
         }
 
         action.put("_ignore_rp_speaking", true);
         String arguments = action.toString();
-        log.info("[RP动作解析] 已翻译 RP 动作: game={}, session={}, do={}, action={}",
-                gameName, sessionId, rpDo, arguments);
+        log.info(LogDomain.GAME, "action.parser_completed", LogOutcome.SUCCEEDED, "gameName", gameName, "sessionId", sessionId, "rpDo", rpDo, "arguments", arguments);
         try {
             return executeInOrder(executionKey, executionTicket,
                     () -> bridgeService.executeOperationQueue(gameName, sessionId, arguments));

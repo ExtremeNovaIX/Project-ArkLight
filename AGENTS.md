@@ -12,6 +12,25 @@
 
 - 当前 Windows sandbox 下 `apply_patch` 不可用；每次调用都会报错并拖慢进度。需要修改文件时，使用精确的 PowerShell 读写或其他可用方式。
 
+## PowerShell 编码规范
+
+- Windows PowerShell 5.1 下，即使 `[Console]::OutputEncoding` 是 UTF-8，`$OutputEncoding` 仍可能默认是 `us-ascii`；把包含中文的 here-string、字符串或脚本文本通过管道传给 `node`、`python` 等 native 程序时，非 ASCII 字符会被替换成 `?`。
+- 需要通过 PowerShell 管道向 native 程序传递非 ASCII 文本前，先在同一个命令里设置：
+  ```powershell
+  $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
+  [Console]::InputEncoding = $utf8NoBom
+  [Console]::OutputEncoding = $utf8NoBom
+  $OutputEncoding = $utf8NoBom
+  ```
+- 更稳妥的做法是避免把含中文的脚本正文直接经 PowerShell 管道传给 native 程序。需要批量改文件时，优先使用 ASCII-only 的脚本内容（例如 Unicode escape 或 Base64）驱动 `node`/`python` 读写 UTF-8 文件。
+- 写入含中文的文件时，优先使用显式 UTF-8 no BOM：
+  ```powershell
+  $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
+  [System.IO.File]::WriteAllText($path, $content, $utf8NoBom)
+  ```
+  避免裸用 `Set-Content`、`Out-File` 或 shell 重定向写入含中文内容；如果必须使用，必须显式指定编码并复查结果。
+- 修改含中文的源码、配置或文档后，至少用 `Get-Content -Encoding UTF8` 检查目标片段；涉及批量替换时，再用 `rg -n "\\?{2,}" <目标文件或目录>` 扫描疑似编码损坏。
+
 ## 项目地图
 
 - `backend/`：Spring Boot 后端，提供 RP 聊天、TTS、STT 转发、本地配置、游戏控制和 doctor API。

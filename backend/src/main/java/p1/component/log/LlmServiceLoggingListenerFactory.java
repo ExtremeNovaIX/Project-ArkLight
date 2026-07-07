@@ -8,29 +8,27 @@ import dev.langchain4j.model.chat.listener.ChatModelResponseContext;
 import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.response.ChatResponse;
 import dev.langchain4j.model.output.TokenUsage;
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
-import org.springframework.boot.ansi.AnsiColor;
-import org.springframework.boot.ansi.AnsiOutput;
-import org.springframework.boot.ansi.AnsiStyle;
 import org.springframework.stereotype.Component;
 import p1.component.agent.reasoning.ReasoningContentRecorder;
 import p1.config.prop.AssistantProperties;
+import p1.infrastructure.logging.LogDomain;
+import p1.infrastructure.logging.LogOutcome;
 import p1.infrastructure.mdc.ChatSessionMetrics;
 import p1.utils.ChatMessageUtil;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
+
 import static p1.utils.SessionUtil.normalizeSessionId;
 
-/**
- * 统一的 LLM 调用跟踪监听器工厂。
- * <p>
- * 控制台开关只决定是否输出可读诊断日志；token 统计和 reasoning 记录始终执行。
- */
 @Component
 @RequiredArgsConstructor
-@Slf4j
+@CustomLog
 public class LlmServiceLoggingListenerFactory {
+
 
     private final AssistantProperties assistantProperties;
     private final ChatSessionMetrics chatSessionMetrics;
@@ -62,6 +60,9 @@ public class LlmServiceLoggingListenerFactory {
                     : response.aiMessage().thinking();
             reasoningContentRecorder.recordLatest(sessionId, reasoningContent);
 
+            log.info(LogDomain.LLM, "call.completed", LogOutcome.SUCCEEDED,
+                    summaryFields(sessionId, currentTokens));
+
             if (!assistantProperties.getLlmLogs().consoleEnabled(serviceName)) {
                 return;
             }
@@ -70,46 +71,71 @@ public class LlmServiceLoggingListenerFactory {
             String output = response == null || response.aiMessage() == null || response.aiMessage().text() == null
                     ? "[N/A]"
                     : response.aiMessage().text().trim();
+            log.infoBlock(renderTraceBlock(sessionId, input, output, reasoningContent, currentTokens, tokenTotals));
+        }
 
+        @Override
+        public void onError(ChatModelErrorContext context) {
+            Throwable error = context.error();
+            Map<String, Object> fields = baseFields(normalizeSessionId(MDC.get("sessionId")));
+            fields.put("exception", error == null ? "N/A" : error.getClass().getSimpleName());
+            fields.put("reason", error == null ? "N/A" : error.getMessage());
+            log.error(LogDomain.LLM, "call.failed", LogOutcome.FAILED, fields);
+        }
+
+        private Map<String, Object> summaryFields(String sessionId, ChatSessionMetrics.TokenSnapshot tokens) {
+            Map<String, Object> fields = baseFields(sessionId);
+            fields.put("inputTokens", tokens.input());
+            fields.put("outputTokens", tokens.output());
+            fields.put("totalTokens", tokens.total());
+            fields.put("cachedInputTokens", tokens.cachedInput());
+            fields.put("cachedInputRate", tokens.cachedInputRatePercent());
+            return fields;
+        }
+
+        private Map<String, Object> baseFields(String sessionId) {
+            Map<String, Object> fields = new LinkedHashMap<>();
+            fields.put("service", serviceName);
+            fields.put("call", valueOrDefault(MDC.get("serviceInfo"), "N/A"));
+            fields.put("session", sessionId);
+            fields.put("model", renderModelInfo());
+            return fields;
+        }
+
+        private String renderTraceBlock(String sessionId,
+                                        String input,
+                                        String output,
+                                        String reasoningContent,
+                                        ChatSessionMetrics.TokenSnapshot currentTokens,
+                                        ChatSessionMetrics.TokenSnapshot tokenTotals) {
             StringBuilder sb = new StringBuilder();
-            sb.append("\n")
-                    .append(AnsiOutput.toString(AnsiColor.BRIGHT_CYAN, AnsiStyle.BOLD,
-                            "==================== [LLM调用跟踪开始] ====================",
-                            AnsiStyle.NORMAL))
-                    .append("\n")
+            sb.append('\n')
+                    .append("==================== [LLM调用跟踪开始] ====================")
+                    .append('\n')
                     .append(line("[服务]", serviceName))
                     .append(line("[调用]", valueOrDefault(MDC.get("serviceInfo"), "N/A")))
                     .append(line("[模型]", renderModelInfo()))
                     .append(line("[SessionId]", sessionId))
                     .append(line("[当前对话轮数]", resolveCurrentRound(sessionId)))
-                    .append(AnsiOutput.toString(AnsiColor.CYAN, "[最新请求]\n", AnsiColor.DEFAULT, input)).append("\n");
+                    .append("[最新请求]\n")
+                    .append(input)
+                    .append('\n');
             if (reasoningContent != null && !reasoningContent.isBlank()) {
-                sb.append(AnsiOutput.toString(AnsiColor.BRIGHT_CYAN,
-                        "[推理内容]\n", AnsiColor.DEFAULT, reasoningContent.trim())).append("\n");
+                sb.append("[推理内容]\n")
+                        .append(reasoningContent.trim())
+                        .append('\n');
             }
-            sb.append(AnsiOutput.toString(AnsiColor.BRIGHT_WHITE,
-                            "[响应]\n", AnsiColor.DEFAULT, output)).append("\n")
+            sb.append("[响应]\n")
+                    .append(output)
+                    .append('\n')
                     .append(tokenLine("[本次调用 Tokens]", currentTokens))
                     .append(cacheLine("[本次缓存命中]", currentTokens))
                     .append(tokenLine("[Session Tokens]", tokenTotals))
                     .append(cacheLine("[Session缓存命中]", tokenTotals))
-                    .append(AnsiOutput.toString(AnsiColor.BRIGHT_CYAN, AnsiStyle.BOLD,
-                            "==================== [LLM调用跟踪结束] ====================",
-                            AnsiStyle.NORMAL))
-                    .append("\n");
-
-            log.info(sb.toString());
+                    .append("==================== [LLM调用跟踪结束] ====================")
+                    .append('\n');
+            return sb.toString();
         }
-
-        @Override
-        public void onError(ChatModelErrorContext context) {
-            if (!assistantProperties.getLlmLogs().consoleEnabled(serviceName)) {
-                return;
-            }
-            log.error("[LLM调用失败] service={}, model={}, call={}, error={}",
-                    serviceName, renderModelInfo(), valueOrDefault(MDC.get("serviceInfo"), "N/A"), context.error().toString());
-        }
-
         private String renderModelInfo() {
             if (modelConfig == null) {
                 return "N/A";
@@ -140,21 +166,15 @@ public class LlmServiceLoggingListenerFactory {
         }
 
         private String line(String label, Object value) {
-            return AnsiOutput.toString(AnsiColor.WHITE, label, " ", AnsiColor.DEFAULT, String.valueOf(value), "\n");
+            return label + " " + value + "\n";
         }
 
         private String tokenLine(String label, ChatSessionMetrics.TokenSnapshot snapshot) {
-            return AnsiOutput.toString(AnsiColor.WHITE, label, " ",
-                    AnsiColor.BRIGHT_YELLOW,
-                    "[I:", snapshot.input(), " O:", snapshot.output(), " T:", snapshot.total(), "]\n",
-                    AnsiColor.DEFAULT);
+            return label + " [I:" + snapshot.input() + " O:" + snapshot.output() + " T:" + snapshot.total() + "]\n";
         }
 
         private String cacheLine(String label, ChatSessionMetrics.TokenSnapshot snapshot) {
-            return AnsiOutput.toString(AnsiColor.WHITE, label, " ",
-                    AnsiColor.BRIGHT_YELLOW,
-                    "[Hit:", snapshot.cachedInput(), " I:", snapshot.input(), " Rate:", snapshot.cachedInputRatePercent(), "]\n",
-                    AnsiColor.DEFAULT);
+            return label + " [Hit:" + snapshot.cachedInput() + " I:" + snapshot.input() + " Rate:" + snapshot.cachedInputRatePercent() + "]\n";
         }
 
         private int resolveCurrentRound(String sessionId) {
@@ -163,7 +183,7 @@ public class LlmServiceLoggingListenerFactory {
                 try {
                     return Integer.parseInt(roundFromMdc);
                 } catch (NumberFormatException ignored) {
-                    // MDC 里没有合法轮次时使用累计计数。
+                    // fall back to the accumulated session counter
                 }
             }
             return chatSessionMetrics.getCurrentRound(sessionId);

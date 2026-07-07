@@ -1,9 +1,11 @@
 package p1.benchmark.halumem;
 
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import p1.infrastructure.logging.LogDomain;
+import p1.infrastructure.logging.LogOutcome;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -11,7 +13,7 @@ import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
-@Slf4j
+@CustomLog
 public class HaluMemJudgeService {
 
     private static final int MAX_JUDGE_EXAMPLES = 3;
@@ -99,8 +101,7 @@ public class HaluMemJudgeService {
         try {
             return memoryJudgeAiService.judge(gold.size(), system.size(), renderedGold, renderedSystem);
         } catch (RuntimeException exception) {
-            log.warn("[HaluMemJudge] memory judge invocation failed, using lexical fallback. goldCount={}, systemCount={}, error={}",
-                    gold.size(), system.size(), exception.toString());
+            log.warn(LogDomain.RUNTIME, "benchmark.judge_size_mismatch", LogOutcome.DEGRADED, "goldCount", gold.size(), "systemCount", system.size(), "exception", exception.toString());
             return lexicalFallbackJudge(gold, system, exception);
         }
     }

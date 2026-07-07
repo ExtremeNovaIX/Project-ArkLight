@@ -4,10 +4,12 @@ import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.memory.ChatMemory;
 import dev.langchain4j.memory.chat.ChatMemoryProvider;
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import p1.infrastructure.logging.LogDomain;
+import p1.infrastructure.logging.LogOutcome;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.Map;
@@ -22,7 +24,7 @@ import static p1.utils.SessionUtil.normalizeSessionId;
  */
 @Service
 @RequiredArgsConstructor
-@Slf4j
+@CustomLog
 public class RpGameInterruptionService {
 
     public static final String EVENT_MESSAGE_NAME = "game_runtime_event";
@@ -97,7 +99,7 @@ public class RpGameInterruptionService {
             memory.add(UserMessage.from(EVENT_MESSAGE_NAME, event));
             log.debug("[RP游戏中断] 已写入 RP 记忆: rpSession={}", sessionId);
         } catch (Exception e) {
-            log.warn("[RP游戏中断] 写入 RP 记忆失败: rpSession={}, reason={}", sessionId, e.getMessage());
+            log.warn(LogDomain.GAME, "game.interruption_failed", LogOutcome.DEGRADED, "sessionId", sessionId, "reason", e.getMessage());
         }
     }
 

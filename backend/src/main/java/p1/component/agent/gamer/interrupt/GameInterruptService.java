@@ -1,8 +1,10 @@
 package p1.component.agent.gamer.interrupt;
 
+import lombok.CustomLog;
 import lombok.NonNull;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import p1.infrastructure.logging.LogDomain;
+import p1.infrastructure.logging.LogOutcome;
 import p1.component.agent.gamer.GameSessionKey;
 
 import java.time.Instant;
@@ -16,7 +18,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * RP、用户界面或其他上层模块向这里登记“新意图”
  */
 @Component
-@Slf4j
+@CustomLog
 public class GameInterruptService {
 
     private final Map<String, GameInterruptRequest> pendingRequests = new ConcurrentHashMap<>();
@@ -42,8 +44,7 @@ public class GameInterruptService {
                 instruction == null ? "" : instruction.trim(),
                 Instant.now());
         pendingRequests.put(memoryId, request);
-        log.info("[游戏打断] 已登记外部打断: game={}, session={}, source={}, instruction={}",
-                gameName, sessionId, request.source(), request.instruction());
+        log.info(LogDomain.GAME, "game.interrupt_requested", LogOutcome.SUCCEEDED, "gameName", gameName, "sessionId", sessionId, "source", request.source(), "instruction", request.instruction());
         return request;
     }
 

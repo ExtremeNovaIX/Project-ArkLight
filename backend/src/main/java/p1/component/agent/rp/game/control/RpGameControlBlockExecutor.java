@@ -2,8 +2,8 @@ package p1.component.agent.rp.game.control;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import p1.component.agent.gamer.GamerPendingQuestionService;
 import p1.component.agent.gamer.loop.ActiveGameRegistry;
@@ -19,7 +19,7 @@ import static p1.utils.SessionUtil.normalizeSessionId;
  */
 @Service
 @RequiredArgsConstructor
-@Slf4j
+@CustomLog
 public class RpGameControlBlockExecutor {
 
     private final ActiveGameRegistry activeGameRegistry;

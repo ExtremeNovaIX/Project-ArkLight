@@ -1,11 +1,7 @@
 package p1.component.agent.stt;
 
 import org.junit.jupiter.api.Test;
-import p1.model.dto.ChatRequestDTO;
 import p1.service.ChatService;
-
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.TimeUnit;
 
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.*;

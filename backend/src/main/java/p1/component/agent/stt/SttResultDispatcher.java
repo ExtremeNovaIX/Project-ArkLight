@@ -1,9 +1,11 @@
 package p1.component.agent.stt;
 
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
+import p1.infrastructure.logging.LogDomain;
+import p1.infrastructure.logging.LogOutcome;
 import p1.model.dto.ChatRequestDTO;
 import p1.service.ChatService;
 
@@ -15,7 +17,7 @@ import p1.service.ChatService;
  */
 @Component
 @RequiredArgsConstructor
-@Slf4j
+@CustomLog
 public class SttResultDispatcher {
 
     private final ChatService chatService;
@@ -38,12 +40,9 @@ public class SttResultDispatcher {
             request.setCharacterName(characterName);
             request.setMessage(text);
             String response = chatService.sendMsgToRpAgent(request);
-            log.info("[STT] 识别文本已发送到 RP: session={}, character={}, textLen={}, responseLen={}",
-                    rpSessionId, characterName, text.length(),
-                    response != null ? response.length() : 0);
+            log.info(LogDomain.STT, "stt.result_dispatched", LogOutcome.SUCCEEDED, "rpSessionId", rpSessionId, "characterName", characterName, "textLength", text.length(), "responseLength", response != null ? response.length() : 0);
         } catch (Exception e) {
-            log.warn("[STT] 发送识别文本到 RP 失败: session={}, character={}, text={}, error={}",
-                    rpSessionId, characterName, text, e.getMessage());
+            log.warn(LogDomain.STT, "stt.result_dispatch_failed", LogOutcome.DEGRADED, "rpSessionId", rpSessionId, "characterName", characterName, "text", text, "reason", e.getMessage());
         }
     }
 }

@@ -28,7 +28,6 @@ class RpCurrentGameContextServiceTest {
         config.setEnabled(true);
         config.setAdapter("sts2");
         config.setStateToolName("get_game_state");
-        config.setTips("- 优先根据当前状态行动\n- 抽牌、弃牌、领奖励等状态变化动作应放在本批末尾");
         properties.putGame("STS2MCP", config);
 
         GamerMCPClientFactory clientFactory = mock(GamerMCPClientFactory.class);
@@ -49,6 +48,7 @@ class RpCurrentGameContextServiceTest {
         when(adapter.renderAvailableOperationSummary(any(GameAdapterContext.class), eq(state)))
                 .thenReturn("- 打出卡牌\n- 结束回合");
         when(adapter.renderStateForAgent(state)).thenReturn("## 当前局面\n\n- state_type：monster\n\n## 本步决策重点\n\n- 当前可用能量：3");
+        when(adapter.tips()).thenReturn("- 来自 adapter 的策略提示\n- 抽牌、弃牌、领奖励等状态变化动作应放在本批末尾");
 
         RpCurrentGameContextService service = new RpCurrentGameContextService(clientFactory, properties, registry);
 
@@ -58,9 +58,9 @@ class RpCurrentGameContextServiceTest {
         assertTrue(rendered.contains("<available_actions>"));
         assertTrue(rendered.contains("- 打出卡牌"));
         assertTrue(rendered.contains("<tips>"));
-        assertTrue(rendered.contains("- 优先根据当前状态行动"));
+        assertTrue(rendered.contains("- 来自 adapter 的策略提示"));
         assertTrue(rendered.contains("- 抽牌、弃牌、领奖励等状态变化动作应放在本批末尾"));
-        assertTrue(rendered.contains("- 当前展示的伤害、格挡、费用、意图等数值已经是游戏在当前 buff/debuff 下计算后的结果。"));
+        assertFalse(rendered.contains("- 来自旧 MCP 配置的提示不应注入"));
         assertTrue(rendered.contains("<key_game_state_markdown>"));
         assertTrue(rendered.contains("## 本步决策重点"));
         assertTrue(rendered.indexOf("<key_game_state_markdown>") < rendered.indexOf("## 当前局面"));

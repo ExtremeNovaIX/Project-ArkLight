@@ -18,12 +18,6 @@ mcp:
       # 启动 MCP server 的命令。
       command: "uv"
       # 启动 MCP server 的命令参数，installPath 会在安装目录解析后替换。
-      args: ["run", "--directory", "{{installPath}}", "python", "server.py"]
+      args: ["run", "--directory", "{{installPath}}", "python", "server.py", "--no-trust-env"]
       # MCP server 建连超时时间，单位秒。
       connect-timeout-seconds: 30
-      # 注入给 RP 当前游戏上下文 tips 块的提示。
-      tips:
-        - 场上大部分buff每回合减少一层（如虚弱，易伤）;在没有特殊buff的情况下，进入新的回合时格挡清零，能量回复至上限，手牌放入弃牌堆并且重新抽取。
-        - 杀戮尖塔使用向下取整算数，比如敌方原本打15，被挂虚弱(减少地方25%伤害)之后变为15*0.75=11。
-        - 当敌人没有攻击意图时是你是输出、成长（打出能力牌）的好时机。
-        - 抽牌、弃牌、随机、领取奖励、打开选择界面等会改变行动窗口的操作必须放在本批队列末尾；触发状态变化后后台会中断剩余队列并要求重新计划。

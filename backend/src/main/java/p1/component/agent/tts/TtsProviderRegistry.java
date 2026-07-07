@@ -1,8 +1,10 @@
 package p1.component.agent.tts;
 
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 import org.springframework.stereotype.Component;
 
+import p1.infrastructure.logging.LogDomain;
+import p1.infrastructure.logging.LogOutcome;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -17,7 +19,7 @@ import java.util.stream.Collectors;
  * 一个 {@link TtsProvider} Bean，并在配置中切换 provider 名称。
  */
 @Component
-@Slf4j
+@CustomLog
 public class TtsProviderRegistry {
 
     private final TtsConfig config;
@@ -40,7 +42,7 @@ public class TtsProviderRegistry {
         String providerName = normalize(config.getProvider());
         TtsProvider provider = providers.get(providerName);
         if (provider == null) {
-            log.warn("[TTS] 未找到配置的 TTS provider: provider={}, available={}", config.getProvider(), providers.keySet());
+            log.warn(LogDomain.TTS, "provider.unavailable", LogOutcome.DEGRADED, "provider", config.getProvider(), "availableProviders", providers.keySet());
             return Optional.empty();
         }
         return Optional.of(provider);

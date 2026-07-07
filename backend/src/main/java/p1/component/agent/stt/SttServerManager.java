@@ -2,10 +2,12 @@ package p1.component.agent.stt;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import p1.infrastructure.logging.LogDomain;
+import p1.infrastructure.logging.LogOutcome;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -21,7 +23,7 @@ import java.util.concurrent.TimeUnit;
  * 管理本地 ASR sidecar 生命周期。
  */
 @Component
-@Slf4j
+@CustomLog
 public class SttServerManager {
 
     private static final int MAX_START_ATTEMPTS = 3;
@@ -114,7 +116,8 @@ public class SttServerManager {
             state.exhausted = true;
             state.process = null;
             state.unavailableMessage = unsupportedEngineMessage(engine);
-            log.error("[STT] Unsupported ASR engine requested: {}", engine);
+            log.warn(LogDomain.STT, "engine.unsupported", LogOutcome.DEGRADED,
+                    Map.of("engine", engine, "reason", "unsupported_engine"));
             return false;
         }
         SidecarState state = states.computeIfAbsent(engine, key -> new SidecarState(defaultUnavailableMessage(key)));
@@ -132,7 +135,8 @@ public class SttServerManager {
         if (sidecarPortOccupied(engine)) {
             state.unavailableMessage = engineLabel(engine) + " ASR sidecar port " + LOCALHOST + ":" + config.enginePort(engine)
                     + " is occupied by another process. Stop that process before starting voice capture.";
-            log.error("[STT] {} sidecar port is already occupied: {}:{}.", engineLabel(engine), LOCALHOST, config.enginePort(engine));
+            log.warn(LogDomain.STT, "sidecar.unavailable", LogOutcome.DEGRADED,
+                    Map.of("engine", engineLabel(engine), "reason", "port_occupied", "port", config.enginePort(engine)));
             state.exhausted = true;
             state.process = null;
             return false;
@@ -141,8 +145,9 @@ public class SttServerManager {
             state.exhausted = true;
             state.unavailableMessage = engineLabel(engine) + " runtime or model files are not ready. " + bootstrapHint(engine)
                     + " Check " + logFilePath(engine) + ".";
-            log.error("[STT] {} runtime is not ready. python={}, script={}, hint={}",
-                    engineLabel(engine), pythonExecutable(engine), sidecarScriptPath(engine), bootstrapHint(engine));
+            log.warn(LogDomain.STT, "sidecar.unavailable", LogOutcome.DEGRADED,
+                    Map.of("engine", engineLabel(engine), "reason", "runtime_missing", "python", pythonExecutable(engine),
+                            "script", sidecarScriptPath(engine), "hint", bootstrapHint(engine)));
             return false;
         }
         return startProcess(engine, state);
@@ -157,8 +162,9 @@ public class SttServerManager {
         }
 
         int exitCode = state.process.exitValue();
-        log.warn("[STT] {} sidecar exited: exitCode={}, attempts={}/{}",
-                engineLabel(engine), exitCode, state.startAttempts, MAX_START_ATTEMPTS);
+        log.warn(LogDomain.STT, "sidecar.exited", LogOutcome.DEGRADED,
+                Map.of("engine", engineLabel(engine), "exitCode", exitCode,
+                        "attempt", state.startAttempts, "maxAttempts", MAX_START_ATTEMPTS));
         state.process = null;
         state.ready = false;
 
@@ -166,8 +172,8 @@ public class SttServerManager {
             state.exhausted = true;
             state.unavailableMessage = engineLabel(engine) + " ASR sidecar exited, but port "
                     + LOCALHOST + ":" + config.enginePort(engine) + " is now occupied by another process.";
-            log.error("[STT] {} sidecar exited but port {}:{} is occupied by another process.",
-                    engineLabel(engine), LOCALHOST, config.enginePort(engine));
+            log.warn(LogDomain.STT, "sidecar.unavailable", LogOutcome.DEGRADED,
+                    Map.of("engine", engineLabel(engine), "reason", "port_occupied", "port", config.enginePort(engine)));
             return;
         }
         if (state.startAttempts < MAX_START_ATTEMPTS) {
@@ -178,8 +184,9 @@ public class SttServerManager {
         state.exhausted = true;
         state.unavailableMessage = engineLabel(engine) + " ASR sidecar reached max start attempts. Check "
                 + logFilePath(engine) + ".";
-        log.error("[STT] {} sidecar reached max start attempts: max={}, logFile={}, hint={}",
-                engineLabel(engine), MAX_START_ATTEMPTS, logFilePath(engine), bootstrapHint(engine));
+        log.warn(LogDomain.STT, "sidecar.unavailable", LogOutcome.DEGRADED,
+                Map.of("engine", engineLabel(engine), "reason", "max_start_attempts", "maxAttempts", MAX_START_ATTEMPTS,
+                        "logFile", logFilePath(engine), "hint", bootstrapHint(engine)));
     }
 
     private boolean startProcess(String engine, SidecarState state) {
@@ -187,8 +194,8 @@ public class SttServerManager {
             state.exhausted = true;
             state.unavailableMessage = engineLabel(engine) + " ASR sidecar port " + LOCALHOST + ":"
                     + config.enginePort(engine) + " is occupied by another process.";
-            log.error("[STT] Refuse to start {} sidecar because port {}:{} is occupied.",
-                    engineLabel(engine), LOCALHOST, config.enginePort(engine));
+            log.warn(LogDomain.STT, "sidecar.unavailable", LogOutcome.DEGRADED,
+                    Map.of("engine", engineLabel(engine), "reason", "port_occupied", "port", config.enginePort(engine)));
             return false;
         }
         if (state.startAttempts >= MAX_START_ATTEMPTS) {
@@ -208,16 +215,18 @@ public class SttServerManager {
             builder.redirectOutput(ProcessBuilder.Redirect.appendTo(logFile.toFile()));
             state.process = processStarter.start(builder);
             state.startAttempts++;
-            log.info("[STT] {} sidecar started: port={}, attempt={}/{}, python={}, logFile={}",
-                    engineLabel(engine), config.enginePort(engine), state.startAttempts, MAX_START_ATTEMPTS,
-                    pythonExecutable(engine), logFile);
+            log.debug(LogDomain.STT, "sidecar.start_attempt", LogOutcome.SUCCEEDED,
+                    Map.of("engine", engineLabel(engine), "port", config.enginePort(engine),
+                            "attempt", state.startAttempts, "maxAttempts", MAX_START_ATTEMPTS,
+                            "python", pythonExecutable(engine), "logFile", logFile));
 
             state.ready = false;
             return waitUntilSidecarAcceptsConnections(engine, state, logFile);
         } catch (IOException e) {
             state.ready = false;
             state.unavailableMessage = "Failed to start " + engineLabel(engine) + " ASR sidecar: " + e.getMessage();
-            log.error("[STT] Failed to start {} sidecar: {}", engineLabel(engine), e.getMessage());
+            log.warn(LogDomain.STT, "sidecar.unavailable", LogOutcome.DEGRADED,
+                    Map.of("engine", engineLabel(engine), "reason", "start_failed", "error", e.getMessage()));
         }
         return false;
     }
@@ -233,7 +242,8 @@ public class SttServerManager {
             if (sidecarPortReady(engine)) {
                 state.ready = true;
                 state.unavailableMessage = "";
-                log.info("[STT] {} sidecar is listening: port={}", engineLabel(engine), config.enginePort(engine));
+                log.info(LogDomain.STT, "sidecar.ready", LogOutcome.SUCCEEDED,
+                        Map.of("engine", engineLabel(engine), "port", config.enginePort(engine)));
                 return true;
             }
             if (System.nanoTime() >= deadlineNanos) {
@@ -245,7 +255,8 @@ public class SttServerManager {
                 Thread.currentThread().interrupt();
                 state.ready = false;
                 state.unavailableMessage = "Interrupted while waiting for " + engineLabel(engine) + " ASR sidecar startup.";
-                log.warn("[STT] Interrupted while waiting for {} sidecar startup", engineLabel(engine));
+                log.warn(LogDomain.STT, "sidecar.unavailable", LogOutcome.DEGRADED,
+                        Map.of("engine", engineLabel(engine), "reason", "startup_wait_interrupted"));
                 return false;
             }
         }
@@ -253,16 +264,18 @@ public class SttServerManager {
         state.ready = false;
         if (state.process != null && !state.process.isAlive()) {
             state.unavailableMessage = engineLabel(engine) + " ASR sidecar exited during startup. Check " + logFile + ".";
-            log.warn("[STT] {} sidecar exited during startup: exitCode={}, logFile={}",
-                    engineLabel(engine), state.process.exitValue(), logFile);
+            log.warn(LogDomain.STT, "sidecar.unavailable", LogOutcome.DEGRADED,
+                    Map.of("engine", engineLabel(engine), "reason", "exited_during_startup",
+                            "exitCode", state.process.exitValue(), "logFile", logFile));
             return false;
         }
 
         state.unavailableMessage = engineLabel(engine) + " ASR sidecar is still starting; port "
                 + LOCALHOST + ":" + config.enginePort(engine) + " was not ready within " + timeoutMs
                 + "ms. Check " + logFile + ".";
-        log.warn("[STT] {} sidecar did not listen on {}:{} within {}ms. logFile={}",
-                engineLabel(engine), LOCALHOST, config.enginePort(engine), timeoutMs, logFile);
+        log.warn(LogDomain.STT, "sidecar.unavailable", LogOutcome.DEGRADED,
+                Map.of("engine", engineLabel(engine), "reason", "startup_timeout", "host", LOCALHOST,
+                        "port", config.enginePort(engine), "timeoutMs", timeoutMs, "logFile", logFile));
         return false;
     }
 
@@ -302,7 +315,7 @@ public class SttServerManager {
             return;
         }
         state.process.destroy();
-        log.info("[STT] ASR sidecar stop requested");
+        log.debug(LogDomain.STT, "sidecar.stop_requested", LogOutcome.SKIPPED, Map.of());
     }
 
     private boolean sidecarPortOccupied(String engine) {

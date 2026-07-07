@@ -1,7 +1,7 @@
 package p1.component.agent.gamer.bridge.result;
 
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import p1.component.agent.gamer.adapter.core.GameOperation;
 import p1.component.agent.gamer.trace.GameQueueExecutionTrace;
@@ -14,7 +14,7 @@ import java.util.List;
  * 记录操作队列执行细节。该记录只进入复盘日志，不写入 RP 记忆。
  */
 @Component
-@Slf4j
+@CustomLog
 @RequiredArgsConstructor
 public class GameQueueResultRecorder {
 

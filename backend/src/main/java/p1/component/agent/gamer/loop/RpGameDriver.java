@@ -1,7 +1,7 @@
 package p1.component.agent.gamer.loop;
 
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import p1.component.agent.gamer.GameSessionKey;
@@ -15,6 +15,8 @@ import p1.component.agent.rp.game.control.RpGameActionExecutionException;
 import p1.component.agent.rp.game.control.RpGameTurnService;
 import p1.component.agent.rp.proactive.RpProactiveSessionRegistry;
 import p1.config.mcp.GameLoopProperties;
+import p1.infrastructure.logging.LogDomain;
+import p1.infrastructure.logging.LogOutcome;
 
 import java.time.Instant;
 import java.util.Collection;
@@ -28,7 +30,7 @@ import java.util.concurrent.locks.ReentrantLock;
  */
 @Service
 @RequiredArgsConstructor
-@Slf4j
+@CustomLog
 public class RpGameDriver {
 
     private static final int MAX_CONSECUTIVE_FAILURES = 5;
@@ -56,8 +58,9 @@ public class RpGameDriver {
             try {
                 processSession(session);
             } catch (Exception e) {
-                log.error("[RP游戏驱动] 会话处理异常: game={}, session={}",
-                        session.getGameName(), session.getSessionId(), e);
+                log.error(LogDomain.GAME, "method.failed", LogOutcome.FAILED,
+                    fields(session, "method", "RpGameDriver.processSession", "exception", e.getClass().getSimpleName(),
+                            "reason", e.getMessage()), e);
             }
         }
     }
@@ -78,8 +81,9 @@ public class RpGameDriver {
         try {
             processSessionOnce(session);
         } catch (Exception e) {
-            log.error("[RP游戏驱动] 行动窗口探测失败: game={}, session={}",
-                    session.getGameName(), session.getSessionId(), e);
+            log.error(LogDomain.GAME, "method.failed", LogOutcome.FAILED,
+                    fields(session, "method", "RpGameDriver.processSessionOnce", "exception", e.getClass().getSimpleName(),
+                            "reason", e.getMessage()), e);
             handleFailure(session);
             session.touch();
         } finally {
@@ -108,8 +112,8 @@ public class RpGameDriver {
 
         GameActionability actionability = probe.actionability();
         if (actionability.status() == GameActionabilityStatus.GAME_OVER) {
-            log.info("[RP游戏驱动] 检测到游戏结束: game={}, session={}, reason={}",
-                    session.getGameName(), session.getSessionId(), actionability.reason());
+            log.info(LogDomain.GAME, "game.completed", LogOutcome.SUCCEEDED,
+                    fields(session, "reason", actionability.reason()));
             session.setState(ActiveGameSession.State.STOPPED);
             observationBackoffService.reset(session);
             clearSameStateObservation(session);
@@ -129,8 +133,8 @@ public class RpGameDriver {
             rpGameTurnService.play(session, gameLoopInstruction(userSpeechSignal), sameStateDecision.replan());
             session.resetFailures();
             clearSameStateObservation(session);
-            log.debug("[RP游戏驱动] 本轮 RP 决策完成: game={}, session={}, totalStep={}",
-                    session.getGameName(), session.getSessionId(), totalSteps);
+            log.info(LogDomain.GAME, "turn.completed", LogOutcome.SUCCEEDED,
+                    fields(session, "totalStep", totalSteps));
         } catch (RpGameActionExecutionException e) {
             if (e.interactionDeferred()) {
                 session.resetFailures();
@@ -141,10 +145,12 @@ public class RpGameDriver {
             }
             session.resetFailures();
             rememberSameStateObservation(session, probe.stateFingerprint(), e.feedback());
-            log.warn("[RP游戏驱动] 动作执行失败，等待下一 tick 观察状态: game={}, session={}, reason={}",
-                    session.getGameName(), session.getSessionId(), e.feedback());
+            log.warn(LogDomain.GAME, "operation.interrupted", LogOutcome.DEGRADED,
+                    fields(session, "reason", e.feedback()));
         } catch (Exception e) {
-            log.error("[RP游戏回合] 调用失败: game={}, session={}", session.getGameName(), session.getSessionId(), e);
+            log.error(LogDomain.GAME, "method.failed", LogOutcome.FAILED,
+                    fields(session, "method", "RpGameTurnService.play", "exception", e.getClass().getSimpleName(),
+                            "reason", e.getMessage()), e);
             handleFailure(session);
         } finally {
             session.touch();
@@ -173,8 +179,8 @@ public class RpGameDriver {
         }
 
         sameStateObservations.remove(key);
-        log.warn("[RP游戏驱动] 动作后状态连续未变化，触发静音重规划: game={}, session={}, unchanged={}, lastReason={}",
-                session.getGameName(), session.getSessionId(), nextTicks, observation.failureFeedback());
+        log.warn(LogDomain.GAME, "operation.interrupted", LogOutcome.DEGRADED,
+                fields(session, "reason", "state_unchanged", "unchanged", nextTicks, "lastReason", observation.failureFeedback()));
         return SameStateDecision.replanDecision();
     }
 
@@ -212,13 +218,24 @@ public class RpGameDriver {
 
     private void handleFailure(ActiveGameSession session) {
         int failures = session.incrementFailures();
-        log.warn("[RP游戏驱动] RP 游戏回合连续失败 {}/{} 次: game={}, session={}",
-                failures, MAX_CONSECUTIVE_FAILURES, session.getGameName(), session.getSessionId());
+        log.warn(LogDomain.GAME, "turn.failed", LogOutcome.FAILED,
+                fields(session, "failures", failures, "maxFailures", MAX_CONSECUTIVE_FAILURES));
         if (failures >= MAX_CONSECUTIVE_FAILURES) {
-            log.error("[RP游戏驱动] 连续失败 {} 次，停止会话: game={}, session={}",
-                    failures, session.getGameName(), session.getSessionId());
+            log.error(LogDomain.GAME, "session.stopped", LogOutcome.FATAL,
+                    fields(session, "reason", "max_consecutive_failures", "failures", failures));
             session.setState(ActiveGameSession.State.STOPPED);
         }
+    }
+
+    private Map<String, Object> fields(ActiveGameSession session, Object... keyValues) {
+        Map<String, Object> fields = new java.util.LinkedHashMap<>();
+        fields.put("game", session.getGameName());
+        fields.put("session", session.getSessionId());
+        fields.put("rpSession", session.getRpSessionId());
+        for (int i = 0; i + 1 < keyValues.length; i += 2) {
+            fields.put(String.valueOf(keyValues[i]), keyValues[i + 1]);
+        }
+        return fields;
     }
 
     private ReentrantLock sessionLock(ActiveGameSession session) {
@@ -284,7 +301,7 @@ public class RpGameDriver {
             session.setState(ActiveGameSession.State.PAUSED);
             observationBackoffService.reset(session);
             clearSameStateObservation(session);
-            log.info("[RP游戏驱动] 会话已暂停: game={}, session={}", gameName, sessionId);
+            log.info(LogDomain.GAME, "session.paused", LogOutcome.SUCCEEDED, fields(session));
         }
     }
 
@@ -299,7 +316,7 @@ public class RpGameDriver {
             session.setState(ActiveGameSession.State.RUNNING);
             observationBackoffService.reset(session);
             clearSameStateObservation(session);
-            log.info("[RP游戏驱动] 会话已恢复: game={}, session={}", gameName, sessionId);
+            log.info(LogDomain.GAME, "session.resumed", LogOutcome.SUCCEEDED, fields(session));
         }
     }
 

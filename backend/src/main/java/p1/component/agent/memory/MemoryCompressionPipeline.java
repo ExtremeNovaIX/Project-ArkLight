@@ -2,9 +2,11 @@ package p1.component.agent.memory;
 
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.UserMessage;
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import p1.infrastructure.logging.LogDomain;
+import p1.infrastructure.logging.LogOutcome;
 import p1.component.agent.memory.model.FactExtractionPipelineResult;
 
 import java.util.List;
@@ -14,7 +16,7 @@ import static p1.utils.ChatMessageUtil.isAiFinalResponseMessage;
 
 @Service
 @RequiredArgsConstructor
-@Slf4j
+@CustomLog
 public class MemoryCompressionPipeline {
 
     private static final int MIN_IMPORTANCE_SCORE = 5;
@@ -28,21 +30,20 @@ public class MemoryCompressionPipeline {
 
         List<FactExtractionService.ExtractedFactEventDTO> extractedEvents =
                 factExtractionService.extractFact(pureChatHistory, sessionId);
-        log.info("[记忆压缩] sessionId={} 第一阶段事实提取完成，事件数={}", sessionId, extractedEvents.size());
+        log.info(LogDomain.MEMORY, "memory.compress.facts_extracted", LogOutcome.SUCCEEDED, "sessionId", sessionId, "eventCount", extractedEvents.size());
 
         List<FactExtractionService.ExtractedFactEventDTO> importantEvents = extractedEvents.stream()
                 .filter(event -> keepEvent(sessionId, event))
                 .toList();
         if (importantEvents.isEmpty()) {
-            log.info("[记忆压缩] sessionId={} 没有达到重要性阈值的事件", sessionId);
+            log.info(LogDomain.MEMORY, "memory.compress.no_important_events", LogOutcome.SKIPPED, "sessionId", sessionId);
             return Optional.empty();
         }
 
         FactExtractionService.FactSummaryDTO summary = factExtractionService.summarizeFacts(importantEvents, sessionId);
         FactExtractionPipelineResult extractionResult =
                 factExtractionService.buildPipelineResult(importantEvents, summary);
-        log.info("[记忆压缩] sessionId={} 第二阶段摘要完成，事件数={}，tagCount={}",
-                sessionId, extractionResult.events().size(), extractionResult.tags().size());
+        log.info(LogDomain.MEMORY, "memory.compress.summary_completed", LogOutcome.SUCCEEDED, "sessionId", sessionId, "eventCount", extractionResult.events().size(), "tagCount", extractionResult.tags().size());
         return Optional.of(extractionResult);
     }
 
@@ -54,8 +55,7 @@ public class MemoryCompressionPipeline {
             return true;
         }
 
-        log.info("[事件丢弃] sessionId={} 重要性不足，topic={}，score={}",
-                sessionId, event.getTopic(), event.getImportanceScore());
+        log.info(LogDomain.MEMORY, "memory.compress.event_dropped", LogOutcome.SUCCEEDED, "sessionId", sessionId, "topic", event.getTopic(), "importanceScore", event.getImportanceScore());
         return false;
     }
 }

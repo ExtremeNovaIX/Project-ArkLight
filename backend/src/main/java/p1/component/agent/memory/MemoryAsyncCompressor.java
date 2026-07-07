@@ -1,17 +1,19 @@
 package p1.component.agent.memory;
 
 import dev.langchain4j.data.message.ChatMessage;
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import p1.infrastructure.logging.LogDomain;
+import p1.infrastructure.logging.LogOutcome;
 import p1.component.agent.memory.model.FactExtractionPipelineResult;
 import p1.component.agent.rp.context.SummaryCacheManager;
 
 import java.util.List;
 
 @Service
-@Slf4j
+@CustomLog
 @RequiredArgsConstructor
 public class MemoryAsyncCompressor {
 
@@ -31,7 +33,7 @@ public class MemoryAsyncCompressor {
                               List<ChatMessage> toCompress,
                               Runnable onSuccess,
                               Runnable onFailure) {
-        log.info("[记忆压缩] sessionId={} 开始异步压缩，消息数={}", sessionId, toCompress.size());
+        log.info(LogDomain.MEMORY, "memory.compress.async_started", LogOutcome.SUCCEEDED, "sessionId", sessionId, "messageCount", toCompress.size());
         try {
             FactExtractionPipelineResult extractionResult =
                     memoryCompressionPipeline.buildPipelineResult(sessionId, toCompress).orElse(null);
@@ -53,7 +55,7 @@ public class MemoryAsyncCompressor {
                 onSuccess.run();
             }
         } catch (Exception e) {
-            log.error("[记忆压缩失败] sessionId={} 后台记忆压缩异常", sessionId, e);
+            log.error(LogDomain.MEMORY, "memory.compress.async_failed", LogOutcome.FAILED, e, "sessionId", sessionId);
             if (onFailure != null) {
                 onFailure.run();
             }

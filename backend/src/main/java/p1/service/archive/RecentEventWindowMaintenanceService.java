@@ -1,9 +1,11 @@
 package p1.service.archive;
 
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import p1.infrastructure.logging.LogDomain;
+import p1.infrastructure.logging.LogOutcome;
 import p1.config.prop.AssistantProperties;
 import p1.infrastructure.vector.ArchiveVectorLibrary;
 import p1.model.document.RecentEventGroupDocument;
@@ -15,7 +17,7 @@ import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
-@Slf4j
+@CustomLog
 public class RecentEventWindowMaintenanceService {
 
     private final AssistantProperties props;
@@ -47,8 +49,7 @@ public class RecentEventWindowMaintenanceService {
             );
             recentEventGroupService.delete(group.getSessionId(), group.getId());
 
-            log.info("[24h 维护] 已淘汰过期事件组，sessionId={}，groupId={}，lastHitAt={}",
-                    group.getSessionId(), group.getId(), group.getLastHitAt());
+            log.info(LogDomain.MEMORY, "recent_window.group_refreshed", LogOutcome.SUCCEEDED, "sessionId", group.getSessionId(), "groupId", group.getId(), "lastHitAt", group.getLastHitAt());
         }
     }
 

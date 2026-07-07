@@ -1,7 +1,7 @@
 package p1.service;
 
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import p1.component.agent.gamer.GamerPendingQuestionService;
 import p1.component.agent.rp.context.SummaryCacheManager;
@@ -16,7 +16,7 @@ import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
-@Slf4j
+@CustomLog
 public class ChatService {
 
     private final RpAgent rpAgent;

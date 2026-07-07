@@ -1,8 +1,10 @@
 package p1.service.markdown;
 
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import p1.infrastructure.logging.LogDomain;
+import p1.infrastructure.logging.LogOutcome;
 import p1.component.agent.memory.model.RecentEventGroupLinkRecord;
 import p1.model.document.MemoryArchiveDocument;
 import p1.model.document.RecentEventGroupDocument;
@@ -17,7 +19,7 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
-@Slf4j
+@CustomLog
 public class RecentEventGroupMarkdownService {
 
     private static final DateTimeFormatter GROUP_ID_TIME_FORMAT =
@@ -98,7 +100,7 @@ public class RecentEventGroupMarkdownService {
     public void touch(String sessionId, String groupId, LocalDateTime hitTime) {
         RecentEventGroupDocument group = findById(sessionId, groupId).orElse(null);
         if (group == null) {
-            log.warn("[recent-event-group] touch skipped, groupId={} not found, sessionId={}", groupId, sessionId);
+            log.warn(LogDomain.MEMORY, "event_group.missing", LogOutcome.DEGRADED, "groupId", groupId, "sessionId", sessionId);
             return;
         }
 
@@ -128,8 +130,7 @@ public class RecentEventGroupMarkdownService {
         RecentEventGroupDocument leftGroup = findById(normalizedSessionId, normalizedLeftGroupId).orElse(null);
         RecentEventGroupDocument rightGroup = findById(normalizedSessionId, normalizedRightGroupId).orElse(null);
         if (leftGroup == null || rightGroup == null) {
-            log.warn("[recent-event-group] skipped bidirectional link, group missing, sessionId={}, leftGroupId={}, rightGroupId={}",
-                    normalizedSessionId, normalizedLeftGroupId, normalizedRightGroupId);
+            log.warn(LogDomain.MEMORY, "event_group.link_skipped", LogOutcome.SKIPPED, "sessionId", normalizedSessionId, "leftGroupId", normalizedLeftGroupId, "rightGroupId", normalizedRightGroupId);
             return;
         }
 

@@ -2,10 +2,12 @@ package p1.component.agent.tts;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import p1.infrastructure.logging.LogDomain;
+import p1.infrastructure.logging.LogOutcome;
 
 import java.io.IOException;
 import java.net.URI;
@@ -27,7 +29,7 @@ import java.util.Map;
  */
 @Component
 @RequiredArgsConstructor
-@Slf4j
+@CustomLog
 public class TtsRuntimeManager {
 
     private final TtsConfig config;
@@ -48,7 +50,7 @@ public class TtsRuntimeManager {
             return;
         }
         if (isServiceHealthy(profile)) {
-            log.info("[TTS运行时] {} 服务已可用，跳过自动启动: baseUrl={}", profile.name(), profile.baseUrl());
+            log.info(LogDomain.TTS, "runtime.ready", LogOutcome.SUCCEEDED, fields(profile, "reason", "already_available", "baseUrl", profile.baseUrl()));
             return;
         }
         startProcess(profile);
@@ -74,12 +76,11 @@ public class TtsRuntimeManager {
 
         int exitCode = process.exitValue();
         int maxRestartAttempts = Math.max(0, profile.runtime().getMaxRestartAttempts());
-        log.warn("[TTS运行时] {} 进程已退出: exitCode={}, restartCount={}, maxRestartAttempts={}",
-                profile.name(), exitCode, restartCount, maxRestartAttempts);
+        log.warn(LogDomain.TTS, "runtime.exited", LogOutcome.DEGRADED, fields(profile, "exitCode", exitCode, "restartCount", restartCount, "maxRestartAttempts", maxRestartAttempts));
         if (restartCount < maxRestartAttempts) {
             startProcess(profile);
         } else {
-            log.error("[TTS运行时] {} 达到最大重启次数，放弃重启", profile.name());
+            log.error(LogDomain.TTS, "runtime.unavailable", LogOutcome.FATAL, fields(profile, "reason", "max_restart_attempts", "restartCount", restartCount, "maxRestartAttempts", maxRestartAttempts));
         }
     }
 
@@ -138,8 +139,7 @@ public class TtsRuntimeManager {
         }
         List<String> missingFiles = missingRequiredFiles(workingDirectory, profile.runtime());
         if (!missingFiles.isEmpty()) {
-            log.warn("[TTS运行时] {} 必要文件缺失，跳过自动启动: workingDirectory={}, missing={}",
-                    profile.name(), workingDirectory, missingFiles);
+            log.warn(LogDomain.TTS, "runtime.unavailable", LogOutcome.DEGRADED, fields(profile, "reason", "missing_files", "workingDirectory", workingDirectory, "missing", missingFiles));
             return;
         }
 
@@ -155,12 +155,10 @@ public class TtsRuntimeManager {
             if (isRestart) {
                 restartCount++;
             }
-            log.info("[TTS运行时] {} 进程已启动: listen={}, workingDirectory={}, logFile={}, restartCount={}",
-                    profile.name(), listenAddress(profile.runtime()), workingDirectory,
-                    resolveLogFile(workingDirectory, profile.runtime()), restartCount);
+            log.info(LogDomain.TTS, "runtime.started", LogOutcome.SUCCEEDED, fields(profile, "listen", listenAddress(profile.runtime()), "workingDirectory", workingDirectory, "logFile", resolveLogFile(workingDirectory, profile.runtime()), "restartCount", restartCount));
             sleepAfterStartup(profile);
         } catch (IOException e) {
-            log.warn("[TTS运行时] {} 进程启动失败: command={}, reason={}", profile.name(), command, e.getMessage());
+            log.warn(LogDomain.TTS, "runtime.unavailable", LogOutcome.DEGRADED, fields(profile, "reason", "start_failed", "command", command, "error", e.getMessage()));
         }
     }
 
@@ -172,7 +170,7 @@ public class TtsRuntimeManager {
             return;
         }
         process.destroy();
-        log.info("[TTS运行时] TTS sidecar 进程已请求停止");
+        log.info(LogDomain.TTS, "runtime.stop_requested", LogOutcome.SUCCEEDED, Map.of());
     }
 
     /**
@@ -286,7 +284,7 @@ public class TtsRuntimeManager {
     private Path resolveWorkingDirectory(RuntimeProfile profile) {
         String configured = profile.runtime().getWorkingDirectory();
         if (!hasText(configured)) {
-            log.warn("[TTS运行时] 未配置 {} 工作目录", profile.name());
+            log.warn(LogDomain.TTS, "runtime.unavailable", LogOutcome.DEGRADED, fields(profile, "reason", "working_directory_not_configured"));
             return null;
         }
 
@@ -300,8 +298,7 @@ public class TtsRuntimeManager {
             return underBackend;
         }
 
-        log.info("[TTS运行时] {} 工作目录不存在，跳过自动启动: configured={}, direct={}, backendFallback={}",
-                profile.name(), configured, direct, underBackend);
+        log.info(LogDomain.TTS, "runtime.unavailable", LogOutcome.SKIPPED, fields(profile, "reason", "working_directory_missing", "configured", configured, "direct", direct, "backendFallback", underBackend));
         return null;
     }
 
@@ -372,7 +369,7 @@ public class TtsRuntimeManager {
             Thread.sleep(waitMs);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            log.warn("[TTS运行时] 等待 {} 启动时被中断", profile.name());
+            log.warn(LogDomain.TTS, "runtime.unavailable", LogOutcome.DEGRADED, fields(profile, "reason", "startup_wait_interrupted"));
         }
     }
 
@@ -449,6 +446,14 @@ public class TtsRuntimeManager {
      * @param baseUrl 健康检查基础地址
      * @param runtime 启动配置
      */
+    private Map<String, Object> fields(RuntimeProfile profile, Object... keyValues) {
+        Map<String, Object> fields = new java.util.LinkedHashMap<>();
+        fields.put("provider", profile.name());
+        for (int i = 0; i + 1 < keyValues.length; i += 2) {
+            fields.put(String.valueOf(keyValues[i]), keyValues[i + 1]);
+        }
+        return fields;
+    }
     private record RuntimeProfile(String name, String baseUrl, TtsConfig.RuntimeConfig runtime) {
     }
 }

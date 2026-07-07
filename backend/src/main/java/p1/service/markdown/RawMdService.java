@@ -1,9 +1,11 @@
 package p1.service.markdown;
 
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
+import p1.infrastructure.logging.LogDomain;
+import p1.infrastructure.logging.LogOutcome;
 import p1.infrastructure.markdown.assembler.RawMdAssembler;
 import p1.infrastructure.markdown.model.DialogueBatchMessage;
 import p1.infrastructure.markdown.model.MarkdownDocument;
@@ -22,7 +24,7 @@ import java.util.*;
  */
 @Service
 @RequiredArgsConstructor
-@Slf4j
+@CustomLog
 public class RawMdService {
 
     private static final DateTimeFormatter BATCH_ID_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
@@ -80,8 +82,7 @@ public class RawMdService {
                         null,
                         new ArrayList<>()
                 );
-                log.info("[对话批次] sessionId={} 新建 collecting，batchId={}，createdAt={}",
-                        sessionId, newCollecting.id(), lifecycleTime);
+                log.info(LogDomain.MEMORY, "batch.collecting_created", LogOutcome.SUCCEEDED, fields(sessionId, "batchId", newCollecting.id(), "createdAt", lifecycleTime));
                 return newCollecting;
             });
 
@@ -133,24 +134,25 @@ public class RawMdService {
      */
     public Optional<RawBatchDocument> promoteCollectingToProcessingIfReady(String sessionId, int triggerThreshold, int compressCount) {
         return sessionLockExecutor.execute(sessionId, "promoteCollectingToProcessingIfReady", () -> {
-            log.info("[对话批次] 开始处理 sessionId={} 的 processing", sessionId);
+            log.info(LogDomain.MEMORY, "batch.processing_started", LogOutcome.SUCCEEDED, fields(sessionId));
 
             Optional<RawBatchDocument> existingProcessing = findProcessing(sessionId);
             if (existingProcessing.isPresent()) {
                 RawBatchDocument processing = existingProcessing.get();
-                log.info("[对话批次] sessionId={} 已存在 processing，直接复用，batchId={}，消息数={}",
-                        sessionId, processing.id(), processing.messageCount());
+                log.info(LogDomain.MEMORY, "batch.processing_reused", LogOutcome.SUCCEEDED,
+                        fields(sessionId, "batchId", processing.id(), "messageCount", processing.messageCount()));
                 return existingProcessing;
             }
 
             RawBatchDocument collecting = loadCollectingForProcessing(sessionId, LocalDateTime.now()).orElse(null);
             if (collecting == null) {
-                log.info("[对话批次] sessionId={} 未找到collecting，尝试从 processing 恢复", sessionId);
+                log.info(LogDomain.MEMORY, "batch.recovered", LogOutcome.SKIPPED, fields(sessionId, "reason", "collecting_missing"));
                 return findProcessing(sessionId);
             }
             if (collecting.messageCount() < triggerThreshold) {
-                log.info("[对话批次] sessionId={} 的 collecting 尚未达到阈值，batchId={}，当前消息数={}，阈值={}",
-                        sessionId, collecting.id(), collecting.messageCount(), triggerThreshold);
+                log.info(LogDomain.MEMORY, "batch.promote_skipped", LogOutcome.SKIPPED,
+                        fields(sessionId, "batchId", collecting.id(), "messageCount", collecting.messageCount(),
+                                "threshold", triggerThreshold));
                 return Optional.empty();
             }
 
@@ -169,8 +171,7 @@ public class RawMdService {
                     processingMessages
             );
             dialogueBatchStore.saveProcessing(sessionId, processing);
-            log.info("[对话批次] sessionId={} collecting 已转为 processing，batchId={}，本次压缩消息数={}，collecting 总消息数={}",
-                    sessionId, processing.id(), processing.messageCount(), collecting.messageCount());
+            log.info(LogDomain.MEMORY, "batch.promoted", LogOutcome.SUCCEEDED, fields(sessionId, "batchId", processing.id(), "messageCount", processing.messageCount(), "collectingMessageCount", collecting.messageCount()));
             return Optional.of(processing);
         });
     }
@@ -184,7 +185,7 @@ public class RawMdService {
         sessionLockExecutor.execute(sessionId, "acknowledgeProcessing", () -> {
             RawBatchDocument processing = findProcessing(sessionId).orElse(null);
             if (processing == null) {
-                log.info("[对话批次] sessionId={} acknowledge 跳过，processing 不存在", sessionId);
+                log.info(LogDomain.MEMORY, "batch.acknowledge_skipped", LogOutcome.SKIPPED, fields(sessionId, "reason", "processing_missing"));
                 return;
             }
 
@@ -200,8 +201,7 @@ public class RawMdService {
 
                 if (remainingMessages.isEmpty()) {
                     dialogueBatchStore.deleteCollecting(sessionId);
-                    log.info("[对话批次] sessionId={} processing 确认完成，collecting 已清空，batchId={}",
-                            sessionId, processing.id());
+                    log.info(LogDomain.MEMORY, "batch.acknowledged", LogOutcome.SUCCEEDED, fields(sessionId, "batchId", processing.id()));
                 } else {
                     RawBatchDocument updatedCollecting = new RawBatchDocument(
                             collecting.id(),
@@ -213,16 +213,14 @@ public class RawMdService {
                             remainingMessages
                     );
                     dialogueBatchStore.saveCollecting(sessionId, updatedCollecting);
-                    log.info("[对话批次] sessionId={} processing 确认完成，collecting 已扣除已处理消息，batchId={}，剩余消息数={}",
-                            sessionId, processing.id(), updatedCollecting.messageCount());
+                    log.info(LogDomain.MEMORY, "batch.acknowledged", LogOutcome.SUCCEEDED, fields(sessionId, "batchId", processing.id(), "remainingMessageCount", updatedCollecting.messageCount()));
                 }
             } else {
-                log.info("[对话批次] sessionId={} processing 确认完成，本轮为独立 processing，batchId={}",
-                        sessionId, processing.id());
+                log.info(LogDomain.MEMORY, "batch.acknowledged", LogOutcome.SUCCEEDED, fields(sessionId, "batchId", processing.id()));
             }
 
             dialogueBatchStore.deleteProcessing(sessionId);
-            log.info("[对话批次] sessionId={} processing 已删除，batchId={}", sessionId, processing.id());
+            log.info(LogDomain.MEMORY, "batch.deleted", LogOutcome.SUCCEEDED, fields(sessionId, "batchId", processing.id()));
         });
     }
 
@@ -254,8 +252,7 @@ public class RawMdService {
             return Optional.of(collecting);
         }
         if (findProcessing(sessionId).isPresent()) {
-            log.info("[对话批次] collecting 已超时，但已有 processing 在执行，暂不封口 collecting，sessionId={}，batchId={}",
-                    sessionId, collecting.id());
+            log.info(LogDomain.MEMORY, "batch.seal_skipped", LogOutcome.SKIPPED, fields(sessionId, "batchId", collecting.id(), "reason", "processing_exists"));
             return Optional.of(collecting);
         }
 
@@ -277,8 +274,7 @@ public class RawMdService {
             return Optional.of(collecting);
         }
         if (findProcessing(sessionId).isPresent()) {
-            log.info("[对话批次] collecting 已超时，但已有 processing 在执行，等待当前 processing 完成后再处理 collecting，sessionId={}，batchId={}",
-                    sessionId, collecting.id());
+            log.info(LogDomain.MEMORY, "batch.seal_skipped", LogOutcome.SKIPPED, fields(sessionId, "batchId", collecting.id(), "reason", "processing_exists"));
             return Optional.empty();
         }
 
@@ -305,8 +301,15 @@ public class RawMdService {
         );
         dialogueBatchStore.saveProcessing(sessionId, processing);
         dialogueBatchStore.deleteCollecting(sessionId);
-        log.info("[对话批次] collecting 已转为 processing，sessionId={}，batchId={}，消息数={}，reason={}",
-                sessionId, processing.id(), processing.messageCount(), reason);
+        log.info(LogDomain.MEMORY, "batch.promoted", LogOutcome.SUCCEEDED, fields(sessionId, "batchId", processing.id(), "messageCount", processing.messageCount(), "reason", reason));
+    }
+    private Map<String, Object> fields(String sessionId, Object... keyValues) {
+        Map<String, Object> fields = new LinkedHashMap<>();
+        fields.put("session", sessionId);
+        for (int i = 0; i + 1 < keyValues.length; i += 2) {
+            fields.put(String.valueOf(keyValues[i]), keyValues[i + 1]);
+        }
+        return fields;
     }
 
     private boolean isCollectingExpired(RawBatchDocument collecting, LocalDateTime referenceTime) {

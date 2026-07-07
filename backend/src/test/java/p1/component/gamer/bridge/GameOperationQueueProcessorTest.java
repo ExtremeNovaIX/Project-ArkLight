@@ -6,11 +6,7 @@ import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 import dev.langchain4j.service.tool.ToolProviderResult;
 import org.junit.jupiter.api.Test;
 import p1.component.agent.gamer.adapter.GameAdapter;
-import p1.component.agent.gamer.adapter.core.GameAdapterContext;
-import p1.component.agent.gamer.adapter.core.GameActionWindowSignature;
-import p1.component.agent.gamer.adapter.core.GameOperationPrecondition;
-import p1.component.agent.gamer.adapter.core.GameStateSnapshot;
-import p1.component.agent.gamer.adapter.core.QueuedGameOperation;
+import p1.component.agent.gamer.adapter.core.*;
 import p1.component.agent.gamer.bridge.GameBridgeExecutionException;
 import p1.component.agent.gamer.bridge.queue.GameOperationBatchParser;
 import p1.component.agent.gamer.bridge.queue.GameOperationQueueProcessor;
@@ -22,7 +18,6 @@ import p1.component.agent.gamer.loop.ActiveGameRegistry;
 import p1.component.agent.interaction.InteractionCoordinator;
 import p1.component.agent.reasoning.ReasoningContentRecorder;
 import p1.config.mcp.MCPProperties;
-import p1.config.prop.AssistantProperties;
 
 import java.time.Duration;
 import java.util.ArrayDeque;
@@ -31,9 +26,7 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 class GameOperationQueueProcessorTest {
 

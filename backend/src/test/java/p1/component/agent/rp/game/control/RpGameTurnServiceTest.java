@@ -5,22 +5,14 @@ import org.junit.jupiter.api.Test;
 import p1.component.agent.gamer.loop.ActiveGameSession;
 import p1.component.agent.memory.ChatMemoryWritePolicy;
 import p1.component.agent.rp.context.SummaryCacheManager;
-import p1.component.agent.rp.core.CharacterPromptRegistry;
-import p1.component.agent.rp.core.RpAgent;
-import p1.component.agent.rp.core.RpGameReasoningEffort;
-import p1.component.agent.rp.core.RpGameReasoningUpgradeException;
-import p1.component.agent.rp.core.RpReasoningAgentFactory;
-import p1.component.agent.rp.core.RpSpeechTurnService;
-import p1.component.agent.rp.core.RpSystemPromptService;
+import p1.component.agent.rp.core.*;
 import p1.component.agent.rp.game.context.RpGameRuntimeInstructionContext;
 import p1.component.agent.rp.proactive.RpLiveMessageHub;
 import p1.component.agent.rp.proactive.RpProactiveSessionRegistry;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 class RpGameTurnServiceTest {
 

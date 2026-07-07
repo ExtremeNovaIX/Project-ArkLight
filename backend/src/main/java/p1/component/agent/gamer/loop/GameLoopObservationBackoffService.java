@@ -1,6 +1,6 @@
 package p1.component.agent.gamer.loop;
 
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 import org.springframework.stereotype.Component;
 import p1.config.mcp.GameLoopProperties;
 
@@ -15,7 +15,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * 不参与游戏生命周期、MCP 调用或 RP 决策。
  */
 @Component
-@Slf4j
+@CustomLog
 public class GameLoopObservationBackoffService {
 
     private final Map<String, ObservationState> states = new ConcurrentHashMap<>();

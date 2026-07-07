@@ -1,11 +1,15 @@
 package p1.component.agent.tts;
 
 import jakarta.annotation.PreDestroy;
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import p1.infrastructure.logging.LogDomain;
+import p1.infrastructure.logging.LogOutcome;
 
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -23,7 +27,7 @@ import static p1.utils.SessionUtil.normalizeSessionId;
  */
 @Service
 @RequiredArgsConstructor
-@Slf4j
+@CustomLog
 public class TtsSpeechService {
 
     private final TtsConfig config;
@@ -37,6 +41,14 @@ public class TtsSpeechService {
     private final AtomicBoolean runtimeNotReadyLogged = new AtomicBoolean(false);
     private final ExecutorService executor = Executors.newCachedThreadPool(new TtsThreadFactory());
 
+    private Map<String, Object> fields(Object... keyValues) {
+        Map<String, Object> fields = new LinkedHashMap<>();
+        for (int i = 0; i + 1 < keyValues.length; i += 2) {
+            fields.put(String.valueOf(keyValues[i]), keyValues[i + 1]);
+        }
+        return fields;
+    }
+
     /**
      * 打开一次 TTS 发言会话。
      *
@@ -48,29 +60,30 @@ public class TtsSpeechService {
         String normalizedSessionId = normalizeSessionId(sessionId);
         if (!config.enabled()) {
             if (disabledLogged.compareAndSet(false, true)) {
-                log.info("[TTS] TTS 未启用，跳过语音合成: provider={}, baseUrl={}",
-                        config.getProvider(), config.providerBaseUrl());
+                log.info(LogDomain.TTS, "speech.skipped", LogOutcome.SKIPPED,
+                        fields("reason", "disabled", "provider", config.getProvider(), "baseUrl", config.providerBaseUrl()));
             }
             return NoopTtsSpeechSession.INSTANCE;
         }
         if (!audioHub.hasSubscribers(normalizedSessionId)) {
             if (noSubscriberLogged.compareAndSet(false, true)) {
-                log.info("[TTS] 当前会话没有前端音频订阅，跳过语音合成: session={}", normalizedSessionId);
+                log.info(LogDomain.TTS, "speech.skipped", LogOutcome.SKIPPED,
+                        fields("session", normalizedSessionId, "reason", "no_audio_subscriber"));
             }
             return NoopTtsSpeechSession.INSTANCE;
         }
         TtsProvider provider = providerRegistry.activeProvider().orElse(null);
         if (provider == null || !provider.isAvailable()) {
             if (unavailableLogged.compareAndSet(false, true)) {
-                log.info("[TTS] 外部 TTS provider 不可用，跳过语音合成: provider={}, baseUrl={}",
-                        config.getProvider(), config.providerBaseUrl());
+                log.info(LogDomain.TTS, "speech.skipped", LogOutcome.SKIPPED,
+                        fields("reason", "provider_unavailable", "provider", config.getProvider(), "baseUrl", config.providerBaseUrl()));
             }
             return NoopTtsSpeechSession.INSTANCE;
         }
         if (runtimeManager.shouldWaitForManagedRuntime() && !runtimeManager.isManagedRuntimeReady()) {
             if (runtimeNotReadyLogged.compareAndSet(false, true)) {
-                log.info("[TTS] 本地 TTS 服务尚未就绪，跳过本次语音合成: session={}, baseUrl={}",
-                        normalizedSessionId, config.providerBaseUrl());
+                log.info(LogDomain.TTS, "speech.skipped", LogOutcome.SKIPPED,
+                        fields("session", normalizedSessionId, "reason", "runtime_not_ready", "baseUrl", config.providerBaseUrl()));
             }
             return NoopTtsSpeechSession.INSTANCE;
         }
@@ -307,8 +320,9 @@ public class TtsSpeechService {
                 chain = chain.thenRunAsync(() -> synthesizeAndPublish(currentSequence, text), executor)
                         .exceptionally(error -> {
                             if (!cancelled.get()) {
-                                log.warn("[TTS] 合成短句失败: session={}, sequence={}, text={}, reason={}",
-                                        sessionId, currentSequence, text, error.getMessage());
+                                log.warn(LogDomain.TTS, "speech.synthesis_failed", LogOutcome.DEGRADED,
+                                        fields("session", sessionId, "sequence", currentSequence,
+                                                "text", text, "reason", error.getMessage()));
                             }
                             return null;
                         });

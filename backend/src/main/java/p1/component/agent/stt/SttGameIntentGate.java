@@ -1,7 +1,9 @@
 package p1.component.agent.stt;
 
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 import org.springframework.stereotype.Service;
+import p1.infrastructure.logging.LogDomain;
+import p1.infrastructure.logging.LogOutcome;
 import p1.component.agent.interaction.GameCoordinationService;
 
 import java.time.Clock;
@@ -12,7 +14,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
 
 @Service
-@Slf4j
+@CustomLog
 public class SttGameIntentGate {
 
     static final String INTENT_WAIT = "WAIT";
@@ -152,8 +154,7 @@ public class SttGameIntentGate {
                 applySideEffect(rpSessionId, decision.intent(), decision.instruction());
             }
             rememberEffect(state, text, decision.intent(), decision.instruction(), signature, now);
-            log.info("[STT游戏语音门控] final 已消费: rpSession={}, intent={}, instruction={}",
-                    rpSessionId, decision.intent(), abbreviate(decision.instruction()));
+            log.info(LogDomain.STT, "stt.game_intent_consumed", LogOutcome.SUCCEEDED, "rpSessionId", rpSessionId, "intent", decision.intent(), "instruction", abbreviate(decision.instruction()));
             return Result.consumed(decision.intent(), 1.0, decision.instruction(), !dryRun, true, 0L,
                     dryRun ? "dry-run-would-trigger" : "triggered");
         }

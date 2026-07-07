@@ -1,11 +1,12 @@
 package p1.controller;
 
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import p1.infrastructure.logging.LogDomain;
+import p1.infrastructure.logging.LoggedOperation;
 import p1.infrastructure.mdc.ChatSessionMetrics;
 import p1.model.dto.ChatRequestDTO;
 import p1.service.ChatService;
@@ -20,11 +21,12 @@ import static p1.utils.SessionUtil.normalizeSessionId;
 @CrossOrigin
 @RequestMapping("/api/chat")
 @RequiredArgsConstructor
-@Slf4j
 public class ChatController {
 
     private final ChatService chatService;
     private final ChatSessionMetrics chatSessionMetrics;
+
+    @LoggedOperation(domain = LogDomain.HTTP, operation = "chat.send")
 
     @PostMapping("/send")
     public ResponseEntity<?> send(@RequestBody ChatRequestDTO request) {
@@ -40,7 +42,6 @@ public class ChatController {
             List<String> replyList = segment(rawReply, request.isShortMode());
             return ResponseEntity.ok(replyList);
         } catch (Exception e) {
-            log.warn("Chat request failed, sessionId={}, reason={}", sessionId, e.toString());
             return ResponseEntity
                     .status(statusFor(e))
                     .body(Map.of("message", userFacingError(e)));

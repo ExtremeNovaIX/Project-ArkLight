@@ -1,7 +1,12 @@
 package p1.component.agent.stt;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -10,9 +15,7 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -159,6 +162,41 @@ class SttServerManagerTest {
         assertFalse(manager.isRunning());
     }
 
+
+    @Test
+    void shouldLogExpectedUnavailableStatesWithoutErrorLevel() throws Exception {
+        Logger logger = (Logger) LoggerFactory.getLogger(SttServerManager.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+        try {
+            SttServerManager missingRuntime = new SttServerManager(
+                    new TestSttConfig(tempDir.resolve("missing-python.exe"), tempDir.resolve("sherpa_qwen_sidecar.py")),
+                    (host, port, timeoutMs) -> false,
+                    builder -> runningProcess());
+            missingRuntime.startIfConfigured();
+
+            SttServerManager unsupportedEngine = new SttServerManager(
+                    readyConfig(),
+                    (host, port, timeoutMs) -> true,
+                    builder -> runningProcess());
+            unsupportedEngine.startIfConfigured("funasr-2pass-win");
+
+            assertFalse(appender.list.stream().anyMatch(event -> event.getLevel() == Level.ERROR));
+            assertTrue(appender.list.stream()
+                    .map(ILoggingEvent::getFormattedMessage)
+                    .anyMatch(message -> message.contains("domain=STT")
+                            && message.contains("event=sidecar.unavailable")
+                            && message.contains("reason=runtime_missing")));
+            assertTrue(appender.list.stream()
+                    .map(ILoggingEvent::getFormattedMessage)
+                    .anyMatch(message -> message.contains("domain=STT")
+                            && message.contains("event=engine.unsupported")));
+        } finally {
+            logger.detachAppender(appender);
+            appender.stop();
+        }
+    }
     private TestSttConfig readyConfig() throws Exception {
         Path python = tempDir.resolve("python.exe");
         Path script = tempDir.resolve("sherpa_qwen_sidecar.py");

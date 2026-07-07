@@ -1,9 +1,11 @@
 package p1.service.archive.graph;
 
+import lombok.CustomLog;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import p1.infrastructure.logging.LogDomain;
+import p1.infrastructure.logging.LogOutcome;
 import p1.component.agent.memory.model.ArchiveLink;
 import p1.model.document.MemoryArchiveDocument;
 import p1.service.markdown.MemoryArchiveStore;
@@ -16,7 +18,7 @@ import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
-@Slf4j
+@CustomLog
 public class ArchiveLinkService {
 
     private final MemoryArchiveStore archiveStore;
@@ -51,8 +53,7 @@ public class ArchiveLinkService {
         }
 
         MemoryArchiveDocument saved = archiveStore.save(latestSource);
-        log.info("[Archive 连边] 已写入出边，sourceArchiveId={}，targetArchiveId={}，relation={}",
-                saved.getId(), targetArchiveId, normalize(relation));
+        log.info(LogDomain.MEMORY, "archive.link_created", LogOutcome.SUCCEEDED, "archiveId", saved.getId(), "targetArchiveId", targetArchiveId, "relation", normalize(relation));
         return saved;
     }
 
@@ -76,7 +77,7 @@ public class ArchiveLinkService {
         MemoryArchiveDocument rightArchive = archiveStore.findById(rightArchiveId).orElse(null);
 
         if (leftArchive == null || rightArchive == null) {
-            log.warn("[Archive 连边] 跳过双向边，archive 不存在，sessionId={}，leftArchiveId={}，rightArchiveId={}", normalizedSessionId, leftArchiveId, rightArchiveId);
+            log.warn(LogDomain.MEMORY, "archive.link_skipped", LogOutcome.DEGRADED, "sessionId", normalizedSessionId, "leftArchiveId", leftArchiveId, "rightArchiveId", rightArchiveId);
             return;
         }
 

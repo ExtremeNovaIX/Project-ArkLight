@@ -4,9 +4,11 @@ import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.service.tool.ToolProvider;
 import dev.langchain4j.service.tool.ToolProviderRequest;
 import dev.langchain4j.service.tool.ToolProviderResult;
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import p1.infrastructure.logging.LogDomain;
+import p1.infrastructure.logging.LogOutcome;
 import p1.component.agent.gamer.GameSessionKey;
 import p1.component.agent.gamer.GamerMCPClientFactory;
 import p1.component.agent.gamer.adapter.GameAdapter;
@@ -23,11 +25,8 @@ import p1.config.mcp.MCPProperties;
  */
 @Service
 @RequiredArgsConstructor
-@Slf4j
+@CustomLog
 public class RpCurrentGameContextService {
-
-    private static final String COMPUTED_VALUE_TIP = "- 当前展示的伤害、格挡、费用、意图等数值已经是游戏在当前 buff/debuff 下计算后的结果。";
-    private static final String DECISION_FOCUS_HEADING = "## 本步决策重点";
 
     private final GamerMCPClientFactory mcpClientFactory;
     private final MCPProperties mcpProperties;
@@ -56,10 +55,9 @@ public class RpCurrentGameContextService {
             GameStateSnapshot state = adapter.fetchState(context);
             String actionSummary = adapter.renderAvailableOperationSummary(context, state);
             String stateSummary = adapter.renderStateForAgent(state);
-            return render(actionSummary, config.getTips(), stateSummary);
+            return render(actionSummary, adapter.tips(), stateSummary);
         } catch (Exception e) {
-            log.warn("[RP游戏状态] 获取当前游戏状态失败: game={}, session={}, reason={}",
-                    gameName, sessionId, e.getMessage());
+            log.warn(LogDomain.GAME, "game.context_render_failed", LogOutcome.DEGRADED, "gameName", gameName, "sessionId", sessionId, "reason", e.getMessage());
             return "<current_game_state>\nstate_error=" + e.getMessage() + "\n</current_game_state>";
         }
     }
@@ -87,7 +85,7 @@ public class RpCurrentGameContextService {
     private String insertTipsBeforeDecisionFocus(String stateSummary, String tips) {
         String renderedState = stateSummary == null || stateSummary.isBlank() ? "(未能获取 STS2 状态)" : stateSummary;
         String tipsBlock = renderTips(tips);
-        int decisionFocusStart = renderedState.indexOf(DECISION_FOCUS_HEADING);
+        int decisionFocusStart = renderedState.indexOf("## 本步决策重点");
         if (decisionFocusStart < 0) {
             return renderedState.stripTrailing() + "\n\n" + tipsBlock;
         }
@@ -102,9 +100,10 @@ public class RpCurrentGameContextService {
         if (tips != null && !tips.isBlank()) {
             sb.append(tips.trim()).append("\n");
         }
-        sb.append(COMPUTED_VALUE_TIP).append("\n</tips>\n");
+        sb.append("</tips>\n");
         return sb.toString();
     }
+
     /**
      * 获取并校验游戏 MCP 配置。
      *

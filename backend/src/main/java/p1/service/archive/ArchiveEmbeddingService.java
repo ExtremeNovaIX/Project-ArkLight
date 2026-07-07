@@ -3,11 +3,13 @@ package p1.service.archive;
 import dev.langchain4j.data.document.Metadata;
 import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.store.embedding.EmbeddingMatch;
+import lombok.CustomLog;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
 import org.springframework.stereotype.Service;
+import p1.infrastructure.logging.LogDomain;
+import p1.infrastructure.logging.LogOutcome;
 import p1.infrastructure.vector.ArchiveVectorLibrary;
 import p1.infrastructure.vector.MemoryVectorDocument;
 import p1.infrastructure.vector.MemoryVectorDocumentIds;
@@ -21,7 +23,7 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
-@Slf4j
+@CustomLog
 public class ArchiveEmbeddingService {
 
     private final EmbeddingService embeddingService;
@@ -77,13 +79,12 @@ public class ArchiveEmbeddingService {
                 embeddingService.indexDocument(normalizedSessionId, library.rootLibrary(), document);
                 indexedDocumentIds.add(document.documentId());
             }
-            log.info("[Archive 向量写入] sessionId={} 完成，library={}，documentCount={}",
-                    normalizedSessionId, library.name(), indexedDocumentIds.size());
+            log.info(LogDomain.MEMORY, "vector.write_completed", LogOutcome.SUCCEEDED, fields(normalizedSessionId, library, "documentCount", indexedDocumentIds.size()));
             return List.copyOf(indexedDocumentIds);
         } catch (RuntimeException e) {
             if (library == ArchiveVectorLibrary.ARCHIVE && shouldFallbackToRebuild(e)) {
-                log.warn("[Archive 向量降级] sessionId={} 的长期 archive 增量写入失败，改为全量重建",
-                        normalizedSessionId, e);
+                log.warn(LogDomain.MEMORY, "vector.rebuild_fallback", LogOutcome.DEGRADED,
+                        fields(normalizedSessionId, library, "reason", e.getMessage()), e);
                 rebuildArchiveEmbeddings(normalizedSessionId);
                 return documents.stream().map(MemoryVectorDocument::documentId).toList();
             }
@@ -240,7 +241,7 @@ public class ArchiveEmbeddingService {
 
         String archiveIdText = match.embedded().metadata().getString("archive_id");
         if (archiveIdText == null || archiveIdText.isBlank()) {
-            log.warn("[向量检索结果跳过] 命中结果缺少 archive_id 元数据");
+            log.warn(LogDomain.MEMORY, "vector.match_skipped", LogOutcome.DEGRADED, fields(currentSessionId(), null, "reason", "missing_archive_id"));
             return null;
         }
 
@@ -248,13 +249,13 @@ public class ArchiveEmbeddingService {
         try {
             archiveId = Long.parseLong(archiveIdText);
         } catch (NumberFormatException e) {
-            log.warn("[向量检索结果跳过] 命中结果的 archive_id={} 不是有效数字", archiveIdText);
+            log.warn(LogDomain.MEMORY, "vector.match_skipped", LogOutcome.DEGRADED, fields(currentSessionId(), null, "reason", "invalid_archive_id", "archiveId", archiveIdText));
             return null;
         }
 
         MemoryArchiveDocument archive = archiveStore.findById(archiveId).orElse(null);
         if (archive == null) {
-            log.warn("[向量检索结果跳过] archive_id={} 对应的 archive 不存在", archiveId);
+            log.warn(LogDomain.MEMORY, "vector.match_skipped", LogOutcome.DEGRADED, fields(currentSessionId(), null, "reason", "archive_missing", "archiveId", archiveId));
             return null;
         }
 
@@ -278,9 +279,18 @@ public class ArchiveEmbeddingService {
 
         String detailedSummary = normalize(archive.getNarrative());
         if (!detailedSummary.isBlank()) {
-            log.warn("[向量索引文本降级] archiveId={} 缺少 keywordSummary，改用 detailedSummary 写入向量库", archive.getId());
+            log.warn(LogDomain.MEMORY, "vector.index_text_fallback", LogOutcome.DEGRADED, fields(archive.getSessionId(), ArchiveVectorLibrary.ARCHIVE, "archiveId", archive.getId(), "reason", "keyword_summary_missing"));
         }
         return detailedSummary;
+    }
+    private Map<String, Object> fields(String sessionId, ArchiveVectorLibrary library, Object... keyValues) {
+        Map<String, Object> fields = new LinkedHashMap<>();
+        fields.put("session", sessionId);
+        fields.put("library", library == null ? null : library.name());
+        for (int i = 0; i + 1 < keyValues.length; i += 2) {
+            fields.put(String.valueOf(keyValues[i]), keyValues[i + 1]);
+        }
+        return fields;
     }
 
     private List<MemoryArchiveDocument> persistedArchives(List<MemoryArchiveDocument> archives) {

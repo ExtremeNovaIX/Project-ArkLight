@@ -354,11 +354,10 @@ QList<ConfigDefinition> buildDefinitions() {
         ConfigDefinition{
             QStringLiteral("mcp-catalog.yaml"),
             QStringLiteral("MCP 游戏目录"),
-            QStringLiteral("配置本地 MCP 游戏服务展示信息和 RP 可见策略提示。"),
+            QStringLiteral("配置本地 MCP 游戏服务展示信息。"),
             {
                 text(QStringLiteral("mcp.catalog.STS2MCP.display-name"), QStringLiteral("显示名称"), QStringLiteral("前端和日志里展示的游戏名称。")),
                 textarea(QStringLiteral("mcp.catalog.STS2MCP.description"), QStringLiteral("说明"), QStringLiteral("MCP 条目的用途和安装前提。")),
-                listField(QStringLiteral("mcp.catalog.STS2MCP.gameplay-guidelines"), QStringLiteral("游戏策略提示"), QStringLiteral("每行一条注入给 RP 游戏控制协议的策略提示。"))
             }
         }
     };

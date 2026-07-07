@@ -1,8 +1,10 @@
 package p1.infrastructure.vector;
 
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import p1.infrastructure.logging.LogDomain;
+import p1.infrastructure.logging.LogOutcome;
 import p1.config.prop.AssistantProperties;
 import p1.utils.SessionUtil;
 
@@ -17,7 +19,7 @@ import java.util.concurrent.ConcurrentMap;
  */
 @Service
 @RequiredArgsConstructor
-@Slf4j
+@CustomLog
 public class SessionMemoryVectorStoreFactory {
 
     private final AssistantProperties props;
@@ -32,8 +34,7 @@ public class SessionMemoryVectorStoreFactory {
         StoreKey key = new StoreKey(normalizedSessionId, library);
         return stores.computeIfAbsent(key, ignored -> {
             Path storePath = resolveStorePath(normalizedSessionId, library);
-            log.info("初始化 sessionId={} 的向量库，library={}，path={}",
-                    normalizedSessionId, library.name(), storePath);
+            log.info(LogDomain.MEMORY, "vector.store_created", LogOutcome.SUCCEEDED, "sessionId", normalizedSessionId, "library", library.name(), "storePath", storePath);
             return new LuceneMemoryVectorStore(storePath);
         });
     }

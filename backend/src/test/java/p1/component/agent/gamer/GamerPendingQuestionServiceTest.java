@@ -12,7 +12,6 @@ import p1.component.agent.interaction.InteractionCoordinator;
 import p1.component.agent.rp.proactive.RpProactiveSessionRegistry;
 import p1.component.agent.tts.TtsSpeechService;
 import p1.component.agent.tts.TtsSpeechSession;
-import p1.config.prop.AssistantProperties;
 import p1.utils.ChatMessageUtil;
 
 import java.lang.reflect.Method;

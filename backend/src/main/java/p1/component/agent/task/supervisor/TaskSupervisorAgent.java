@@ -2,12 +2,14 @@ package p1.component.agent.task.supervisor;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.data.message.ChatMessageDeserializer;
+import lombok.CustomLog;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
+import p1.infrastructure.logging.LogDomain;
+import p1.infrastructure.logging.LogOutcome;
 import p1.component.agent.task.checker.TaskCheckerAgent;
 import p1.component.agent.task.checker.TaskCheckerVerdict;
 import p1.component.agent.task.context.TaskBlackboardRenderer;
@@ -35,7 +37,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 @RequiredArgsConstructor
-@Slf4j
+@CustomLog
 @Service
 public class TaskSupervisorAgent {
 
@@ -64,14 +66,13 @@ public class TaskSupervisorAgent {
         try {
             return execute(context);
         } catch (TaskSupervisorRoundLimitExceededException e) {
-            log.warn("[TaskSupervisor] 工具轮次超限, taskRunId={}, sessionId={}, usedRounds={}, maxRounds={}, toolName={}",
-                    e.taskRunId(), context.sessionId(), context.toolbox().usedRounds(), e.maxRounds(), e.toolName());
+            log.warn(LogDomain.GAME, "supervisor.round_limit_exceeded", LogOutcome.DEGRADED, "taskRunId", e.taskRunId(), "sessionId", context.sessionId(), "usedRounds", context.toolbox().usedRounds(), "maxRounds", e.maxRounds(), "toolName", e.toolName());
             return TaskExecuteResult.timeout(context.taskRunId(), "supervisor_round_limit_exceeded");
         } catch (TaskCheckerException e) {
-            log.error("[TaskSupervisor] checker 调用失败, taskRunId={}, sessionId={}", context.taskRunId(), context.sessionId(), e);
+            log.error(LogDomain.GAME, "supervisor.checker_failed", LogOutcome.FAILED, e, "taskRunId", context.taskRunId(), "sessionId", context.sessionId());
             return TaskExecuteResult.failed(context.taskRunId(), "checker_invocation_failed", "后端助手验收失败。");
         } catch (RuntimeException e) {
-            log.error("[TaskSupervisor] supervisor 调用失败, taskRunId={}, sessionId={}", context.taskRunId(), context.sessionId(), e);
+            log.error(LogDomain.GAME, "supervisor.checker_failed", LogOutcome.FAILED, e, "taskRunId", context.taskRunId(), "sessionId", context.sessionId());
             return TaskExecuteResult.failed(context.taskRunId(), "supervisor_invocation_failed", "后端助手执行失败。");
         }
     }
@@ -83,8 +84,7 @@ public class TaskSupervisorAgent {
             SupervisorAttempt attempt = runSupervisorAttempt(context, currentInstruction);
             if (attempt.isWorking()) {
                 if (!attempt.hasProgress()) {
-                    log.warn("[TaskSupervisor] supervisor 返回 WORKING 但没有推进, taskRunId={}, sessionId={}, usedRounds={}",
-                            context.taskRunId(), context.sessionId(), context.toolbox().usedRounds());
+                    log.warn(LogDomain.GAME, "supervisor.no_progress", LogOutcome.DEGRADED, "taskRunId", context.taskRunId(), "sessionId", context.sessionId(), "usedRounds", context.toolbox().usedRounds());
                     return TaskExecuteResult.failed(context.taskRunId(), "supervisor_working_without_progress");
                 }
                 continue;
@@ -150,8 +150,7 @@ public class TaskSupervisorAgent {
             return AttemptResolution.finalResult(TaskExecuteResult.failed(context.taskRunId(), "checker_retry_limit_exceeded"));
         }
 
-        log.info("[TaskSupervisor] checker 要求重试, taskRunId={}, sessionId={}, checkerAttempt={}, usedRounds={}, instruction={}",
-                context.taskRunId(), context.sessionId(), checkerAttempt + 1, context.toolbox().usedRounds(), retryInstruction);
+        log.info(LogDomain.GAME, "supervisor.retry_requested", LogOutcome.SUCCEEDED, "taskRunId", context.taskRunId(), "sessionId", context.sessionId(), "checkerAttempt", checkerAttempt + 1, "usedRounds", context.toolbox().usedRounds(), "retryInstruction", retryInstruction);
         return AttemptResolution.nextInstruction(retryInstruction);
     }
 
@@ -159,8 +158,7 @@ public class TaskSupervisorAgent {
         List<TaskSupervisorBlackboardEntry> visibleEntries = context.blackboard().snapshotEntries();
         List<String> visibleEvidenceIds = context.blackboard().snapshotEvidenceIds();
         String responseText = resultRenderer.renderApprovedResponse(visibleEntries);
-        log.info("[TaskSupervisor] 任务完成, taskRunId={}, sessionId={}, visibleEvidenceCount={}, usedRounds={}",
-                context.taskRunId(), context.sessionId(), visibleEvidenceIds.size(), context.toolbox().usedRounds());
+        log.info(LogDomain.GAME, "supervisor.approved", LogOutcome.SUCCEEDED, "taskRunId", context.taskRunId(), "sessionId", context.sessionId(), "evidenceCount", visibleEvidenceIds.size(), "usedRounds", context.toolbox().usedRounds());
         return TaskExecuteResult.completed(context.taskRunId(), responseText, visibleEvidenceIds);
     }
 

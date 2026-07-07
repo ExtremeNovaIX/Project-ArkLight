@@ -5,7 +5,6 @@
     <timestamp key="START_TIME" datePattern="yyyy-MM-dd_HH-mm-ss" timeReference="contextBirth" />
 
     <property name="LOG_PATTERN" value="%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} -%replace(%X{sessionId}){ '(.+)', ' [LLM:$1]' }%replace(%X{serviceInfo}){ '(.+)', ' [$1]' } %msg%n" />
-
     <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
             <pattern>${LOG_PATTERN}</pattern>
@@ -19,6 +18,7 @@
             <pattern>${LOG_PATTERN}</pattern>
         </encoder>
     </appender>
+
 
     <root level="INFO">
         <appender-ref ref="STDOUT" />

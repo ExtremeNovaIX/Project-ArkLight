@@ -1,7 +1,7 @@
 package p1.component.agent.rp.proactive;
 
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -23,7 +23,7 @@ import static p1.utils.SessionUtil.normalizeSessionId;
  */
 @Component
 @RequiredArgsConstructor
-@Slf4j
+@CustomLog
 public class RpLiveMessageHub {
 
     private static final long EMITTER_TIMEOUT_MS = 0L;

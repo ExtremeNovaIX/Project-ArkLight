@@ -4,24 +4,20 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 import p1.component.agent.gamer.adapter.core.GameAdapterContext;
 import p1.component.agent.gamer.adapter.core.GameBridgeException;
 import p1.component.agent.gamer.adapter.core.GameStateSnapshot;
 import p1.component.agent.gamer.adapter.core.QueuedGameOperation;
 
-import java.util.ArrayList;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Locale;
-import java.util.Set;
+import java.util.*;
 
 /**
  * STS2 操作执行前修复器。
  * <p>
  * RP/parser 可以用更自然的牌名、选项名表达动作；执行前由该组件翻译成当前状态下的 MCP 参数。
  */
-@Slf4j
+@CustomLog
 public class STS2OperationRepairer {
 
     private final ObjectMapper objectMapper = new ObjectMapper();

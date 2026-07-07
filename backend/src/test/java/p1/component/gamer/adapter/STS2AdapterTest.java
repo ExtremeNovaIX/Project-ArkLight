@@ -7,13 +7,8 @@ import dev.langchain4j.agent.tool.ToolSpecification;
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 import dev.langchain4j.service.tool.ToolProviderResult;
 import org.junit.jupiter.api.Test;
-import p1.component.agent.gamer.adapter.core.GameBridgeException;
-import p1.component.agent.gamer.adapter.core.GameAdapterContext;
-import p1.component.agent.gamer.adapter.core.GameActionWindowSignature;
-import p1.component.agent.gamer.adapter.core.GameOperation;
-import p1.component.agent.gamer.adapter.core.GameStateSnapshot;
-import p1.component.agent.gamer.adapter.core.QueuedGameOperation;
 import p1.component.agent.gamer.adapter.STS2Adapter;
+import p1.component.agent.gamer.adapter.core.*;
 import p1.config.mcp.MCPProperties;
 
 import java.util.ArrayDeque;
@@ -27,6 +22,17 @@ class STS2AdapterTest {
 
     private final STS2Adapter adapter = new STS2Adapter();
     private final ObjectMapper objectMapper = new ObjectMapper();
+
+    @Test
+    void shouldExposeRpTipsForCurrentGameContext() {
+        String tips = adapter.tips();
+
+        assertTrue(tips.startsWith("- 卡牌与敌方意图的当前显示值均视为已结算面板值"));
+        assertTrue(tips.contains("禁止重复应用已体现的自身/来源侧修正"));
+        assertTrue(tips.contains("- 杀戮尖塔使用向下取整算数"));
+        assertTrue(tips.contains("- 抽牌、弃牌、随机、领取奖励、打开选择界面等会改变行动窗口的操作必须放在本批队列末尾"));
+        assertFalse(tips.contains("<tips>"));
+    }
 
     @Test
     void shouldRepairPlayCardIndexByCardName() throws Exception {

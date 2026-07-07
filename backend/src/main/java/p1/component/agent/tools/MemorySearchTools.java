@@ -1,11 +1,13 @@
 package p1.component.agent.tools;
 
 import lombok.AllArgsConstructor;
+import lombok.CustomLog;
 import lombok.NonNull;
-import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
+import p1.infrastructure.logging.LogDomain;
+import p1.infrastructure.logging.LogOutcome;
 import p1.component.agent.memory.model.ArchiveLink;
 import p1.infrastructure.vector.ArchiveVectorLibrary;
 import p1.model.document.MemoryArchiveDocument;
@@ -18,7 +20,7 @@ import java.util.*;
 
 import static p1.utils.SessionUtil.normalizeSessionId;
 
-@Slf4j
+@CustomLog
 @Component
 @AllArgsConstructor
 public class MemorySearchTools {
@@ -43,7 +45,7 @@ public class MemorySearchTools {
 
         String trimmedQuery = query.trim();
         String sessionId = normalizeSessionId(MDC.get("sessionId"));
-        log.info("[记忆工具] 开始检索长期记忆，sessionId={}，query={}", sessionId, trimmedQuery);
+        log.info(LogDomain.RUNTIME, "memory.search_started", LogOutcome.SUCCEEDED, "sessionId", sessionId, "query", trimmedQuery);
 
         List<ArchiveEmbeddingService.ArchiveVectorMatch> matches = archiveEmbeddingService.searchArchiveMatches(
                 sessionId,
@@ -53,7 +55,7 @@ public class MemorySearchTools {
                 MIN_MATCH_SCORE
         );
         if (matches.isEmpty()) {
-            log.info("[记忆工具] 未检索到相关长期记忆，sessionId={}，query={}", sessionId, trimmedQuery);
+            log.info(LogDomain.RUNTIME, "memory.search_invalid", LogOutcome.SKIPPED, "sessionId", sessionId, "query", trimmedQuery);
             return new MemorySearchResult(
                     trimmedQuery,
                     STATUS_EMPTY,
@@ -87,7 +89,7 @@ public class MemorySearchTools {
         }
 
         if (bundles.isEmpty()) {
-            log.info("[记忆工具] 命中结果无法还原为有效节点，sessionId={}，query={}", sessionId, trimmedQuery);
+            log.info(LogDomain.RUNTIME, "memory.search_empty", LogOutcome.SKIPPED, "sessionId", sessionId, "query", trimmedQuery);
             return new MemorySearchResult(
                     trimmedQuery,
                     STATUS_EMPTY,
@@ -97,7 +99,7 @@ public class MemorySearchTools {
             );
         }
 
-        log.info("[记忆工具] 长期记忆检索完成，sessionId={}，命中组数={}，query={}", sessionId, bundles.size(), trimmedQuery);
+        log.info(LogDomain.RUNTIME, "memory.search_completed", LogOutcome.SUCCEEDED, "sessionId", sessionId, "bundleCount", bundles.size(), "query", trimmedQuery);
         return new MemorySearchResult(trimmedQuery, STATUS_OK, "已检索到相关长期记忆。", List.copyOf(bundles), truncated);
     }
 

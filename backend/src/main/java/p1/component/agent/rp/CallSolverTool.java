@@ -1,17 +1,19 @@
 package p1.component.agent.rp;
 
 import dev.langchain4j.agent.tool.Tool;
+import lombok.CustomLog;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
+import p1.infrastructure.logging.LogDomain;
+import p1.infrastructure.logging.LogOutcome;
 import p1.component.agent.task.state.TaskExecuteResult;
 import p1.component.agent.task.supervisor.TaskSupervisorAgent;
 
 @Component
 @RequiredArgsConstructor
-@Slf4j
+@CustomLog
 public class CallSolverTool {
 
     private final TaskSupervisorAgent taskSupervisorAgent;
@@ -30,12 +32,11 @@ public class CallSolverTool {
             return "后端助手请求不能为空。";
         }
         String request = rawRequest.trim();
-        log.info("[TaskSupervisorTool] 请求转发给后端助手，请求内容={}", request);
+        log.info(LogDomain.GAME, "solver.request_received", LogOutcome.SUCCEEDED, "request", request);
 
         TaskExecuteResult result = taskSupervisorAgent.handle(request);
 
-        log.info("[TaskSupervisorTool] 后端助手执行结束，status={}，reasonCode={}，taskRunId={}",
-                result.status(), result.reasonCode(), result.taskRunId());
+        log.info(LogDomain.GAME, "solver.completed", LogOutcome.SUCCEEDED, "status", result.status(), "reasonCode", result.reasonCode(), "taskRunId", result.taskRunId());
 
         if (result.status() == TaskExecuteResult.Status.TIMEOUT) {
             return "工具调用超时";

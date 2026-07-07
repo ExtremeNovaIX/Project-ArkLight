@@ -1,6 +1,6 @@
 package p1.aop;
 
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
@@ -9,7 +9,7 @@ import org.springframework.stereotype.Component;
 
 @Aspect
 @Component
-@Slf4j
+@CustomLog
 public class AiServiceLogAspect {
 
     @Around("execution(* p1.component.ai.service.*.*(..))")

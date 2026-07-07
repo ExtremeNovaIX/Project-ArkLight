@@ -1,6 +1,6 @@
 package p1.component.agent.rp.proactive;
 
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
@@ -20,7 +20,7 @@ import static p1.utils.SessionUtil.normalizeSessionId;
  * 这样空闲扫描不会对已经关闭的前端继续调用 LLM。
  */
 @Component
-@Slf4j
+@CustomLog
 public class RpProactiveSessionRegistry {
 
     private final ConcurrentMap<String, SessionState> sessions = new ConcurrentHashMap<>();

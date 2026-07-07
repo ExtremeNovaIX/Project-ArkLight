@@ -5,7 +5,7 @@ import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.store.embedding.EmbeddingMatch;
 import dev.langchain4j.store.embedding.EmbeddingSearchResult;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 import org.apache.lucene.analysis.core.KeywordAnalyzer;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.KnnFloatVectorField;
@@ -19,6 +19,8 @@ import org.apache.lucene.search.TopDocs;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.FSDirectory;
 
+import p1.infrastructure.logging.LogDomain;
+import p1.infrastructure.logging.LogOutcome;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
@@ -29,7 +31,7 @@ import java.util.Map;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
-@Slf4j
+@CustomLog
 public class LuceneMemoryVectorStore implements MemoryVectorStore {
 
     private static final String FIELD_DOC_ID = "doc_id";
@@ -167,7 +169,7 @@ public class LuceneMemoryVectorStore implements MemoryVectorStore {
                 writer.addDocument(toLuceneDocument(document));
             }
             writer.commit();
-            log.info("[Lucene 向量重建] 已完成全量重建，共写入 {} 条文档。", documents.size());
+            log.info(LogDomain.MEMORY, "vector.index_rebuilt", LogOutcome.SUCCEEDED, "documentCount", documents.size());
         } catch (IOException e) {
             throw new UncheckedIOException("重建 Lucene 向量索引失败", e);
         } finally {

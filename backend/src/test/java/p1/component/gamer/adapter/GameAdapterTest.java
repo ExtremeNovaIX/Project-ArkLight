@@ -13,10 +13,7 @@ import p1.config.mcp.MCPProperties;
 
 import java.util.Arrays;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertSame;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 class GameAdapterTest {
 
@@ -33,6 +30,13 @@ class GameAdapterTest {
         config.setAdapter("TEST");
 
         assertTrue(adapter.supports("any-game", config));
+    }
+
+    @Test
+    void shouldDefaultToNoRpTips() {
+        TestAdapter adapter = new TestAdapter();
+
+        assertEquals("", adapter.tips());
     }
 
     @Test

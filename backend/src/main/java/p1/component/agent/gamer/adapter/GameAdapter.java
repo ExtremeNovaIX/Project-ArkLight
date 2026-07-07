@@ -3,13 +3,7 @@ package p1.component.agent.gamer.adapter;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
-import p1.component.agent.gamer.adapter.core.GameActionWindowSignature;
-import p1.component.agent.gamer.adapter.core.GameActionability;
-import p1.component.agent.gamer.adapter.core.GameAdapterContext;
-import p1.component.agent.gamer.adapter.core.GameOperation;
-import p1.component.agent.gamer.adapter.core.GameOperationPrecondition;
-import p1.component.agent.gamer.adapter.core.GameStateSnapshot;
-import p1.component.agent.gamer.adapter.core.QueuedGameOperation;
+import p1.component.agent.gamer.adapter.core.*;
 import p1.config.mcp.MCPProperties;
 
 import java.util.ArrayDeque;
@@ -32,6 +26,15 @@ public abstract class GameAdapter {
      * @return 配置中 mcp.games.*.adapter 使用的适配器标识
      */
     public abstract String id();
+
+    /**
+     * 返回注入 RP 当前游戏上下文的策略提示。
+     *
+     * @return 适合放入 tips 块的多行文本；无提示时返回空字符串
+     */
+    public String tips() {
+        return "";
+    }
 
     /**
      * 判断该适配器是否支持当前游戏配置。

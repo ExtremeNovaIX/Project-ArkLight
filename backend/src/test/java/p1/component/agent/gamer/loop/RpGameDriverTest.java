@@ -10,7 +10,6 @@ import p1.component.agent.rp.game.control.RpGameActionExecutionException;
 import p1.component.agent.rp.game.control.RpGameTurnService;
 import p1.component.agent.rp.proactive.RpProactiveSessionRegistry;
 import p1.config.mcp.GameLoopProperties;
-import p1.config.prop.AssistantProperties;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
@@ -18,17 +17,9 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyBoolean;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
 
 class RpGameDriverTest {
 

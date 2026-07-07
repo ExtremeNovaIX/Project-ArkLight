@@ -2,9 +2,11 @@ package p1.config.mcp.registry;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import p1.config.mcp.MCPProperties;
+import p1.infrastructure.logging.LogDomain;
+import p1.infrastructure.logging.LogOutcome;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -13,7 +15,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 @RequiredArgsConstructor
-@Slf4j
+@CustomLog
 public final class McpRegistryFileStore {
     private final ObjectMapper objectMapper;
 
@@ -26,10 +28,10 @@ public final class McpRegistryFileStore {
             Map<String, MCPProperties.GameMCPConfig> entries = objectMapper.readValue(
                     json, new TypeReference<LinkedHashMap<String, MCPProperties.GameMCPConfig>>() {
                     });
-            log.info("[MCP] 已加载注册表: {} 个条目", entries.size());
+            log.info(LogDomain.MCP, "registry.loaded", LogOutcome.SUCCEEDED, fields(registryFile, "entries", entries.size()));
             return new LinkedHashMap<>(entries);
         } catch (IOException e) {
-            log.error("[MCP] 加载注册表失败: {}", e.toString());
+            log.error(LogDomain.MCP, "registry.load_failed", LogOutcome.FAILED, fields(registryFile, "reason", e.toString()), e);
             return new LinkedHashMap<>();
         }
     }
@@ -41,9 +43,17 @@ public final class McpRegistryFileStore {
                 Files.createDirectories(parent);
             }
             objectMapper.writeValue(registryFile.toFile(), registered);
-            log.info("[MCP] 已保存注册表: {} 个条目", registered.size());
+            log.info(LogDomain.MCP, "registry.saved", LogOutcome.SUCCEEDED, fields(registryFile, "entries", registered.size()));
         } catch (IOException e) {
-            log.error("[MCP] 保存注册表失败: {}", e.toString());
+            log.error(LogDomain.MCP, "registry.load_failed", LogOutcome.FAILED, fields(registryFile, "reason", e.toString()), e);
         }
+    }
+    private Map<String, Object> fields(Path registryFile, Object... keyValues) {
+        Map<String, Object> fields = new LinkedHashMap<>();
+        fields.put("file", registryFile);
+        for (int i = 0; i + 1 < keyValues.length; i += 2) {
+            fields.put(String.valueOf(keyValues[i]), keyValues[i + 1]);
+        }
+        return fields;
     }
 }

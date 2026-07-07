@@ -3,16 +3,18 @@ package p1.component.agent.memory;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.UserMessage;
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import p1.infrastructure.logging.LogDomain;
+import p1.infrastructure.logging.LogOutcome;
 import p1.model.enums.MessageRole;
 import p1.service.markdown.RawMdService;
 import p1.utils.ChatMessageUtil;
 
 @Service
 @RequiredArgsConstructor
-@Slf4j
+@CustomLog
 public class ChatMemoryAppender {
     private final RawMdService rawMdService;
 
@@ -32,7 +34,7 @@ public class ChatMemoryAppender {
                 default -> log.trace("[忽略消息] 类型: {}", message.getClass().getSimpleName());
             }
         } catch (Exception e) {
-            log.error("[消息写入失败] 保存聊天消息时发生异常。", e);
+            log.error(LogDomain.MEMORY, "memory.append_failed", LogOutcome.FAILED, e);
         }
     }
 

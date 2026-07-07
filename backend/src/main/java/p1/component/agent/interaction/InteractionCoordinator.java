@@ -1,7 +1,7 @@
 package p1.component.agent.interaction;
 
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import p1.component.agent.gamer.loop.ActiveGameRegistry;
 import p1.component.agent.gamer.loop.ActiveGameSession;
@@ -23,7 +23,7 @@ import static p1.utils.SessionUtil.normalizeSessionId;
  */
 @Component
 @RequiredArgsConstructor
-@Slf4j
+@CustomLog
 public class InteractionCoordinator {
 
     private final ActiveGameRegistry activeGameRegistry;

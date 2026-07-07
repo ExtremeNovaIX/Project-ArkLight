@@ -4,7 +4,9 @@ import com.fasterxml.jackson.databind.JavaType;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.internal.Json;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
+import p1.infrastructure.logging.LogDomain;
+import p1.infrastructure.logging.LogOutcome;
 import p1.utils.json.TolerantJsonFieldRepairer.RepairReport;
 
 import java.lang.reflect.Constructor;
@@ -14,7 +16,7 @@ import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.List;
 
-@Slf4j
+@CustomLog
 public class TolerantJsonCodec implements Json.JsonCodec {
 
     private static final List<String> REPAIR_PACKAGE_PREFIXES = List.of(
@@ -50,7 +52,7 @@ public class TolerantJsonCodec implements Json.JsonCodec {
 
             this.objectMapper = (ObjectMapper) objectMapperMethod.invoke(delegate);
             this.fieldRepairer = new TolerantJsonFieldRepairer(objectMapper);
-            log.info("[JSON repair] tolerant JsonCodec initialized");
+            log.info(LogDomain.RUNTIME, "json.codec_initialized", LogOutcome.SUCCEEDED);
         } catch (Exception e) {
             throw new IllegalStateException("failed to initialize tolerant json codec", e);
         }
@@ -78,7 +80,7 @@ public class TolerantJsonCodec implements Json.JsonCodec {
                 try {
                     @SuppressWarnings("unchecked")
                     T result = (T) fromJsonClassMethod.invoke(delegate, sanitizedJson, type);
-                    log.info("[JSON repair] sanitized JSON parsed successfully, targetType={}", targetType);
+                    log.info(LogDomain.RUNTIME, "json.sanitized_parse_succeeded", LogOutcome.SUCCEEDED, fields(targetType));
                     return result;
                 } catch (Exception sanitizedException) {
                     e.addSuppressed(sanitizedException);
@@ -108,7 +110,7 @@ public class TolerantJsonCodec implements Json.JsonCodec {
                 try {
                     @SuppressWarnings("unchecked")
                     T result = (T) fromJsonTypeMethod.invoke(delegate, sanitizedJson, type);
-                    log.info("[JSON repair] sanitized JSON parsed successfully, targetType={}", targetType);
+                    log.info(LogDomain.RUNTIME, "json.sanitized_parse_succeeded", LogOutcome.SUCCEEDED, fields(targetType));
                     return result;
                 } catch (Exception sanitizedException) {
                     e.addSuppressed(sanitizedException);
@@ -127,27 +129,34 @@ public class TolerantJsonCodec implements Json.JsonCodec {
 
     private <T> T repairAndRead(String json, JavaType targetType, Exception originalException) {
         try {
-            log.warn("[JSON repair] default deserialization failed, targetType={}, reason={}",
-                    targetType, rootMessage(originalException));
+            log.warn(LogDomain.RUNTIME, "json.default_deserialization_failed", LogOutcome.DEGRADED,
+                    fields(targetType, "reason", rootMessage(originalException)));
             JsonNode originalTree = objectMapper.readTree(json);
             RepairReport report = fieldRepairer.repair(originalTree, targetType);
             JsonNode repairedTree = report.repairedTree();
             T result = objectMapper.readerFor(targetType).readValue(repairedTree);
 
             if (report.changed()) {
-                log.info("[JSON repair] field repair succeeded, targetType={}, changes={}", targetType, report.describeChanges());
+                log.info(LogDomain.RUNTIME, "json.repair_succeeded", LogOutcome.SUCCEEDED, fields(targetType, "changes", report.describeChanges()));
             } else {
-                log.info("[JSON repair] entered field repair flow but no field changes were needed, targetType={}", targetType);
+                log.info(LogDomain.RUNTIME, "json.repair_skipped", LogOutcome.SKIPPED, fields(targetType, "reason", "no_field_changes"));
             }
             return result;
         } catch (Exception repairException) {
-            log.error("[JSON repair] repair failed, targetType={}, originalReason={}, repairReason={}",
-                    targetType,
-                    rootMessage(originalException),
-                    rootMessage(repairException));
+            log.error(LogDomain.RUNTIME, "json.repair_failed", LogOutcome.FAILED,
+                    fields(targetType, "originalReason", rootMessage(originalException),
+                            "repairReason", rootMessage(repairException)), repairException);
             originalException.addSuppressed(repairException);
             throw propagateOriginal(originalException);
         }
+    }
+    private java.util.Map<String, Object> fields(JavaType targetType, Object... keyValues) {
+        java.util.Map<String, Object> fields = new java.util.LinkedHashMap<>();
+        fields.put("targetType", targetType);
+        for (int i = 0; i + 1 < keyValues.length; i += 2) {
+            fields.put(String.valueOf(keyValues[i]), keyValues[i + 1]);
+        }
+        return fields;
     }
 
     private boolean shouldRepair(JavaType targetType) {

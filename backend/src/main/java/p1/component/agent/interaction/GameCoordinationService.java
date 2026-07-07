@@ -3,8 +3,8 @@ package p1.component.agent.interaction;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.memory.ChatMemory;
 import dev.langchain4j.memory.chat.ChatMemoryProvider;
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import p1.component.agent.gamer.interrupt.GameInterruptService;
@@ -14,6 +14,8 @@ import p1.component.agent.gamer.loop.GameLoopObservationBackoffService;
 import p1.component.agent.rp.proactive.RpLiveMessageHub;
 import p1.component.agent.rp.proactive.RpProactiveSessionRegistry;
 import p1.config.prop.AssistantProperties;
+import p1.infrastructure.logging.LogDomain;
+import p1.infrastructure.logging.LogOutcome;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -34,7 +36,7 @@ import static p1.utils.SessionUtil.normalizeSessionId;
  */
 @Service
 @RequiredArgsConstructor
-@Slf4j
+@CustomLog
 public class GameCoordinationService {
 
     private final ActiveGameRegistry activeGameRegistry;
@@ -94,8 +96,8 @@ public class GameCoordinationService {
 
         scheduleReminder(state);
         scheduleAutoClear(state, maxHold);
-        log.info("[游戏协调] 已进入等待: game={}, session={}, rpSession={}, askDelaySeconds={}, reason={}",
-                session.getGameName(), session.getSessionId(), normalizedRpSessionId, normalizedAskDelaySeconds, state.reason);
+        log.info(LogDomain.GAME, "coordination.wait_started", LogOutcome.SUCCEEDED,
+                fields(session, "rpSession", normalizedRpSessionId, "askDelaySeconds", normalizedAskDelaySeconds, "reason", state.reason));
         return "已进入等待状态，" + normalizedAskDelaySeconds + " 秒后会询问用户是否继续。";
     }
 
@@ -144,8 +146,7 @@ public class GameCoordinationService {
         }
         observationBackoffService.reset(session);
         session.touch();
-        log.info("[游戏协调] 用户确认继续: game={}, session={}, rpSession={}",
-                session.getGameName(), session.getSessionId(), session.getRpSessionId());
+        log.info(LogDomain.GAME, "coordination.user_confirmed", LogOutcome.SUCCEEDED, fields(session));
         return "已解除等待状态，游戏会基于最新状态继续。";
     }
 
@@ -172,8 +173,8 @@ public class GameCoordinationService {
         observationBackoffService.reset(session);
         interruptService.requestInterrupt(session.getGameName(), session.getSessionId(), "rp", normalizedInstruction);
         session.touch();
-        log.info("[游戏协调] 已提交用户游戏意图: game={}, session={}, rpSession={}, instruction={}",
-                session.getGameName(), session.getSessionId(), session.getRpSessionId(), normalizedInstruction);
+        log.info(LogDomain.GAME, "coordination.intent_submitted", LogOutcome.SUCCEEDED,
+                fields(session, "instruction", normalizedInstruction));
         return "已收到新的游戏意图，会打断未执行操作并基于最新状态重新决策：" + normalizedInstruction;
     }
 
@@ -265,8 +266,7 @@ public class GameCoordinationService {
             return;
         }
         clearWait(expected.rpSessionId);
-        log.info("[游戏协调] 等待状态已超过最长保留时间，自动清理: game={}, session={}, rpSession={}",
-                expected.gameName, expected.gameSessionId, expected.rpSessionId);
+        log.info(LogDomain.GAME, "coordination.wait_expired", LogOutcome.SKIPPED, fields(expected));
     }
 
     /**
@@ -295,8 +295,7 @@ public class GameCoordinationService {
         appendRpMemory(expected.rpSessionId, speech);
         sessionRegistry.observeRpSpeech(expected.rpSessionId);
         liveMessageHub.publish(expected.rpSessionId, "game-wait", speech, onlineSession.shortMode());
-        log.info("[游戏协调] 已投递等待提醒: game={}, session={}, rpSession={}",
-                expected.gameName, expected.gameSessionId, expected.rpSessionId);
+        log.info(LogDomain.GAME, "coordination.reminder_delivered", LogOutcome.SUCCEEDED, fields(expected));
     }
 
     /**
@@ -310,7 +309,8 @@ public class GameCoordinationService {
             ChatMemory memory = chatMemoryProvider.get(rpSessionId);
             memory.add(AiMessage.from(speech));
         } catch (Exception e) {
-            log.warn("[游戏协调] 写入等待提醒记忆失败: rpSession={}, reason={}", rpSessionId, e.getMessage());
+            log.warn(LogDomain.GAME, "coordination.memory_write_failed", LogOutcome.DEGRADED,
+                    fields(rpSessionId, "reason", e.getMessage()));
         }
     }
 
@@ -326,6 +326,36 @@ public class GameCoordinationService {
     /**
      * 一次等待状态。
      */
+    private Map<String, Object> fields(ActiveGameSession session, Object... keyValues) {
+        Map<String, Object> fields = new java.util.LinkedHashMap<>();
+        fields.put("game", session.getGameName());
+        fields.put("session", session.getSessionId());
+        fields.put("rpSession", session.getRpSessionId());
+        for (int i = 0; i + 1 < keyValues.length; i += 2) {
+            fields.put(String.valueOf(keyValues[i]), keyValues[i + 1]);
+        }
+        return fields;
+    }
+
+    private Map<String, Object> fields(WaitState state, Object... keyValues) {
+        Map<String, Object> fields = new java.util.LinkedHashMap<>();
+        fields.put("game", state.gameName);
+        fields.put("session", state.gameSessionId);
+        fields.put("rpSession", state.rpSessionId);
+        for (int i = 0; i + 1 < keyValues.length; i += 2) {
+            fields.put(String.valueOf(keyValues[i]), keyValues[i + 1]);
+        }
+        return fields;
+    }
+
+    private Map<String, Object> fields(String rpSessionId, Object... keyValues) {
+        Map<String, Object> fields = new java.util.LinkedHashMap<>();
+        fields.put("rpSession", rpSessionId);
+        for (int i = 0; i + 1 < keyValues.length; i += 2) {
+            fields.put(String.valueOf(keyValues[i]), keyValues[i + 1]);
+        }
+        return fields;
+    }
     private record WaitState(
             String gameName,
             String gameSessionId,

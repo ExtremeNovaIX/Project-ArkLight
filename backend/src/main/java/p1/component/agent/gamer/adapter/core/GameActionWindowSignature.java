@@ -1,10 +1,6 @@
 package p1.component.agent.gamer.adapter.core;
 
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Collections;
-import java.util.StringJoiner;
+import java.util.*;
 
 /**
  * 表示一批操作依赖的本地行动窗口。

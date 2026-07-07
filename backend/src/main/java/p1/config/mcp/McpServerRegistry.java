@@ -3,11 +3,15 @@ package p1.config.mcp;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import jakarta.annotation.PostConstruct;
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
 import org.yaml.snakeyaml.Yaml;
+import p1.infrastructure.logging.LogDomain;
+import p1.infrastructure.logging.LogOutcome;
+import p1.config.mcp.registry.McpRegistryFileStore;
+import p1.config.mcp.registry.McpTemplateResolver;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -18,8 +22,6 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import p1.config.mcp.registry.McpRegistryFileStore;
-import p1.config.mcp.registry.McpTemplateResolver;
 import java.util.stream.Stream;
 
 /**
@@ -36,7 +38,7 @@ import java.util.stream.Stream;
  */
 @Component
 @RequiredArgsConstructor
-@Slf4j
+@CustomLog
 public class McpServerRegistry {
 
     private static final String DEFAULT_ADAPTER = "default";
@@ -68,23 +70,15 @@ public class McpServerRegistry {
         resolveCatalog();
         mergeConfigs();
 
-        log.info("[MCP] 注册表已初始化: catalog={}, discovered={}, configured={}, registered={}, total={}",
-                properties.getCatalog().size(),
-                discovered.size(),
-                countConfigured(),
-                registered.size(),
-                properties.getGames().size());
+        log.info(LogDomain.MCP, "registry.initialized", LogOutcome.SUCCEEDED, "catalogCount", properties.getCatalog().size(), "discoveredCount", discovered.size(), "configuredCount", countConfigured(), "registeredCount", registered.size(), "gameCount", properties.getGames().size());
 
-        log.info("[MCP] ── 可用 MCP 服务器列表 (共 {} 个) ──", properties.getGames().size());
+        log.info(LogDomain.MCP, "registry.available_games_listed", LogOutcome.SUCCEEDED, "gameCount", properties.getGames().size());
         properties.getGames().forEach((name, config) -> {
             String source = config.isRegistered() ? "registered"
                     : discovered.containsKey(name) ? "discovered" : "configured";
-            log.info("[MCP]   • {} [{}] transport={}, command={}, adapter={}, enabled={}",
-                    name, source, config.getTransport(),
-                    config.getCommand() != null ? config.getCommand() : config.getUrl(),
-                    config.getAdapter(), config.isEnabled());
+            log.info(LogDomain.MCP, "registry.game_available", LogOutcome.SUCCEEDED, "name", name, "source", source, "transport", config.getTransport(), "endpoint", config.getCommand() != null ? config.getCommand() : config.getUrl(), "adapter", config.getAdapter(), "enabled", config.isEnabled());
         });
-        log.info("[MCP] ────────────────────────────────");
+        log.info(LogDomain.MCP, "registry.ready", LogOutcome.SUCCEEDED);
     }
 
 
@@ -97,7 +91,7 @@ public class McpServerRegistry {
         registered.put(gameName, config);
         properties.putGame(gameName, config.copy());
         saveRegistryFile();
-        log.info("[MCP] 服务器已注册: name={}, transport={}", gameName, config.getTransport());
+        log.info(LogDomain.MCP, "registry.server_registered", LogOutcome.SUCCEEDED, "gameName", gameName, "transport", config.getTransport());
         return config;
     }
 
@@ -115,12 +109,12 @@ public class McpServerRegistry {
             } else {
                 resolveAndMergeCatalogEntry(gameName);
             }
-            log.info("[MCP] 服务器已注销: name={}", gameName);
+            log.info(LogDomain.MCP, "registry.server_unregistered", LogOutcome.SUCCEEDED, "gameName", gameName);
             return true;
         }
         MCPProperties.GameMCPConfig existing = properties.getGames().get(gameName);
         if (existing != null && !existing.isRegistered()) {
-            log.warn("[MCP] 不能删除非注册条目: name={}", gameName);
+            log.warn(LogDomain.MCP, "registry.unregister_skipped", LogOutcome.DEGRADED, "gameName", gameName);
         }
         return false;
     }
@@ -151,7 +145,7 @@ public class McpServerRegistry {
     private void scanServersDirectory() {
         Path dir = resolvePath(properties.getServersDirectory());
         if (!Files.isDirectory(dir)) {
-            log.info("[MCP] MCP servers 目录不存在，跳过自动发现: {}", dir);
+            log.info(LogDomain.MCP, "registry.scan_skipped", LogOutcome.SUCCEEDED, "dir", dir);
             return;
         }
 
@@ -177,13 +171,13 @@ public class McpServerRegistry {
                 }
 
                 if (!foundInChild) {
-                    log.warn("[MCP] 跳过目录，未找到可识别的 MCP 配置: {}", subDir);
+                    log.warn(LogDomain.MCP, "registry.server_not_detected", LogOutcome.DEGRADED, "subDir", subDir);
                 }
             });
         } catch (IOException e) {
-            log.error("[MCP] 扫描 mcp-servers/ 失败: {}", e.toString());
+            log.error(LogDomain.MCP, "registry.scan_failed", LogOutcome.FAILED, "exception", e.toString());
         }
-        log.info("[MCP] 自动发现 {} 个服务器", discovered.size());
+        log.info(LogDomain.MCP, "registry.scan_skipped", LogOutcome.SKIPPED, "discoveredCount", discovered.size());
     }
 
     /**
@@ -210,7 +204,7 @@ public class McpServerRegistry {
             @SuppressWarnings("unchecked")
             Map<String, Object> servers = (Map<String, Object>) root.get("mcpServers");
             if (servers == null || servers.isEmpty()) {
-                log.warn("[MCP] {} 中没有 mcpServers 条目", jsonFile.getFileName());
+                log.warn(LogDomain.MCP, "registry.standard_manifest_empty", LogOutcome.DEGRADED, "fileName", jsonFile.getFileName());
                 return false;
             }
 
@@ -225,11 +219,11 @@ public class McpServerRegistry {
                 resolveRelativePaths(config, baseDir);
                 config.setEnabled(true);
                 discovered.put(serverName, config);
-                log.info("[MCP] 发现服务器 (.mcp.json): name={}, dir={}", serverName, baseDir);
+                log.info(LogDomain.MCP, "registry.standard_server_discovered", LogOutcome.SUCCEEDED, "serverName", serverName, "baseDir", baseDir);
             }
             return true;
         } catch (IOException e) {
-            log.error("[MCP] 解析 {} 失败: {}", jsonFile, e.toString());
+            log.error(LogDomain.MCP, "registry.standard_manifest_failed", LogOutcome.FAILED, "jsonFile", jsonFile, "exception", e.toString());
             return false;
         }
     }
@@ -252,10 +246,10 @@ public class McpServerRegistry {
             resolveRelativePaths(config, baseDir);
             config.setEnabled(true);
             discovered.put(gameName, config);
-            log.info("[MCP] 发现服务器 (manifest.yaml): name={}, dir={}", gameName, baseDir);
+            log.info(LogDomain.MCP, "registry.manifest_server_discovered", LogOutcome.SUCCEEDED, "gameName", gameName, "baseDir", baseDir);
             return true;
         } catch (IOException e) {
-            log.error("[MCP] 读取清单失败: {}", manifest, e.toString());
+            log.error(LogDomain.MCP, "registry.manifest_parse_failed", LogOutcome.FAILED, "manifest", manifest, "exception", e.toString());
             return false;
         }
     }
@@ -276,16 +270,18 @@ public class McpServerRegistry {
             String entry = findEntryFile(projectDir);
             if (entry == null) entry = "server.py";
 
-            MCPProperties.GameMCPConfig config = new MCPProperties.GameMCPConfig();
-            config.setTransport("stdio");
-            config.setCommand("uv");
-            config.setArgs(new String[]{"run", "--directory", absoluteDir, "python", entry});
-            config.setDisplayName(gameName);
-            config.setDescription("自动发现 (pyproject.toml)");
+            MCPProperties.GameMCPConfig config = resolveCatalogTemplateForDiscovery(gameName, absoluteDir);
+            if (config == null) {
+                config = new MCPProperties.GameMCPConfig();
+                config.setTransport("stdio");
+                config.setCommand("uv");
+                config.setArgs(new String[]{"run", "--directory", absoluteDir, "python", entry});
+                config.setDisplayName(gameName);
+                config.setDescription("自动发现 (pyproject.toml)");
+            }
             config.setEnabled(true);
             discovered.put(gameName, config);
-            log.info("[MCP] 发现服务器 (自动推断/Python): name={}, dir={}, projectDir={}",
-                    gameName, dir, absoluteDir);
+            log.info(LogDomain.MCP, "registry.scan_completed", LogOutcome.SUCCEEDED, "gameName", gameName, "dir", dir, "absoluteDir", absoluteDir);
             return true;
         }
 
@@ -309,7 +305,7 @@ public class McpServerRegistry {
             config.setDescription("自动发现 (package.json)");
             config.setEnabled(true);
             discovered.put(gameName, config);
-            log.info("[MCP] 发现服务器 (自动推断/Node): name={}, dir={}", gameName, dir);
+            log.info(LogDomain.MCP, "registry.node_server_discovered", LogOutcome.SUCCEEDED, "gameName", gameName, "dir", dir);
             return true;
         }
 
@@ -346,6 +342,21 @@ public class McpServerRegistry {
             if (Files.isRegularFile(dir.resolve(name))) return name;
         }
         return null;
+    }
+
+    private MCPProperties.GameMCPConfig resolveCatalogTemplateForDiscovery(String gameName, String installPath) {
+        MCPProperties.GameMCPConfig template = properties.getCatalog().get(gameName);
+        if (template == null || (isBlank(template.getCommand()) && isBlank(template.getUrl()))) {
+            return null;
+        }
+        MCPProperties.GameMCPConfig resolved = templateResolver.resolveTemplate(template, installPath);
+        if (isBlank(resolved.getDisplayName())) {
+            resolved.setDisplayName(gameName);
+        }
+        if (isBlank(resolved.getDescription())) {
+            resolved.setDescription("自动发现 (catalog template)");
+        }
+        return resolved;
     }
 
     /**
@@ -387,7 +398,7 @@ public class McpServerRegistry {
         try {
             ClassPathResource resource = new ClassPathResource(CATALOG_FILE_NAME);
             if (!resource.exists()) {
-                log.info("[MCP] 未找到 mcp-catalog.yaml，跳过目录加载");
+                log.info(LogDomain.MCP, "registry.standard_server_discovered", LogOutcome.SUCCEEDED);
                 return;
             }
             try (InputStream in = resource.getInputStream()) {
@@ -407,10 +418,10 @@ public class McpServerRegistry {
                     // 外部 config/mcp-catalog.yaml 优先，classpath 只补齐缺失模板。
                     properties.getCatalog().putIfAbsent(name, config);
                 }
-                log.info("[MCP] 加载目录: {} 个条目", properties.getCatalog().size());
+                log.info(LogDomain.MCP, "registry.classpath_catalog_loaded", LogOutcome.SUCCEEDED, "catalogCount", properties.getCatalog().size());
             }
         } catch (Exception e) {
-            log.error("[MCP] 加载 mcp-catalog.yaml 失败: {}", e.toString());
+            log.error(LogDomain.MCP, "registry.classpath_catalog_failed", LogOutcome.FAILED, "exception", e.toString());
         }
     }
 
@@ -442,9 +453,9 @@ public class McpServerRegistry {
                 MCPProperties.GameMCPConfig config = mapToConfig(fields);
                 properties.getCatalog().put(name, config);
             }
-            log.info("[MCP] 加载外部目录: file={}, entries={}", catalogFile, catalogNode.size());
+            log.info(LogDomain.MCP, "registry.manifest_server_discovered", LogOutcome.SUCCEEDED, "catalogFile", catalogFile, "catalogNodeCount", catalogNode.size());
         } catch (Exception e) {
-            log.error("[MCP] 加载外部 mcp-catalog.yaml 失败: {}", e.toString());
+            log.error(LogDomain.MCP, "registry.external_catalog_failed", LogOutcome.FAILED, "exception", e.toString());
         }
     }
 
@@ -475,7 +486,7 @@ public class McpServerRegistry {
 
             MCPProperties.GameMCPConfig template = properties.getCatalog().get(gameName);
             if (template == null) {
-                log.warn("[MCP] 找不到目录模板: name={}", gameName);
+                log.warn(LogDomain.MCP, "registry.install_template_missing", LogOutcome.DEGRADED, "gameName", gameName);
                 continue;
             }
             MCPProperties.GameMCPConfig resolved = templateResolver.resolveTemplate(template, userConfig.getInstallPath());
@@ -484,7 +495,7 @@ public class McpServerRegistry {
             resolved.setDescription(template.getDescription());
             resolved.setEnabled(userConfig.isEnabled());
             properties.putGame(gameName, resolved);
-            log.info("[MCP] 目录条目已解析: name={}, installPath={}", gameName, userConfig.getInstallPath());
+            log.info(LogDomain.MCP, "registry.install_path_resolved", LogOutcome.SUCCEEDED, "gameName", gameName, "installPath", userConfig.getInstallPath());
         }
     }
 
@@ -544,9 +555,6 @@ public class McpServerRegistry {
                 && !isBlank(catalogConfig.getStateToolName())) {
             merged.setStateToolName(catalogConfig.getStateToolName());
         }
-        if (isBlank(merged.getTips()) && !isBlank(catalogConfig.getTips())) {
-            merged.setTips(catalogConfig.getTips());
-        }
 
         MCPProperties.GameMCPConfig defaults = new MCPProperties.GameMCPConfig();
         if (merged.getStateSettleMaxAttempts() == defaults.getStateSettleMaxAttempts()) {
@@ -596,7 +604,6 @@ public class McpServerRegistry {
         if (fields.get("state-tool-name") != null) config.setStateToolName(fields.get("state-tool-name").toString());
         if (fields.get("stateToolName") != null) config.setStateToolName(fields.get("stateToolName").toString());
         applyStateSettleConfig(fields, config);
-        config.setTips(readTips(fields));
         if (fields.get("args") instanceof List<?> args) {
             config.setArgs(args.stream().map(Object::toString).toArray(String[]::new));
         }
@@ -616,19 +623,6 @@ public class McpServerRegistry {
         }
     }
 
-    private String readTips(Map<String, Object> fields) {
-        Object value = fields.get("tips");
-        if (value instanceof List<?> lines) {
-            return lines.stream()
-                    .map(Object::toString)
-                    .map(String::trim)
-                    .filter(line -> !line.isBlank())
-                    .map(line -> line.startsWith("-") ? line : "- " + line)
-                    .reduce((left, right) -> left + "\n" + right)
-                    .orElse(null);
-        }
-        return value != null ? value.toString() : null;
-    }
 
     private boolean isBlank(String value) {
         return value == null || value.isBlank();

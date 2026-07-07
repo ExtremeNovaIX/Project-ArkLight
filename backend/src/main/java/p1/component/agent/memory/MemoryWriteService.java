@@ -1,9 +1,11 @@
 package p1.component.agent.memory;
 
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import p1.component.agent.memory.model.ExtractedMemoryEvent;
+import p1.infrastructure.logging.LogDomain;
+import p1.infrastructure.logging.LogOutcome;
 import p1.infrastructure.vector.ArchiveVectorLibrary;
 import p1.model.document.MemoryArchiveDocument;
 import p1.model.document.RecentEventGroupDocument;
@@ -16,10 +18,11 @@ import p1.utils.SessionUtil;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
-@Slf4j
+@CustomLog
 public class MemoryWriteService {
 
     private final MemoryArchiveStore archiveStore;
@@ -60,8 +63,7 @@ public class MemoryWriteService {
         String groupTopic = resolveGroupTopic(events);
         List<MemoryArchiveDocument> savedArchives = new ArrayList<>();
 
-        log.info("[事件组写入] sessionId={} 开始写入，groupId={}，groupTopic={}，eventCount={}",
-                normalizedSessionId, groupId, groupTopic, events.size());
+        log.info(LogDomain.MEMORY, "event_group.write_started", LogOutcome.SUCCEEDED, fields(normalizedSessionId, "groupId", groupId, "topic", groupTopic, "eventCount", events.size()));
 
         for (int index = 0; index < events.size(); index++) {
             ExtractedMemoryEvent event = events.get(index);
@@ -88,12 +90,10 @@ public class MemoryWriteService {
             );
             archiveGraphService.syncGroupLinks(normalizedSessionId, group.getId(), savedArchives);
         } catch (Exception e) {
-            log.error("[事件组写入] recent-24h 写入失败，但 archive 已保留，sessionId={}，groupId={}",
-                    normalizedSessionId, groupId, e);
+            log.error(LogDomain.MEMORY, "event_group.recent_write_failed", LogOutcome.DEGRADED, fields(normalizedSessionId, "groupId", groupId, "reason", e.getMessage()), e);
         }
 
-        log.info("[事件组写入] 完成，sessionId={}，groupId={}，savedArchiveCount={}",
-                normalizedSessionId, groupId, savedArchives.size());
+        log.info(LogDomain.MEMORY, "event_group.write_completed", LogOutcome.SUCCEEDED, fields(normalizedSessionId, "groupId", groupId, "savedArchiveCount", savedArchives.size()));
         return List.copyOf(savedArchives);
     }
 
@@ -172,8 +172,7 @@ public class MemoryWriteService {
      * 这仍然是当前长期事件写入链的唯一权威入口。
      */
     private MemoryArchiveDocument saveArchive(MemoryArchiveDocument archive, String action) {
-        log.info("[Archive 写入] sessionId={} 开始，action={}，groupId={}，groupOrder={}，topic={}",
-                archive.getSessionId(), action, archive.getGroupId(), archive.getGroupOrder(), archive.getTopic());
+        log.info(LogDomain.MEMORY, "archive.write_started", LogOutcome.SUCCEEDED, archiveFields(archive, action));
         try {
             MemoryArchiveDocument saved = archiveStore.save(archive);
             archiveEmbeddingService.indexArchives(
@@ -182,14 +181,30 @@ public class MemoryWriteService {
                     List.of(saved),
                     saved.getGroupId()
             );
-            log.info("[Archive 写入] sessionId={} 完成，action={}，archiveId={}，groupId={}，groupOrder={}，topic={}",
-                    archive.getSessionId(), action, saved.getId(), saved.getGroupId(), saved.getGroupOrder(), saved.getTopic());
+            log.info(LogDomain.MEMORY, "archive.write_completed", LogOutcome.SUCCEEDED, archiveFields(saved, action));
             return saved;
         } catch (Exception e) {
-            log.error("[Archive 写入] sessionId={} 失败，action={}，groupId={}，groupOrder={}，topic={}",
-                    archive.getSessionId(), action, archive.getGroupId(), archive.getGroupOrder(), archive.getTopic(), e);
+            log.error(LogDomain.MEMORY, "archive.write_failed", LogOutcome.FAILED, archiveFields(archive, action, "reason", e.getMessage()), e);
             throw e;
         }
+    }
+    private Map<String, Object> fields(String sessionId, Object... keyValues) {
+        Map<String, Object> fields = new java.util.LinkedHashMap<>();
+        fields.put("session", sessionId);
+        for (int i = 0; i + 1 < keyValues.length; i += 2) {
+            fields.put(String.valueOf(keyValues[i]), keyValues[i + 1]);
+        }
+        return fields;
+    }
+
+    private Map<String, Object> archiveFields(MemoryArchiveDocument archive, String action, Object... keyValues) {
+        Map<String, Object> fields = fields(archive.getSessionId(), "action", action,
+                "archiveId", archive.getId(), "groupId", archive.getGroupId(),
+                "groupOrder", archive.getGroupOrder(), "topic", archive.getTopic());
+        for (int i = 0; i + 1 < keyValues.length; i += 2) {
+            fields.put(String.valueOf(keyValues[i]), keyValues[i + 1]);
+        }
+        return fields;
     }
 
     private String resolveGroupTopic(List<ExtractedMemoryEvent> events) {

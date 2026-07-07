@@ -3,12 +3,14 @@ package p1.component.agent.stt;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 import org.springframework.web.socket.BinaryMessage;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
+import p1.infrastructure.logging.LogDomain;
+import p1.infrastructure.logging.LogOutcome;
 
 import java.nio.ByteBuffer;
 import java.time.Instant;
@@ -20,7 +22,7 @@ import java.util.function.Consumer;
 /**
  * 处理来自 Qt 前端的 STT 音频流 WebSocket 连接。
  */
-@Slf4j
+@CustomLog
 public class SttStreamHandler extends TextWebSocketHandler {
 
     @FunctionalInterface
@@ -98,7 +100,8 @@ public class SttStreamHandler extends TextWebSocketHandler {
 
     @Override
     public void afterConnectionEstablished(WebSocketSession session) {
-        log.info("[STT] Qt client connected: session={}, waiting for config", session.getId());
+        log.debug(LogDomain.STT, "client.connected", LogOutcome.SUCCEEDED,
+                Map.of("session", session.getId(), "state", "waiting_for_config"));
     }
 
     @Override
@@ -156,7 +159,8 @@ public class SttStreamHandler extends TextWebSocketHandler {
         String engine = config.sttEngine();
         if (!config.supportedEngine(engine)) {
             String message = unsupportedEngineMessage(engine);
-            log.warn("[STT] Reject Qt client because ASR engine is unsupported: session={}, engine={}", sessionId, engine);
+            log.warn(LogDomain.STT, "client.rejected", LogOutcome.DEGRADED,
+                    Map.of("session", sessionId, "engine", engine, "reason", "unsupported_engine"));
             sendErrorMessage(session, message);
             try {
                 session.close(CloseStatus.SERVER_ERROR);
@@ -166,8 +170,8 @@ public class SttStreamHandler extends TextWebSocketHandler {
         }
         String unavailableMessage = sidecarAvailability.unavailableMessage(engine);
         if (unavailableMessage != null && !unavailableMessage.isBlank()) {
-            log.warn("[STT] Reject Qt client because ASR sidecar is unavailable: session={}, engine={}, reason={}",
-                    sessionId, engine, unavailableMessage);
+            log.warn(LogDomain.STT, "client.rejected", LogOutcome.DEGRADED,
+                    Map.of("session", sessionId, "engine", engine, "reason", "sidecar_unavailable", "message", unavailableMessage));
             sendErrorMessage(session, unavailableMessage);
             try {
                 session.close(CloseStatus.SERVER_ERROR);
@@ -187,10 +191,12 @@ public class SttStreamHandler extends TextWebSocketHandler {
             );
             sessions.put(sessionId, proxy);
             proxy.begin(16000, sessionSources.getOrDefault(sessionId, "unknown"));
-            log.info("[STT] ASR proxy initialized: session={}, engine={}, port={}, source={}",
-                    sessionId, engine, port, sessionSources.getOrDefault(sessionId, "unknown"));
+            log.debug(LogDomain.STT, "proxy.initialized", LogOutcome.SUCCEEDED,
+                    Map.of("session", sessionId, "engine", engine, "port", port,
+                            "source", sessionSources.getOrDefault(sessionId, "unknown")));
         } catch (Exception e) {
-            log.warn("[STT] Failed to connect ASR sidecar: engine={}, error={}", engine, e.getMessage());
+            log.warn(LogDomain.STT, "client.rejected", LogOutcome.DEGRADED,
+                    Map.of("engine", engine, "reason", "sidecar_connect_failed", "error", String.valueOf(e.getMessage())));
             sendErrorMessage(session, sidecarConnectionMessage(engine));
             try {
                 session.close(CloseStatus.SERVER_ERROR);
@@ -201,12 +207,14 @@ public class SttStreamHandler extends TextWebSocketHandler {
 
     @Override    public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
         cleanup(session.getId());
-        log.info("[STT] Qt client disconnected: session={}, status={}", session.getId(), status);
+        log.debug(LogDomain.STT, "client.disconnected", LogOutcome.SUCCEEDED,
+                Map.of("session", session.getId(), "status", status));
     }
 
     @Override
     public void handleTransportError(WebSocketSession session, Throwable exception) {
-        log.warn("[STT] Qt transport error: session={}, error={}", session.getId(), exception.getMessage());
+        log.warn(LogDomain.STT, "client.transport_error", LogOutcome.DEGRADED,
+                Map.of("session", session.getId(), "reason", String.valueOf(exception.getMessage())));
         cleanup(session.getId());
     }
 
@@ -402,7 +410,7 @@ public class SttStreamHandler extends TextWebSocketHandler {
             session.sendMessage(new TextMessage(objectMapper.writeValueAsString(payload)));
         } catch (Exception e) {
             if (event.finalResult()) {
-                log.warn("[STT] Could not send final ASR result: {}", e.getMessage());
+                log.warn(LogDomain.STT, "client.final_send_failed", LogOutcome.DEGRADED, Map.of("session", session.getId(), "reason", e.getMessage()));
             } else {
                 log.debug("[STT] Could not send partial ASR result: {}", e.getMessage());
             }

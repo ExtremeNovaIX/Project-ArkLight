@@ -6,7 +6,7 @@ import dev.langchain4j.mcp.client.protocol.McpClientMessage;
 import dev.langchain4j.mcp.client.protocol.McpInitializeRequest;
 import dev.langchain4j.mcp.client.transport.McpOperationHandler;
 import dev.langchain4j.mcp.client.transport.McpTransport;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 
 import java.io.IOException;
 import java.util.Iterator;
@@ -31,7 +31,7 @@ import java.util.concurrent.CompletableFuture;
  *   {"type": "string", "default": null}
  * }</pre>
  */
-@Slf4j
+@CustomLog
 public class SchemaNormalizingMcpTransport implements McpTransport {
 
     private final McpTransport delegate;

@@ -1,12 +1,13 @@
 package p1.controller;
 
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import p1.component.agent.gamer.GamerRequestResolver;
 import p1.component.agent.gamer.loop.ActiveGameSession;
 import p1.component.agent.gamer.loop.RpGameDriver;
+import p1.infrastructure.logging.LogDomain;
+import p1.infrastructure.logging.LoggedOperation;
 
 import java.util.Map;
 
@@ -24,13 +25,14 @@ import java.util.Map;
 @CrossOrigin
 @RequestMapping("/api/gamer")
 @RequiredArgsConstructor
-@Slf4j
 public class GamerController {
 
     private final RpGameDriver gameLoopService;
     private final GamerRequestResolver requestResolver;
 
     // ── 游戏循环控制 ──
+
+    @LoggedOperation(domain = LogDomain.GAME, operation = "game.loop.start")
 
     @PostMapping("/loop/start")
     public ResponseEntity<?> startLoop(@RequestBody(required = false) GamerLoopRequest request) {
@@ -40,8 +42,6 @@ public class GamerController {
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
-
-        log.info("[游戏控制器] 启动游戏循环: game={}, session={}", target.gameName(), target.sessionId());
         ActiveGameSession session;
         try {
             session = gameLoopService.start(target.gameName(), target.sessionId(), target.rpSessionId(), characterName(request), shortMode(request));
@@ -55,6 +55,8 @@ public class GamerController {
         ));
     }
 
+    @LoggedOperation(domain = LogDomain.GAME, operation = "game.loop.stop")
+
     @PostMapping("/loop/stop")
     public ResponseEntity<?> stopLoop(@RequestBody(required = false) GamerLoopRequest request) {
         GameTarget target;
@@ -63,12 +65,12 @@ public class GamerController {
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
-
-        log.info("[游戏控制器] 停止游戏循环: game={}, session={}", target.gameName(), target.sessionId());
         gameLoopService.stop(target.gameName(), target.sessionId());
 
         return ResponseEntity.ok(Map.of("message", "游戏循环已停止"));
     }
+
+    @LoggedOperation(domain = LogDomain.GAME, operation = "game.loop.pause")
 
     @PostMapping("/loop/pause")
     public ResponseEntity<?> pauseLoop(@RequestBody(required = false) GamerLoopRequest request) {
@@ -78,8 +80,6 @@ public class GamerController {
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
-
-        log.info("[游戏控制器] 暂停游戏循环: game={}, session={}", target.gameName(), target.sessionId());
         gameLoopService.pause(target.gameName(), target.sessionId());
 
         ActiveGameSession s = gameLoopService.status(target.gameName(), target.sessionId());
@@ -89,6 +89,8 @@ public class GamerController {
         ));
     }
 
+    @LoggedOperation(domain = LogDomain.GAME, operation = "game.loop.resume")
+
     @PostMapping("/loop/resume")
     public ResponseEntity<?> resumeLoop(@RequestBody(required = false) GamerLoopRequest request) {
         GameTarget target;
@@ -97,8 +99,6 @@ public class GamerController {
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
-
-        log.info("[游戏控制器] 恢复游戏循环: game={}, session={}", target.gameName(), target.sessionId());
         gameLoopService.resume(target.gameName(), target.sessionId(), characterName(request), shortMode(request));
 
         ActiveGameSession s = gameLoopService.status(target.gameName(), target.sessionId());

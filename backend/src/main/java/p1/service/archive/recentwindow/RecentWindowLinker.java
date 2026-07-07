@@ -1,8 +1,10 @@
 package p1.service.archive.recentwindow;
 
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import p1.infrastructure.logging.LogDomain;
+import p1.infrastructure.logging.LogOutcome;
 import p1.config.prop.AssistantProperties;
 import p1.model.document.MemoryArchiveDocument;
 import p1.service.archive.graph.ArchiveGraphRelations;
@@ -17,7 +19,7 @@ import java.util.Locale;
  * 在目标解析完成后，真正创建 recent-window 图边。
  */
 @Service
-@Slf4j
+@CustomLog
 @RequiredArgsConstructor
 public class RecentWindowLinker {
 
@@ -49,9 +51,7 @@ public class RecentWindowLinker {
 
         double finalThreshold = props.getEventTree().getRecentWindowFinalThreshold();
         if (target == null || target.boostedSupportScore() < finalThreshold) {
-            log.info("[recent-window] 最终分数低于阈值，跳过连边。分数={}, 阈值={}",
-                    target == null ? 0 : target.boostedSupportScore(),
-                    finalThreshold);
+            log.info(LogDomain.MEMORY, "recent_window.link_selected", LogOutcome.SUCCEEDED, "supportScore", target == null ? 0 : target.boostedSupportScore(), "threshold", finalThreshold);
             return;
         }
 

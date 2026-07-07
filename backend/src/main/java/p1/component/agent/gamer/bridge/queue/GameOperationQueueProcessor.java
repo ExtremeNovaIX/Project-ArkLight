@@ -1,15 +1,11 @@
 package p1.component.agent.gamer.bridge.queue;
 
 import dev.langchain4j.service.tool.ToolProviderResult;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import p1.component.agent.gamer.adapter.GameAdapter;
-import p1.component.agent.gamer.adapter.core.GameAdapterContext;
-import p1.component.agent.gamer.adapter.core.GameBridgeException;
-import p1.component.agent.gamer.adapter.core.GameOperation;
-import p1.component.agent.gamer.adapter.core.GameStateSnapshot;
-import p1.component.agent.gamer.adapter.core.QueuedGameOperation;
+import p1.component.agent.gamer.adapter.core.*;
 import p1.component.agent.gamer.bridge.GameBridgeExecutionException;
 import p1.component.agent.gamer.bridge.result.GameQueueResultRecorder;
 import p1.component.agent.gamer.bridge.result.GameQueueResultRenderer;
@@ -19,16 +15,16 @@ import p1.component.agent.gamer.trace.GameQueueExecutionTraceBuilder;
 import p1.component.agent.gamer.trace.GamerDecisionTraceService;
 import p1.component.agent.reasoning.ReasoningContentRecorder;
 import p1.config.mcp.MCPProperties;
+import p1.infrastructure.logging.LogDomain;
+import p1.infrastructure.logging.LogOutcome;
 
-import java.util.ArrayDeque;
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
 
 /**
  * 执行由 RP 的 do 文本翻译出的游戏操作队列。
  */
 @Component
-@Slf4j
+@CustomLog
 public class GameOperationQueueProcessor {
 
     private final GameOperationBatchParser batchParser;
@@ -90,8 +86,8 @@ public class GameOperationQueueProcessor {
                 throw new GameBridgeExecutionException("RP 动作没有可执行操作，队列未提交。");
             }
 
-            log.info("[游戏桥接] 收到操作队列: game={}, memoryId={}, queueId={}, operations={}",
-                    gameName, key, queueId, operations);
+            log.info(LogDomain.GAME, "operation.queue_received", LogOutcome.SUCCEEDED,
+                    fields(gameName, key, "queueId", queueId, "operations", operations.size()));
             GameStateSnapshot queueStartState = adapter.fetchState(context);
             ArrayDeque<QueuedGameOperation> queue = adapter.prepareBatch(context, operations, queueStartState);
             if (queue.isEmpty()) {
@@ -113,8 +109,8 @@ public class GameOperationQueueProcessor {
             recordOutcome(gameName, traceSessionId, reasoningContent, batch, operations, e.feedback(), e.feedback(), traceBuilder.build());
             throw e;
         } catch (GameBridgeException e) {
-            log.warn("[游戏桥接] 操作队列中断: game={}, memoryId={}, executed={}, reason={}",
-                    gameName, key, e.getExecutedCount(), e.getMessage());
+            log.warn(LogDomain.GAME, "operation.interrupted", LogOutcome.DEGRADED,
+                    fields(gameName, key, "executed", e.getExecutedCount(), "reason", e.getMessage()));
             String cleanReason = resultRenderer.compactInterruptReason(e.getMessage());
             String result = "操作队列中断，已执行 " + e.getExecutedCount() + " 条操作，剩余操作已丢弃。";
             recordOutcome(gameName, traceSessionId, reasoningContent, batch, operations, result, cleanReason, traceBuilder.build());
@@ -123,11 +119,22 @@ public class GameOperationQueueProcessor {
                     : GameBridgeExecutionException.Kind.FAILURE;
             throw new GameBridgeExecutionException(result + " 原因：" + cleanReason, kind, e);
         } catch (Exception e) {
-            log.error("[游戏桥接] 操作队列处理失败: game={}, memoryId={}", gameName, key, e);
+            log.error(LogDomain.GAME, "operation.failed", LogOutcome.FAILED,
+                    fields(gameName, key, "exception", e.getClass().getSimpleName(), "reason", e.getMessage()), e);
             String result = "桥接层处理操作队列失败，队列已丢弃。";
             recordOutcome(gameName, traceSessionId, reasoningContent, batch, operations, result, e.getMessage(), traceBuilder.build());
             throw new GameBridgeExecutionException(result + " 原因：" + e.getMessage(), e);
         }
+    }
+
+    private Map<String, Object> fields(String gameName, String memoryId, Object... keyValues) {
+        Map<String, Object> fields = new LinkedHashMap<>();
+        fields.put("game", gameName);
+        fields.put("memoryId", memoryId);
+        for (int i = 0; i + 1 < keyValues.length; i += 2) {
+            fields.put(String.valueOf(keyValues[i]), keyValues[i + 1]);
+        }
+        return fields;
     }
 
     private void recordOutcome(String gameName,

@@ -48,10 +48,10 @@ class ResourceYamlDefaultsTest {
         assertFalse(content.contains("${"), "application-ai.yaml should not contain Spring placeholders");
     }
     @Test
-    void mcpCatalogShouldUseTipsInsteadOfGameplayGuidelines() throws Exception {
+    void mcpCatalogShouldKeepRpTipsOutOfCatalog() throws Exception {
         String content = Files.readString(RESOURCE_DIR.resolve("mcp-catalog.yaml"));
 
-        assertTrue(content.contains("tips:"), "mcp-catalog.yaml should put RP guidance under tips");
+        assertFalse(content.contains("tips:"), "RP tips should live in GameAdapter implementations");
         assertFalse(content.contains("gameplay-guidelines"), "mcp-catalog.yaml should not keep the old gameplay-guidelines key");
     }
 }

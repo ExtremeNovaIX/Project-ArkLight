@@ -5,22 +5,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.agent.tool.ToolSpecification;
 import dev.langchain4j.service.tool.ToolExecutor;
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 import org.springframework.stereotype.Component;
-import p1.component.agent.gamer.adapter.core.GameActionWindowSignature;
-import p1.component.agent.gamer.adapter.core.GameActionability;
-import p1.component.agent.gamer.adapter.core.GameAdapterContext;
-import p1.component.agent.gamer.adapter.core.GameBridgeException;
-import p1.component.agent.gamer.adapter.core.GameOperation;
-import p1.component.agent.gamer.adapter.core.GameStateSnapshot;
-import p1.component.agent.gamer.adapter.core.QueuedGameOperation;
-import p1.component.agent.gamer.adapter.sts2.STS2ActionWindowAnalyzer;
-import p1.component.agent.gamer.adapter.sts2.STS2ModeDetector;
-import p1.component.agent.gamer.adapter.sts2.STS2OperationPlanCompiler;
-import p1.component.agent.gamer.adapter.sts2.STS2OperationRepairer;
-import p1.component.agent.gamer.adapter.sts2.STS2OperationToolRenderer;
-import p1.component.agent.gamer.adapter.sts2.STS2StateMonitor;
-import p1.component.agent.gamer.adapter.sts2.STS2StateSummaryRenderer;
+import p1.infrastructure.logging.LogDomain;
+import p1.infrastructure.logging.LogOutcome;
+import p1.component.agent.gamer.adapter.core.*;
+import p1.component.agent.gamer.adapter.sts2.*;
 import p1.config.mcp.MCPProperties;
 
 import java.util.ArrayDeque;
@@ -37,7 +27,7 @@ import java.util.stream.Collectors;
  * 操作修复、出牌计划编译和执行后监控委托给同包 helper。
  */
 @Component
-@Slf4j
+@CustomLog
 public class STS2Adapter extends GameAdapter {
 
     private static final String MP_PREFIX = STS2ModeDetector.MP_PREFIX;
@@ -56,6 +46,17 @@ public class STS2Adapter extends GameAdapter {
     @Override
     public String id() {
         return "sts2";
+    }
+
+    @Override
+    public String tips() {
+        return """
+                - 卡牌与敌方意图的当前显示值均视为已结算面板值，禁止重复应用已体现的自身/来源侧修正。目标相关、条件相关、触发相关效果仍需额外计算，如目标易伤、对易伤目标额外增伤等。不要直接用已取整的手牌显示值继续乘倍率；多重修正应按规则组合并最终取整。仅对规则明确适用的伤害/格挡来源应用修正。
+                - 场上大部分buff每回合减少一层（如虚弱，易伤）;在没有特殊buff的情况下，进入新的回合时格挡清零，能量回复至上限，手牌放入弃牌堆并且重新抽取。
+                - 杀戮尖塔使用向下取整算数，比如敌方原本打15，被挂虚弱(减少敌方25%伤害)之后变为15*0.75=11。
+                - 当敌人没有攻击意图时是你是输出、成长（打出能力牌）的好时机。
+                - 抽牌、弃牌、随机、领取奖励、打开选择界面等会改变行动窗口的操作必须放在本批队列末尾；触发状态变化后后台会中断剩余队列并要求重新计划。
+                """.strip();
     }
 
     /**
@@ -98,7 +99,7 @@ public class STS2Adapter extends GameAdapter {
         String mode = MP_PREFIX.equals(modePrefix) ? "multiplayer" : "singleplayer";
         String previous = loggedModeBySession.put(sessionId, mode);
         if (!mode.equals(previous)) {
-            log.info("[STS2] detected {} mode: game={}, session={}", mode, context.gameName(), sessionId);
+            log.info(LogDomain.GAME, "game.adapter_mode_selected", LogOutcome.SUCCEEDED, "mode", mode, "gameName", context.gameName(), "sessionId", sessionId);
             return;
         }
         log.debug("[STS2] detected {} mode: game={}, session={}", mode, context.gameName(), sessionId);

@@ -1,6 +1,6 @@
 package p1.component.agent.rp.game.control;
 
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 import org.springframework.stereotype.Service;
 
 import java.util.Map;
@@ -17,7 +17,7 @@ import static p1.utils.SessionUtil.normalizeSessionId;
  * 否则后续回合可能基于旧游戏状态生成动作，再交给已经推进到新状态的 parser 执行。
  */
 @Service
-@Slf4j
+@CustomLog
 public class RpGameControlTurnLockService {
 
     private final Map<String, ReentrantLock> locks = new ConcurrentHashMap<>();

@@ -1,7 +1,9 @@
 package p1.service.archive.recentwindow;
 
-import lombok.extern.slf4j.Slf4j;
+import lombok.CustomLog;
 import org.springframework.stereotype.Service;
+import p1.infrastructure.logging.LogDomain;
+import p1.infrastructure.logging.LogOutcome;
 import p1.service.markdown.MemoryArchiveStore;
 
 import java.util.List;
@@ -12,7 +14,7 @@ import java.util.stream.Collectors;
  * 负责 recent-window trace 的持久化和日志输出。
  */
 @Service
-@Slf4j
+@CustomLog
 public class RecentWindowTraceService {
 
     private static final int LOG_MATCH_PREVIEW_LIMIT = 3;
@@ -158,12 +160,7 @@ public class RecentWindowTraceService {
 
     private void logQuery(String sessionId, Long rootArchiveId, QueryTrace queryTrace) {
         if (queryTrace.skippedReason() != null) {
-            log.info("[recent-window][查询] sessionId={} rootArchiveId={} queryArchiveId={} queryWeight={} skippedReason={}",
-                    sessionId,
-                    rootArchiveId,
-                    queryTrace.queryArchiveId(),
-                    formatDouble(queryTrace.weight()),
-                    queryTrace.skippedReason());
+            log.info(LogDomain.MEMORY, "recent_window.query_skipped", LogOutcome.SKIPPED, "sessionId", sessionId, "rootArchiveId", rootArchiveId, "queryArchiveId", queryTrace.queryArchiveId(), "weight", formatDouble(queryTrace.weight()), "skippedReason", queryTrace.skippedReason());
             return;
         }
 
@@ -174,14 +171,7 @@ public class RecentWindowTraceService {
                 .map(this::matchPreview)
                 .collect(Collectors.joining(" | "));
 
-        log.info("[recent-window][查询] sessionId={} rootArchiveId={} queryArchiveId={} queryWeight={} matchCount={} queryText={} matches={}",
-                sessionId,
-                rootArchiveId,
-                queryTrace.queryArchiveId(),
-                formatDouble(queryTrace.weight()),
-                queryTrace.matches().size(),
-                preview(queryTrace.queryText(), 60),
-                preview);
+        log.info(LogDomain.MEMORY, "recent_window.query_matched", LogOutcome.SUCCEEDED, "sessionId", sessionId, "rootArchiveId", rootArchiveId, "queryArchiveId", queryTrace.queryArchiveId(), "weight", formatDouble(queryTrace.weight()), "matchCount", queryTrace.matches().size(), "queryPreview", preview(queryTrace.queryText(), 60), "preview", preview);
     }
 
     private void logCandidates(String sessionId, Long rootArchiveId, ScoreTrace trace) {
@@ -192,14 +182,7 @@ public class RecentWindowTraceService {
                 .map(this::candidatePreview)
                 .collect(Collectors.joining(" | "));
 
-        log.info("[recent-window][候选] sessionId={} rootArchiveId={} currentTagCount={} taggedGroupCount={} usableMatchCount={} candidateCount={} candidates={}",
-                sessionId,
-                rootArchiveId,
-                trace.currentTagCount(),
-                trace.taggedGroupCount(),
-                trace.usableMatchCount(),
-                trace.candidateCount(),
-                preview);
+        log.info(LogDomain.MEMORY, "recent_window.trace_recorded", LogOutcome.SUCCEEDED, "sessionId", sessionId, "rootArchiveId", rootArchiveId, "currentTagCount", trace.currentTagCount(), "taggedGroupCount", trace.taggedGroupCount(), "usableMatchCount", trace.usableMatchCount(), "candidateCount", trace.candidateCount(), "preview", preview);
     }
 
     private String matchPreview(MatchTrace match) {

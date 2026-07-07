@@ -2,9 +2,7 @@ package p1.config.prop;
 
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 class AssistantPropertiesTest {
 
@@ -34,13 +32,13 @@ class AssistantPropertiesTest {
     }
 
     @Test
-    void shouldOnlyPrintRpLlmTraceByDefault() {
+    void shouldPrintAllLlmTracesByDefault() {
         AssistantProperties properties = new AssistantProperties();
 
         assertTrue(properties.getLlmLogs().consoleEnabled("rp"));
-        assertFalse(properties.getLlmLogs().consoleEnabled("parser"));
-        assertFalse(properties.getLlmLogs().consoleEnabled("checker"));
-        assertFalse(properties.getLlmLogs().consoleEnabled("supervisor"));
+        assertTrue(properties.getLlmLogs().consoleEnabled("parser"));
+        assertTrue(properties.getLlmLogs().consoleEnabled("checker"));
+        assertTrue(properties.getLlmLogs().consoleEnabled("supervisor"));
     }
 
     private AssistantProperties.ChatModelConfig chatModel(String apiKey, String baseUrl, String modelName, Long timeoutSeconds) {

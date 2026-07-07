@@ -6,14 +6,16 @@ import dev.langchain4j.model.chat.response.PartialResponse;
 import dev.langchain4j.model.chat.response.PartialResponseContext;
 import dev.langchain4j.model.chat.response.StreamingHandle;
 import dev.langchain4j.service.TokenStream;
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import p1.infrastructure.logging.LogDomain;
+import p1.infrastructure.logging.LogOutcome;
 import p1.component.agent.gamer.trace.GamerDecisionTraceService;
 import p1.component.agent.rp.game.control.RpControlBlock;
-import p1.component.agent.rp.game.control.RpGameControlTurnLockService;
 import p1.component.agent.rp.game.control.RpGameActionExecutionException;
 import p1.component.agent.rp.game.control.RpGameControlBlockExecutor;
+import p1.component.agent.rp.game.control.RpGameControlTurnLockService;
 import p1.component.agent.rp.game.interrupt.RpGameInterruptionService;
 import p1.component.agent.streaming.StreamingJsonInstruction;
 import p1.component.agent.streaming.StreamingJsonInstructionParser;
@@ -35,7 +37,7 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 @Service
 @RequiredArgsConstructor
-@Slf4j
+@CustomLog
 public class RpSpeechTurnService {
 
     private static final long GAME_ACTION_SPEECH_COOLDOWN_MS = 6000L;
@@ -393,7 +395,7 @@ public class RpSpeechTurnService {
                 handle.cancel();
             }
             cancelTts(reason);
-            log.warn("[RP发言流] 已取消: session={}, source={}, reason={}", rpSessionId, source, reason);
+            log.warn(LogDomain.GAME, "speech.tts_cancelled", LogOutcome.DEGRADED, "rpSessionId", rpSessionId, "source", source, "reason", reason);
         }
 
         private void stopStreamAfterCurrentSpeechChunk(String reason) {
@@ -405,8 +407,7 @@ public class RpSpeechTurnService {
                 ttsStopAfterCurrentChunk = true;
                 ttsSession.stopAfterCurrentChunk(reason);
             }
-            log.warn("[RP发言流] 已请求在当前语音片段后停止: session={}, source={}, reason={}",
-                    rpSessionId, source, reason);
+            log.warn(LogDomain.GAME, "speech.tts_stop_requested", LogOutcome.DEGRADED, "rpSessionId", rpSessionId, "source", source, "reason", reason);
         }
 
         private void cancelTts(String reason) {

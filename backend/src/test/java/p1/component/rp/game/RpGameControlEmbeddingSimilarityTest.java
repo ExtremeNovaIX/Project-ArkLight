@@ -19,9 +19,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * 真实 embedding 停止意图相似度探针。

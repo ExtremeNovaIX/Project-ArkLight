@@ -1,8 +1,10 @@
 package p1.component.agent.gamer.trace;
 
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import p1.infrastructure.logging.LogDomain;
+import p1.infrastructure.logging.LogOutcome;
 import p1.component.agent.gamer.adapter.core.GameOperation;
 import p1.component.agent.rp.game.control.RpControlBlock;
 import p1.config.mcp.GameTraceProperties;
@@ -30,7 +32,7 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 @Service
 @RequiredArgsConstructor
-@Slf4j
+@CustomLog
 public class GamerDecisionTraceService {
 
     private static final DateTimeFormatter TIMESTAMP_FMT =
@@ -77,11 +79,10 @@ public class GamerDecisionTraceService {
             sessionPaths.put(key, path);
             sessionStatsMap.put(key, new SessionStats());
             stepCounters.computeIfAbsent(key, ignored -> new AtomicLong());
-            log.info("[游戏复盘] 初始化会话追踪: game={}, memoryId={}, path={}", gameName, memoryId, path);
+            log.info(LogDomain.GAME, "trace.created", LogOutcome.SUCCEEDED, "gameName", gameName, "memoryId", memoryId, "path", path);
             return path;
         } catch (IOException e) {
-            log.warn("[游戏复盘] 初始化会话追踪文件失败: game={}, memoryId={}, reason={}",
-                    gameName, memoryId, e.getMessage());
+            log.warn(LogDomain.GAME, "trace.write_failed", LogOutcome.DEGRADED, "gameName", gameName, "memoryId", memoryId, "reason", e.getMessage());
             return null;
         }
     }
@@ -172,8 +173,7 @@ public class GamerDecisionTraceService {
             log.debug("[游戏复盘] 已写入会话摘要: game={}, memoryId={}, steps={}",
                     gameName, memoryId, stats.totalSteps());
         } catch (IOException e) {
-            log.warn("[游戏复盘] 写入摘要失败: game={}, memoryId={}, reason={}",
-                    gameName, memoryId, e.getMessage());
+            log.warn(LogDomain.GAME, "trace.write_failed", LogOutcome.DEGRADED, "gameName", gameName, "memoryId", memoryId, "reason", e.getMessage());
         }
     }
 
@@ -202,8 +202,7 @@ public class GamerDecisionTraceService {
                     StandardCharsets.UTF_8,
                     StandardOpenOption.APPEND);
         } catch (IOException e) {
-            log.warn("[游戏复盘] 写入 RP 控制块复盘失败: game={}, memoryId={}, reason={}",
-                    gameName, memoryId, e.getMessage());
+            log.warn(LogDomain.GAME, "trace.write_failed", LogOutcome.DEGRADED, "gameName", gameName, "memoryId", memoryId, "reason", e.getMessage());
         }
     }
 
@@ -265,8 +264,7 @@ public class GamerDecisionTraceService {
                     StandardCharsets.UTF_8,
                     StandardOpenOption.APPEND);
         } catch (IOException e) {
-            log.warn("[游戏复盘] 写入操作队列复盘失败: game={}, memoryId={}, reason={}",
-                    gameName, memoryId, e.getMessage());
+            log.warn(LogDomain.GAME, "trace.write_failed", LogOutcome.DEGRADED, "gameName", gameName, "memoryId", memoryId, "reason", e.getMessage());
         }
     }
 
@@ -293,8 +291,7 @@ public class GamerDecisionTraceService {
                     StandardCharsets.UTF_8,
                     StandardOpenOption.APPEND);
         } catch (IOException e) {
-            log.warn("[游戏复盘] 写入 RP 命令失败复盘失败: game={}, memoryId={}, reason={}",
-                    gameName, memoryId, e.getMessage());
+            log.warn(LogDomain.GAME, "trace.write_failed", LogOutcome.DEGRADED, "gameName", gameName, "memoryId", memoryId, "reason", e.getMessage());
         }
     }
 
@@ -318,8 +315,7 @@ public class GamerDecisionTraceService {
                     StandardCharsets.UTF_8,
                     StandardOpenOption.APPEND);
         } catch (IOException e) {
-            log.warn("[游戏复盘] 写入 RP 动作解析失败复盘失败: game={}, memoryId={}, reason={}",
-                    gameName, memoryId, e.getMessage());
+            log.warn(LogDomain.GAME, "trace.write_failed", LogOutcome.DEGRADED, "gameName", gameName, "memoryId", memoryId, "reason", e.getMessage());
         }
     }
 

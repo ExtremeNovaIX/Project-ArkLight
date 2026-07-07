@@ -3,12 +3,14 @@ package p1.component.agent.rp.proactive;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.memory.chat.ChatMemoryProvider;
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import p1.infrastructure.logging.LogDomain;
+import p1.infrastructure.logging.LogOutcome;
 import p1.component.agent.gamer.loop.ActiveGameRegistry;
 import p1.component.agent.gamer.loop.ActiveGameSession;
 import p1.component.agent.interaction.InteractionCoordinator;
@@ -36,7 +38,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 @Service
 @RequiredArgsConstructor
-@Slf4j
+@CustomLog
 public class RpProactiveSpeechService {
 
     private static final int RECENT_CONTEXT_LIMIT = 8;
@@ -159,10 +161,9 @@ public class RpProactiveSpeechService {
                 sessionRegistry.observeRpSpeech(session.sessionId());
             }
             messageHub.publish(session.sessionId(), source, speech, session.shortMode());
-            log.info("[RP主动发言] 已投递主动消息: session={}, source={}", session.sessionId(), source);
+            log.info(LogDomain.GAME, "speech.proactive_published", LogOutcome.SUCCEEDED, "sessionId", session.sessionId(), "source", source);
         } catch (Exception e) {
-            log.warn("[RP主动发言] 生成主动消息失败: session={}, source={}, reason={}",
-                    session.sessionId(), source, e.getMessage());
+            log.warn(LogDomain.GAME, "speech.proactive_failed", LogOutcome.DEGRADED, "sessionId", session.sessionId(), "source", source, "reason", e.getMessage());
         } finally {
             MDC.remove("chatRound");
             MDC.remove("sessionId");

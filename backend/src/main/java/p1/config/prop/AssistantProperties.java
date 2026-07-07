@@ -59,9 +59,9 @@ public class AssistantProperties {
     @Data
     public static class LlmLogsConfig {
         /**
-         * 应用侧 LLM 调用跟踪的控制台开关。
+         * 应用侧 LLM 调用跟踪是否写入主日志和控制台。
          * <p>
-         * 该配置只控制可读诊断日志是否输出到控制台；token 统计始终记录。
+         * 该配置只控制可读诊断日志是否输出；token 统计始终记录。
          * 底层模型客户端原生日志由 {@link ChatModelConfig#logEnabled} 控制。
          */
         private Map<String, Boolean> console = defaultConsoleConfig();
@@ -76,9 +76,9 @@ public class AssistantProperties {
         private static Map<String, Boolean> defaultConsoleConfig() {
             Map<String, Boolean> defaults = new LinkedHashMap<>();
             defaults.put("rp", true);
-            defaults.put("parser", false);
-            defaults.put("checker", false);
-            defaults.put("supervisor", false);
+            defaults.put("parser", true);
+            defaults.put("checker", true);
+            defaults.put("supervisor", true);
             return defaults;
         }
     }

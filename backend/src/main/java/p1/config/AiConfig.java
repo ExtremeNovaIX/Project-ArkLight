@@ -3,11 +3,13 @@ package p1.config;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.StreamingChatModel;
 import dev.langchain4j.model.embedding.EmbeddingModel;
+import lombok.CustomLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import p1.infrastructure.logging.LogDomain;
+import p1.infrastructure.logging.LogOutcome;
 import p1.component.agent.factory.ChatModelFactory;
 import p1.component.agent.factory.EmbeddingModelFactory;
 import p1.component.log.LlmServiceLoggingListenerFactory;
@@ -20,7 +22,7 @@ import p1.config.prop.AssistantProperties;
  */
 @Configuration
 @RequiredArgsConstructor
-@Slf4j
+@CustomLog
 public class AiConfig {
 
     private final AssistantProperties props;
@@ -77,18 +79,7 @@ public class AiConfig {
             AssistantProperties.ChatModelConfig checkerModel = props.activeCheckerModel();
             AssistantProperties.ChatModelConfig supervisorModel = props.activeSupervisorModel();
             AssistantProperties.EmbeddingModelConfig embeddingModel = props.activeEmbeddingModel();
-            log.info("LLM mode: {} | rp: {} @ {} | parser: {} @ {} | checker: {} @ {} | supervisor: {} @ {} | embedding-model: {} @ {}",
-                    props.getMode(),
-                    rpModel.getModelName(),
-                    rpModel.getBaseUrl(),
-                    parserModel.getModelName(),
-                    parserModel.getBaseUrl(),
-                    checkerModel.getModelName(),
-                    checkerModel.getBaseUrl(),
-                    supervisorModel.getModelName(),
-                    supervisorModel.getBaseUrl(),
-                    embeddingModel.getModelName(),
-                    embeddingModel.getBaseUrl());
+            log.info(LogDomain.LLM, "ai.config.active_models", LogOutcome.SUCCEEDED, "mode", props.getMode(), "rpModel", rpModel.getModelName(), "rpBaseUrl", rpModel.getBaseUrl(), "parserModel", parserModel.getModelName(), "parserBaseUrl", parserModel.getBaseUrl(), "checkerModel", checkerModel.getModelName(), "checkerBaseUrl", checkerModel.getBaseUrl(), "supervisorModel", supervisorModel.getModelName(), "supervisorBaseUrl", supervisorModel.getBaseUrl(), "embeddingModel", embeddingModel.getModelName(), "embeddingBaseUrl", embeddingModel.getBaseUrl());
         };
     }
 
