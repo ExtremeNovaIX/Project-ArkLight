@@ -121,6 +121,10 @@ qt_add_executable(arklight_qt_tests
 )
 
 target_include_directories(arklight_qt_tests PRIVATE src/app)
+target_compile_definitions(arklight_qt_tests
+    PRIVATE
+        ARKLIGHT_QML_DIR="${CMAKE_CURRENT_SOURCE_DIR}/qml"
+)
 
 target_link_libraries(arklight_qt_tests
     PRIVATE

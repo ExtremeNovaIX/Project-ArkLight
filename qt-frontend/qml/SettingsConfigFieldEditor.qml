@@ -18,6 +18,21 @@ Rectangle {
     property string fieldPlaceholder: field && field.placeholder ? field.placeholder : ""
     property string storageKey: editor.host.fieldKey(fileName, fieldName)
     property int valuesRevision: configCatalog.valuesRevision
+    property var historyItems: {
+        editor.valuesRevision
+        return configCatalog.historyFor(editor.fileName, editor.fieldName)
+    }
+    property bool historyAvailable: configCatalog.fieldSupportsHistory(field || {}) && editor.historyItems.length > 0
+    function historyPreview(value) {
+        return String(value || "").replace(/\s+/g, " ").trim()
+    }
+    function openHistoryDropdown() {
+        if (!editor.historyAvailable) {
+            return
+        }
+        editor.host.activeHistoryKey = editor.storageKey
+        historyPopup.open()
+    }
     Layout.fillWidth: true
     implicitHeight: Math.max(editor.host.sp(132), editorColumn.implicitHeight + editor.host.sp(32))
     radius: editor.host.sp(editor.tokens.radiusFrame)
@@ -67,9 +82,11 @@ Rectangle {
         }
 
         Item {
+            id: inputSlot
             Layout.fillWidth: true
             Layout.minimumWidth: 0
             Layout.preferredHeight: Math.max(editor.host.sp(46), inputStack.implicitHeight)
+            z: editor.host.activeHistoryKey === editor.storageKey ? 10 : 0
 
             ColumnLayout {
                 id: inputStack
@@ -152,9 +169,12 @@ Rectangle {
                         border.width: 1
                     }
                     onActiveFocusChanged: {
-                        if (activeFocus && configCatalog.fieldSupportsHistory(field || {})) {
-                            editor.host.activeHistoryKey = editor.storageKey
+                        if (activeFocus) {
+                            editor.openHistoryDropdown()
                         }
+                    }
+                    TapHandler {
+                        onTapped: editor.openHistoryDropdown()
                     }
                     onTextChanged: {
                         if (activeFocus) {
@@ -179,44 +199,113 @@ Rectangle {
                     echoMode: TextInput.Normal
                     inputMethodHints: editor.fieldType === "number" ? Qt.ImhFormattedNumbersOnly : Qt.ImhNone
                     onActiveFocusChanged: {
-                        if (activeFocus && configCatalog.fieldSupportsHistory(field || {})) {
-                            editor.host.activeHistoryKey = editor.storageKey
+                        if (activeFocus) {
+                            editor.openHistoryDropdown()
                         }
                     }
                     onTextEdited: configCatalog.setFieldValue(editor.fileName, editor.fieldName, text)
+                    TapHandler {
+                        onTapped: editor.openHistoryDropdown()
+                    }
                 }
 
-                Row {
-                    visible: editor.host.activeHistoryKey === editor.storageKey
-                             && configCatalog.fieldSupportsHistory(field || {})
-                             && configCatalog.historyFor(editor.fileName, editor.fieldName).length > 0
-                    spacing: editor.host.sp(6)
-                    Repeater {
-                        model: configCatalog.historyFor(editor.fileName, editor.fieldName)
-                        Button {
-                            id: historyButton
-                            text: modelData
+                Popup {
+                    id: historyPopup
+                    parent: inputSlot
+                    x: 0
+                    y: (areaInput.visible ? areaInput.y + areaInput.height : textInput.y + textInput.height) + editor.host.sp(6)
+                    width: inputSlot.width
+                    implicitHeight: Math.min(historyList.contentHeight + editor.host.sp(8), editor.host.sp(164))
+                    padding: editor.host.sp(4)
+                    closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
+                    transformOrigin: Item.Top
+                    opacity: 0
+                    scale: 0.985
+                    modal: false
+                    dim: false
+
+                    onClosed: {
+                        if (editor.host.activeHistoryKey === editor.storageKey) {
+                            editor.host.activeHistoryKey = ""
+                        }
+                    }
+
+                    enter: Transition {
+                        ParallelAnimation {
+                            NumberAnimation { property: "opacity"; from: 0; to: 1; duration: 150; easing.type: Easing.OutCubic }
+                            NumberAnimation { property: "scale"; from: 0.985; to: 1; duration: 180; easing.type: Easing.OutCubic }
+                            NumberAnimation {
+                                property: "y"
+                                from: (areaInput.visible ? areaInput.y + areaInput.height : textInput.y + textInput.height)
+                                to: (areaInput.visible ? areaInput.y + areaInput.height : textInput.y + textInput.height) + editor.host.sp(6)
+                                duration: 180
+                                easing.type: Easing.OutCubic
+                            }
+                        }
+                    }
+                    exit: Transition {
+                        ParallelAnimation {
+                            NumberAnimation { property: "opacity"; from: 1; to: 0; duration: 110; easing.type: Easing.InCubic }
+                            NumberAnimation { property: "scale"; from: 1; to: 0.985; duration: 110; easing.type: Easing.InCubic }
+                        }
+                    }
+
+                    Connections {
+                        target: editor.host
+                        function onActiveHistoryKeyChanged() {
+                            if (editor.host.activeHistoryKey !== editor.storageKey && historyPopup.opened) {
+                                historyPopup.close()
+                            }
+                        }
+                    }
+
+                    contentItem: ListView {
+                        id: historyList
+                        clip: true
+                        implicitHeight: contentHeight
+                        model: historyPopup.visible ? editor.historyItems : []
+                        boundsBehavior: Flickable.StopAtBounds
+                        delegate: ItemDelegate {
+                            id: historyDelegate
+                            width: historyList.width
+                            height: editor.host.sp(38)
                             focusPolicy: Qt.NoFocus
-                            font.family: editor.tokens.monoFont
-                            font.pixelSize: editor.host.sp(10)
+                            hoverEnabled: true
+                            text: editor.historyPreview(modelData)
                             onClicked: {
                                 configCatalog.applyHistory(editor.fileName, editor.fieldName, modelData)
                                 editor.host.activeHistoryKey = ""
+                                historyPopup.close()
                             }
                             contentItem: Text {
-                                text: historyButton.text
-                                color: editor.tokens.inkAlpha(0.76)
-                                font: historyButton.font
+                                text: historyDelegate.text
+                                color: historyDelegate.hovered ? "#FFFFFF" : editor.tokens.inkAlpha(0.78)
+                                font.family: editor.tokens.monoFont
+                                font.pixelSize: editor.host.sp(10)
                                 elide: Text.ElideRight
                                 verticalAlignment: Text.AlignVCenter
                             }
                             background: Rectangle {
                                 radius: editor.host.sp(editor.tokens.radiusFrame)
-                                color: editor.tokens.inputPaper
-                                border.color: editor.tokens.inkAlpha(0.18)
-                                border.width: 1
+                                color: historyDelegate.hovered ? editor.tokens.ink : "transparent"
+                                Behavior on color { ColorAnimation { duration: editor.tokens.fastMotion } }
                             }
                         }
+                        ScrollBar.vertical: ScrollBar {
+                            policy: ScrollBar.AsNeeded
+                            contentItem: Rectangle {
+                                implicitWidth: editor.host.sp(4)
+                                radius: editor.host.sp(2)
+                                color: editor.tokens.inkAlpha(0.18)
+                            }
+                            background: Rectangle { color: "transparent" }
+                        }
+                    }
+                    background: Rectangle {
+                        radius: editor.host.sp(editor.tokens.radiusFrame)
+                        color: editor.tokens.paperLight
+                        border.color: editor.tokens.inkAlpha(0.24)
+                        border.width: 1
                     }
                 }
             }

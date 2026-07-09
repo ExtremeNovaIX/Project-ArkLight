@@ -1,5 +1,6 @@
 #include "config/ConfigCatalogSupport.h"
 
+#include <QFile>
 #include <QtTest/QtTest>
 
 class ConfigCatalogSupportTest final : public QObject {
@@ -8,6 +9,7 @@ class ConfigCatalogSupportTest final : public QObject {
 private slots:
     void updatesNestedScalar();
     void rewritesBlockList();
+    void settingsHistoryUsesDropdownPopup();
 };
 
 void ConfigCatalogSupportTest::updatesNestedScalar() {
@@ -36,6 +38,17 @@ void ConfigCatalogSupportTest::rewritesBlockList() {
         QStringLiteral("    - new-b.wav"),
         QStringLiteral("  enabled: true")
     }));
+}
+
+void ConfigCatalogSupportTest::settingsHistoryUsesDropdownPopup() {
+    QFile file(QStringLiteral(ARKLIGHT_QML_DIR) + QStringLiteral("/SettingsConfigFieldEditor.qml"));
+    QVERIFY2(file.open(QIODevice::ReadOnly | QIODevice::Text), qPrintable(file.fileName()));
+    const QString qml = QString::fromUtf8(file.readAll());
+
+    QVERIFY(qml.contains(QStringLiteral("id: historyPopup")));
+    QVERIFY(qml.contains(QStringLiteral("Popup {")));
+    QVERIFY(qml.contains(QStringLiteral("historyPopup.open()")));
+    QVERIFY(!qml.contains(QStringLiteral("id: historyButton")));
 }
 
 QTEST_GUILESS_MAIN(ConfigCatalogSupportTest)
