@@ -2,62 +2,67 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 
-Rectangle {
+Item {
     id: root
     property var host
     property var tokens
-    Layout.preferredWidth: root.host.sp(320)
+    Layout.preferredWidth: root.host.sp(238)
     Layout.fillHeight: true
-    radius: root.host.sp(root.tokens.radiusFrame)
-    color: root.tokens.panelAlt
-    border.color: root.tokens.inkAlpha(0.1)
-    border.width: 1
 
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: root.host.sp(24)
-        spacing: root.host.sp(12)
+        anchors.leftMargin: root.host.sp(22)
+        anchors.rightMargin: root.host.sp(18)
+        anchors.topMargin: root.host.sp(24)
+        anchors.bottomMargin: root.host.sp(18)
+        spacing: root.host.sp(4)
 
-        Text {
-            Layout.fillWidth: true
-            text: "系统设置"
-            color: root.tokens.teal
-            font.family: root.tokens.monoFont
-            font.pixelSize: root.host.sp(10)
-            font.capitalization: Font.AllUppercase
-            elide: Text.ElideRight
+        SettingsNavButton {
+            host: root.host
+            tokens: root.tokens
+            viewKey: "frontend"
+            number: "01"
+            kicker: "GENERAL"
+            label: "常规"
+            glyphKind: "general"
         }
-        Text {
-            Layout.fillWidth: true
-            text: "设置面板"
-            color: root.tokens.ink
-            font.family: root.tokens.sansFont
-            font.pixelSize: root.host.sp(30)
-            font.weight: Font.Black
-            wrapMode: Text.WordWrap
+        SettingsNavButton {
+            host: root.host
+            tokens: root.tokens
+            viewKey: "backend"
+            number: "02"
+            kicker: "MODELS & SERVICES"
+            label: "模型与服务"
+            glyphKind: "services"
         }
-        Item { Layout.preferredHeight: root.host.sp(16) }
-
-        SettingsNavButton {
-
-            host: root.host
-
-            tokens: root.tokens
-
-            viewKey: "frontend"; kicker: "本地"; label: "前端设置" }
         SettingsNavButton {
             host: root.host
             tokens: root.tokens
-            viewKey: "backend"; kicker: "Config"; label: "本地配置" }
+            viewKey: "game"
+            number: "03"
+            kicker: "GAME LINK"
+            label: "游戏联动"
+            glyphKind: "game"
+        }
         SettingsNavButton {
             host: root.host
             tokens: root.tokens
-            viewKey: "game"; kicker: "Game"; label: "游戏模式" }
-        SettingsNavButton {
-            host: root.host
-            tokens: root.tokens
-            viewKey: "voice"; kicker: "Voice"; label: "语音调试" }
+            viewKey: "voice"
+            number: "04"
+            kicker: "VOICE & AUDIO"
+            label: "语音与音频"
+            glyphKind: "voice"
+        }
 
         Item { Layout.fillHeight: true }
+
+        Text {
+            Layout.fillWidth: true
+            text: "RLY-Σ 22B\nFIELD INDEX 0.93"
+            color: root.tokens.inkAlpha(0.24)
+            font.family: root.tokens.monoFont
+            font.pixelSize: root.host.sp(8)
+            lineHeight: 1.45
+        }
     }
 }

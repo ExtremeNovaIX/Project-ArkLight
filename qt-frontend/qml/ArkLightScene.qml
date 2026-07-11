@@ -30,45 +30,20 @@ Item {
 
     Rectangle {
         anchors.fill: parent
-        color: tokens.blackPanel
-    }
-
-    SurfaceTexture {
-        anchors.fill: parent
-        scaleFactor: scene.scaleFactor
-        lineColor: "#FFFFFF"
-        lineAlpha: 0.018
-        geometryAlpha: 0.01
+        color: tokens.paper
     }
 
     Item {
         id: shell
         anchors.fill: parent
-        anchors.margins: scene.sp(tokens.outerMargin)
         clip: true
-
-        Rectangle {
-            anchors.fill: parent
-            radius: scene.sp(tokens.radiusFrame)
-            color: tokens.paper
-            border.color: tokens.whiteAlpha(0.12)
-            border.width: 1
-        }
-
-        SurfaceTexture {
-            anchors.fill: parent
-            scaleFactor: scene.scaleFactor
-            lineColor: tokens.chatGrid
-            lineAlpha: 0.038
-            geometryAlpha: 0.018
-        }
 
         RowLayout {
             anchors.fill: parent
             spacing: 0
 
             CharacterStage {
-                Layout.preferredWidth: Math.max(scene.sp(330), Math.min(shell.width * 0.39, scene.sp(560)))
+                Layout.preferredWidth: Math.max(scene.sp(410), Math.min(shell.width * 0.45, scene.sp(640)))
                 Layout.fillHeight: true
                 scaleFactor: scene.scaleFactor
                 workspaceName: scene.workspaceName

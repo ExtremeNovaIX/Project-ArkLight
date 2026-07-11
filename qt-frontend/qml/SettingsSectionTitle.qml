@@ -10,22 +10,34 @@ ColumnLayout {
     property string title: ""
     Layout.fillWidth: true
     spacing: host.sp(8)
-    Text {
+
+    RowLayout {
         Layout.fillWidth: true
-        text: sectionTitle.eyebrow
-        color: tokens.teal
-        font.family: tokens.monoFont
-        font.pixelSize: host.sp(10)
-        font.capitalization: Font.AllUppercase
-        elide: Text.ElideRight
+        spacing: host.sp(12)
+
+        Text {
+            text: sectionTitle.eyebrow
+            color: tokens.orange
+            font.family: tokens.displayFont
+            font.pixelSize: host.sp(11)
+            font.weight: Font.DemiBold
+            font.letterSpacing: host.sp(0.6)
+        }
+
+        Text {
+            Layout.fillWidth: true
+            text: sectionTitle.title
+            color: tokens.ink
+            font.family: tokens.sansFont
+            font.pixelSize: host.sp(23)
+            font.weight: Font.DemiBold
+            elide: Text.ElideRight
+        }
     }
-    Text {
+
+    Rectangle {
         Layout.fillWidth: true
-        text: sectionTitle.title
-        color: tokens.ink
-        font.family: tokens.sansFont
-        font.pixelSize: host.sp(30)
-        font.weight: Font.Black
-        wrapMode: Text.WordWrap
+        Layout.preferredHeight: 1
+        color: tokens.inkAlpha(0.14)
     }
 }

@@ -1,42 +1,42 @@
 import QtQuick
 
 QtObject {
-    readonly property color paper: "#F6F0DC"
-    readonly property color panel: "#F1E9D4"
-    readonly property color panelAlt: "#EBE7DC"
-    readonly property color shell: "#F2EFE6"
-    readonly property color inputPaper: "#F8F5EC"
+    readonly property color paper: "#F2EBDD"
+    readonly property color panel: "#EDE5D5"
+    readonly property color panelAlt: "#E7E0D2"
+    readonly property color shell: "#F4EEE2"
+    readonly property color inputPaper: "#F8F3E9"
     readonly property color paperLight: "#FFFDF8"
     readonly property color card: "#FFFFFF"
-    readonly property color ink: "#1A1A1A"
-    readonly property color black: "#0A0A0A"
-    readonly property color blackPanel: "#12110E"
-    readonly property color blackPanelAlt: "#191712"
-    readonly property color blackLine: "#2B281F"
-    readonly property color orange: "#E85D04"
-    readonly property color orangeDark: "#9A3412"
-    readonly property color teal: "#4D908E"
-    readonly property color tealDark: "#25615F"
-    readonly property color chatGrid: "#786848"
-    readonly property color statusRed: "#8F2A1F"
-    readonly property color statusRedLight: "#A63B28"
-    readonly property color statusYellow: "#F0B649"
-    readonly property color statusYellowDark: "#DEA03B"
-    readonly property color statusTeal: "#67B6B0"
-    readonly property color statusTealDark: "#4C8E8B"
-    readonly property string sansFont: "Segoe UI"
-    readonly property string displayFont: "Segoe UI"
-    readonly property string monoFont: "JetBrains Mono"
-    readonly property int radiusBubble: 12
-    readonly property int radiusControl: 8
-    readonly property int radiusFrame: 4
-    readonly property int outerMargin: 14
-    readonly property int fastMotion: 150
-    readonly property int baseMotion: 220
-    readonly property int slowMotion: 560
+    readonly property color ink: "#202322"
+    readonly property color black: "#090B0C"
+    readonly property color blackPanel: "#11191B"
+    readonly property color blackPanelAlt: "#172022"
+    readonly property color blackLine: "#293234"
+    readonly property color orange: "#F26422"
+    readonly property color orangeDark: "#A74319"
+    readonly property color teal: "#2A7C79"
+    readonly property color tealDark: "#235E5C"
+    readonly property color chatGrid: "#7C705E"
+    readonly property color statusRed: "#C83227"
+    readonly property color statusRedLight: "#E14A34"
+    readonly property color statusYellow: "#E7B93E"
+    readonly property color statusYellowDark: "#C99927"
+    readonly property color statusTeal: "#66B9B3"
+    readonly property color statusTealDark: "#318C88"
+    readonly property string sansFont: "Microsoft YaHei UI"
+    readonly property string displayFont: "Bahnschrift SemiCondensed"
+    readonly property string monoFont: "Cascadia Mono"
+    readonly property int radiusBubble: 4
+    readonly property int radiusControl: 7
+    readonly property int radiusFrame: 2
+    readonly property int outerMargin: 0
+    readonly property int fastMotion: 140
+    readonly property int baseMotion: 210
+    readonly property int slowMotion: 520
 
     function inkAlpha(alpha) {
-        return Qt.rgba(26 / 255, 26 / 255, 26 / 255, alpha)
+        return Qt.rgba(32 / 255, 35 / 255, 34 / 255, alpha)
     }
 
     function whiteAlpha(alpha) {
@@ -44,26 +44,26 @@ QtObject {
     }
 
     function blackAlpha(alpha) {
-        return Qt.rgba(10 / 255, 10 / 255, 10 / 255, alpha)
+        return Qt.rgba(9 / 255, 11 / 255, 12 / 255, alpha)
     }
 
     function orangeAlpha(alpha) {
-        return Qt.rgba(232 / 255, 93 / 255, 4 / 255, alpha)
+        return Qt.rgba(242 / 255, 100 / 255, 34 / 255, alpha)
     }
 
     function tealAlpha(alpha) {
-        return Qt.rgba(77 / 255, 144 / 255, 142 / 255, alpha)
+        return Qt.rgba(42 / 255, 124 / 255, 121 / 255, alpha)
     }
 
     function chatGridAlpha(alpha) {
-        return Qt.rgba(120 / 255, 104 / 255, 72 / 255, alpha)
+        return Qt.rgba(124 / 255, 112 / 255, 94 / 255, alpha)
     }
 
     function orangeDarkAlpha(alpha) {
-        return Qt.rgba(154 / 255, 52 / 255, 18 / 255, alpha)
+        return Qt.rgba(167 / 255, 67 / 255, 25 / 255, alpha)
     }
 
     function tealDarkAlpha(alpha) {
-        return Qt.rgba(37 / 255, 97 / 255, 95 / 255, alpha)
+        return Qt.rgba(35 / 255, 94 / 255, 92 / 255, alpha)
     }
 }

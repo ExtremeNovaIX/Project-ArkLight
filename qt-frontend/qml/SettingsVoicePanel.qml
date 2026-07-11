@@ -16,7 +16,7 @@ ColumnLayout {
 
         tokens: root.tokens
 
-        eyebrow: "Voice Debug"; title: "语音调试" }
+        eyebrow: "04 / VOICE & AUDIO"; title: "语音与音频" }
 
     SettingsUiCard {
 
@@ -24,7 +24,7 @@ ColumnLayout {
 
         tokens: root.tokens
 
-        title: "ASR Runtime"
+        title: "语音识别服务"
         Text {
             Layout.fillWidth: true
             text: "sherpa-qwen-onnx / ASR v2 / partial 500ms / segment 3000ms"
@@ -41,21 +41,21 @@ ColumnLayout {
 
         tokens: root.tokens
 
-        title: "只调试不执行"
-        detail: "运行语音识别和意图路由，但不把识别文本发给大模型，也不执行游戏副作用。"
+        title: "仅识别"
+        detail: "只显示识别结果，不发送消息或触发联动操作。"
         checked: frontendSettings.voiceDebugEnabled
         onToggled: function(value) { frontendSettings.voiceDebugEnabled = value }
     }
 
     GridLayout {
         Layout.fillWidth: true
-        columns: root.host.width > root.host.sp(1080) ? 2 : 1
+        columns: 1
         columnSpacing: root.host.sp(20)
         rowSpacing: root.host.sp(20)
         SettingsUiCard {
             host: root.host
             tokens: root.tokens
-            title: "ASR Runtime"
+            title: "语音识别服务"
             Text {
                 Layout.fillWidth: true
                 text: "sherpa-qwen-onnx / ASR v2 / port 6006"
@@ -153,7 +153,7 @@ ColumnLayout {
 
         tokens: root.tokens
 
-        title: "识别审计"
+        title: "识别记录"
         RowLayout {
             Layout.fillWidth: true
             Text {

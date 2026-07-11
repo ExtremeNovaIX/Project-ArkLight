@@ -16,7 +16,7 @@ ColumnLayout {
         SettingsSectionTitle {
             host: root.host
             tokens: root.tokens
-            eyebrow: "前端设置"; title: "当前会话" }
+            eyebrow: "01 / GENERAL"; title: "常规" }
         SettingsUiButton {
             host: root.host
             tokens: root.tokens
@@ -27,7 +27,7 @@ ColumnLayout {
 
     GridLayout {
         Layout.fillWidth: true
-        columns: root.host.width > root.host.sp(1080) ? 2 : 1
+        columns: 1
         columnSpacing: root.host.sp(20)
         rowSpacing: root.host.sp(20)
 
@@ -37,8 +37,8 @@ ColumnLayout {
 
             tokens: root.tokens
 
-            title: "界面主题"
-            detail: "当前 Qt 版本先复刻 ArkLight 默认主题。"
+            title: "界面"
+            detail: "选择应用的显示风格。"
             SettingsUiCombo {
                 host: root.host
                 tokens: root.tokens
@@ -50,8 +50,8 @@ ColumnLayout {
         SettingsUiCard {
             host: root.host
             tokens: root.tokens
-            title: "当前角色"
-            detail: "角色来自项目 chara 目录。"
+            title: "角色"
+            detail: "选择当前对话使用的角色。"
             SettingsUiCombo {
                 host: root.host
                 tokens: root.tokens
@@ -70,8 +70,8 @@ ColumnLayout {
         SettingsUiCard {
             host: root.host
             tokens: root.tokens
-            title: "当前后端地址"
-            detail: "主界面、配置编辑器、游戏控制和语音链路都会使用这个地址。"
+            title: "服务地址"
+            detail: "用于连接本地服务与同步对话。"
             SettingsUiField {
                 host: root.host
                 tokens: root.tokens
@@ -82,8 +82,8 @@ ColumnLayout {
         SettingsUiCard {
             host: root.host
             tokens: root.tokens
-            title: "Session ID"
-            detail: "聊天请求和主动消息订阅会使用这个会话标识。"
+            title: "会话编号"
+            detail: "用于区分当前对话记录。"
             SettingsUiField {
                 host: root.host
                 tokens: root.tokens
@@ -94,8 +94,8 @@ ColumnLayout {
         SettingsUiCard {
             host: root.host
             tokens: root.tokens
-            title: "工作区名称"
-            detail: "显示在左侧舞台和启动遮罩中。"
+            title: "工作区"
+            detail: "显示在应用标题与启动画面中。"
             SettingsUiField {
                 host: root.host
                 tokens: root.tokens
@@ -106,8 +106,8 @@ ColumnLayout {
         SettingsUiCard {
             host: root.host
             tokens: root.tokens
-            title: "操作员名称"
-            detail: "用于用户消息标签。"
+            title: "显示名称"
+            detail: "用于标记你发送的消息。"
             SettingsUiField {
                 host: root.host
                 tokens: root.tokens
@@ -119,14 +119,14 @@ ColumnLayout {
 
     GridLayout {
         Layout.fillWidth: true
-        columns: root.host.width > root.host.sp(1080) ? 2 : 1
+        columns: 1
         columnSpacing: root.host.sp(16)
         rowSpacing: root.host.sp(16)
         SettingsBlackToggle {
             host: root.host
             tokens: root.tokens
             title: "短句模式"
-            detail: "关闭后会让后端 shortMode=false，并停用按句长调整的显示间隔。"
+            detail: "让回复更紧凑，并缩短段落之间的等待。"
             checked: frontendSettings.shortModeEnabled
             onToggled: function(value) { frontendSettings.shortModeEnabled = value }
         }
@@ -152,7 +152,7 @@ ColumnLayout {
         SettingsSectionTitle {
             host: root.host
             tokens: root.tokens
-            eyebrow: "角色选择"; title: "Chara" }
+            eyebrow: "CHARACTER INDEX"; title: "角色" }
         SettingsUiButton {
             host: root.host
             tokens: root.tokens

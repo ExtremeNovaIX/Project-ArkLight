@@ -162,72 +162,105 @@ Dialog {
         implicitHeight: dialog.sp(720)
 
         Rectangle {
-            x: dialog.sp(18)
-            y: dialog.sp(18)
-            width: parent.width - dialog.sp(18)
-            height: parent.height - dialog.sp(18)
-            radius: dialog.sp(tokens.radiusFrame)
-            color: tokens.inkAlpha(0.18)
-        }
-
-        Rectangle {
-            anchors.left: parent.left
-            anchors.top: parent.top
-            width: parent.width - dialog.sp(18)
-            height: parent.height - dialog.sp(18)
-            radius: dialog.sp(tokens.radiusFrame)
+            anchors.fill: parent
+            radius: dialog.sp(4)
             color: tokens.shell
-            border.color: tokens.ink
-            border.width: 2
+            border.color: tokens.inkAlpha(0.36)
+            border.width: 1
             clip: true
 
-            RowLayout {
+            SettingsBackdrop {
+                anchors.fill: parent
+                host: dialog
+                tokens: tokens
+            }
+
+            ColumnLayout {
                 anchors.fill: parent
                 spacing: 0
 
-                SettingsNav {
-                    host: dialog
-                    tokens: tokens
+                Item {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: dialog.sp(146)
+
+                    RowLayout {
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        anchors.leftMargin: dialog.sp(40)
+                        anchors.rightMargin: dialog.sp(34)
+                        spacing: dialog.sp(20)
+
+                        OrbitalRelayMark {
+                            Layout.preferredWidth: dialog.sp(76)
+                            Layout.preferredHeight: dialog.sp(76)
+                            host: dialog
+                            tokens: tokens
+                        }
+
+                        ColumnLayout {
+                            spacing: dialog.sp(3)
+                            Text {
+                                text: "ARKLIGHT PIONEER"
+                                color: tokens.ink
+                                font.family: tokens.displayFont
+                                font.pixelSize: dialog.sp(21)
+                                font.weight: Font.DemiBold
+                                font.letterSpacing: dialog.sp(0.5)
+                            }
+                            Text {
+                                text: "C A S S E T T E   R E L A Y"
+                                color: tokens.inkAlpha(0.72)
+                                font.family: tokens.monoFont
+                                font.pixelSize: dialog.sp(8)
+                                font.letterSpacing: dialog.sp(1.5)
+                            }
+                        }
+
+                        Item { Layout.fillWidth: true }
+
+                        Text {
+                            text: "RLY-Σ / " + (dialog.activeView === "frontend" ? "01"
+                                                  : dialog.activeView === "backend" ? "02"
+                                                  : dialog.activeView === "game" ? "03" : "04")
+                            color: tokens.inkAlpha(0.25)
+                            font.family: tokens.monoFont
+                            font.pixelSize: dialog.sp(8)
+                        }
+
+                        SettingsUiButton {
+                            host: dialog
+                            tokens: tokens
+                            text: "关闭"
+                            onClicked: dialog.close()
+                        }
+                    }
+
+                    Rectangle {
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.bottom: parent.bottom
+                        anchors.leftMargin: dialog.sp(24)
+                        anchors.rightMargin: dialog.sp(24)
+                        height: 1
+                        color: tokens.inkAlpha(0.16)
+                    }
                 }
 
-
-                ColumnLayout {
+                RowLayout {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     spacing: 0
 
-                    Rectangle {
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: dialog.sp(82)
-                        radius: dialog.sp(tokens.radiusFrame)
-                        color: tokens.whiteAlpha(0.5)
-                        border.color: tokens.inkAlpha(0.1)
-                        border.width: 1
+                    SettingsNav {
+                        host: dialog
+                        tokens: tokens
+                    }
 
-                        RowLayout {
-                            anchors.fill: parent
-                            anchors.leftMargin: dialog.sp(24)
-                            anchors.rightMargin: dialog.sp(24)
-                            spacing: dialog.sp(16)
-                            Text {
-                                Layout.fillWidth: true
-                                text: dialog.activeView === "frontend" ? "前端设置"
-                                      : dialog.activeView === "backend" ? "本地配置"
-                                      : dialog.activeView === "game" ? "游戏模式"
-                                      : "语音调试"
-                                color: tokens.orange
-                                font.family: tokens.monoFont
-                                font.pixelSize: dialog.sp(10)
-                                font.capitalization: Font.AllUppercase
-                                elide: Text.ElideRight
-                            }
-                            SettingsUiButton {
-                                host: dialog
-                                tokens: tokens
-                                text: "\u5173\u95ed"
-                                onClicked: dialog.close()
-                            }
-                        }
+                    Rectangle {
+                        Layout.fillHeight: true
+                        Layout.preferredWidth: 1
+                        color: tokens.inkAlpha(0.14)
                     }
 
                     ScrollView {
@@ -237,11 +270,13 @@ Dialog {
                         clip: true
                         contentWidth: availableWidth
 
+                        ScrollBar.vertical.policy: ScrollBar.AsNeeded
+
                         ColumnLayout {
-                            width: Math.max(0, settingsScroll.availableWidth - dialog.sp(56))
-                            x: dialog.sp(28)
-                            y: dialog.sp(28)
-                            spacing: dialog.sp(24)
+                            width: Math.max(0, settingsScroll.availableWidth - dialog.sp(66))
+                            x: dialog.sp(34)
+                            y: dialog.sp(26)
+                            spacing: dialog.sp(26)
 
                             SettingsFrontendPanel {
                                 host: dialog
@@ -261,6 +296,11 @@ Dialog {
                             SettingsVoicePanel {
                                 host: dialog
                                 tokens: tokens
+                            }
+
+                            Item {
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: dialog.sp(28)
                             }
                         }
                     }

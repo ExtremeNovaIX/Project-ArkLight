@@ -60,6 +60,8 @@ qt_add_qml_module(arklight_qt
         qml/ArkLightTokens.qml
         qml/BootOverlay.qml
         qml/CharacterStage.qml
+        qml/DeepSpaceBackdrop.qml
+        qml/TechnicalBackdrop.qml
         qml/ChatComposer.qml
         qml/ChatSurface.qml
         qml/DiagonalGrid.qml
@@ -70,6 +72,9 @@ qt_add_qml_module(arklight_qt
         qml/IconUser.qml
         qml/Main.qml
         qml/SettingsCompatDialog.qml
+        qml/OrbitalRelayMark.qml
+        qml/SettingsBackdrop.qml
+        qml/SettingsCategoryGlyph.qml
         qml/SettingsBlackToggle.qml
         qml/SettingsConfigFieldEditor.qml
         qml/SettingsConfigPanel.qml
@@ -85,6 +90,10 @@ qt_add_qml_module(arklight_qt
         qml/SettingsVoicePanel.qml
         qml/StatusStrip.qml
         qml/SurfaceTexture.qml
+    RESOURCES
+        assets/ui/technical-overlays/megastructure-raster.png
+        assets/ui/technical-overlays/technical-graphics-raster.png
+        assets/app-icon/orbital-relay.png
 )
 
 target_include_directories(arklight_qt PRIVATE src/app)
@@ -163,6 +172,7 @@ set_target_properties(arklight_qt PROPERTIES
 )
 
 if(WIN32)
+    target_sources(arklight_qt PRIVATE src/windows/arklight.rc)
     target_link_libraries(arklight_qt PRIVATE ole32 avrt mmdevapi)
 
     find_program(WINDEPLOYQT_EXECUTABLE

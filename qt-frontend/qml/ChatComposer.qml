@@ -10,12 +10,8 @@ Rectangle {
     signal inputEdited(string value)
     signal submitRequested(string value)
 
-    color: tokens.whiteAlpha(0.26)
-    border.color: tokens.inkAlpha(0.1)
-    border.width: 1
-    radius: sp(tokens.radiusFrame)
-    implicitHeight: sp(124)
-    clip: true
+    color: "transparent"
+    implicitHeight: sp(84)
 
     ArkLightTokens {
         id: tokens
@@ -33,114 +29,113 @@ Rectangle {
         composer.submitRequested(content)
     }
 
-    RowLayout {
-        anchors.centerIn: parent
-        width: Math.min(parent.width - composer.sp(64), composer.sp(1060))
-        height: composer.sp(96)
-        spacing: composer.sp(16)
+    Rectangle {
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.top: parent.top
+        height: 1
+        color: tokens.inkAlpha(0.12)
+    }
 
-        Item {
+    RowLayout {
+        anchors.fill: parent
+        anchors.leftMargin: composer.sp(32)
+        anchors.rightMargin: composer.sp(28)
+        anchors.topMargin: composer.sp(14)
+        anchors.bottomMargin: composer.sp(14)
+        spacing: composer.sp(12)
+
+        TextArea {
+            id: inputArea
             Layout.fillWidth: true
             Layout.fillHeight: true
-            clip: true
+            text: composer.value
+            placeholderText: "输入内容..."
+            wrapMode: TextEdit.NoWrap
+            color: tokens.ink
+            placeholderTextColor: tokens.inkAlpha(0.42)
+            selectionColor: tokens.orange
+            selectedTextColor: tokens.paperLight
+            font.family: tokens.sansFont
+            font.pixelSize: composer.sp(14)
+            leftPadding: composer.sp(14)
+            rightPadding: composer.sp(14)
+            topPadding: composer.sp(13)
+            bottomPadding: composer.sp(11)
 
-            TextArea {
-                id: inputArea
-                anchors.fill: parent
-                text: composer.value
-                placeholderText: "输入内容..."
-                wrapMode: TextEdit.WrapAnywhere
-                color: tokens.ink
-                placeholderTextColor: tokens.inkAlpha(0.42)
-                selectionColor: tokens.orange
-                selectedTextColor: "#FFFFFF"
-                font.family: tokens.sansFont
-                font.pixelSize: composer.sp(15)
-                leftPadding: composer.sp(20)
-                rightPadding: composer.sp(48)
-                topPadding: composer.sp(14)
-                bottomPadding: composer.sp(14)
+            background: Rectangle {
+                radius: composer.sp(tokens.radiusControl)
+                color: tokens.inputPaper
+                border.color: inputArea.activeFocus ? tokens.orangeAlpha(0.52) : tokens.inkAlpha(0.22)
+                border.width: 1
 
-                background: Rectangle {
-                    radius: composer.sp(tokens.radiusControl)
-                    color: "#FFFFFF"
-                    border.color: inputArea.activeFocus ? tokens.orangeAlpha(0.34) : tokens.inkAlpha(0.15)
-                    border.width: 1
-
-                    Behavior on border.color { ColorAnimation { duration: tokens.fastMotion } }
-                }
-
-                onTextChanged: {
-                    if (text !== composer.value) {
-                        composer.inputEdited(text)
-                    }
-                }
-
-                Keys.onPressed: function(event) {
-                    if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
-                        if (event.modifiers & Qt.ShiftModifier) {
-                            return
-                        }
-                        composer.submit()
-                        event.accepted = true
+                Behavior on border.color {
+                    ColorAnimation {
+                        duration: tokens.fastMotion
                     }
                 }
             }
 
-            IconCpu {
-                anchors.right: parent.right
-                anchors.top: parent.top
-                anchors.rightMargin: composer.sp(14)
-                anchors.topMargin: composer.sp(14)
-                width: composer.sp(20)
-                height: composer.sp(20)
-                strokeColor: inputArea.activeFocus ? tokens.orangeAlpha(0.46) : tokens.inkAlpha(0.22)
+            onTextChanged: {
+                if (text !== composer.value) {
+                    composer.inputEdited(text)
+                }
+            }
+
+            Keys.onPressed: function(event) {
+                if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+                    if (event.modifiers & Qt.ShiftModifier) {
+                        return
+                    }
+                    composer.submit()
+                    event.accepted = true
+                }
             }
         }
 
         Button {
             id: sendButton
-            Layout.preferredWidth: composer.sp(156)
+            Layout.preferredWidth: composer.sp(92)
             Layout.fillHeight: true
-            Layout.alignment: Qt.AlignVCenter
             enabled: !composer.sendDisabled && inputArea.text.trim().length > 0
             focusPolicy: Qt.NoFocus
-            scale: pressed ? 0.9 : (hovered && enabled ? 1.015 : 1)
+            scale: pressed ? 0.96 : 1
 
-            Behavior on scale { NumberAnimation { duration: 130; easing.type: Easing.OutCubic } }
-
-            contentItem: Row {
-                spacing: composer.sp(10)
-                anchors.centerIn: parent
-
-                IconSend {
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: composer.sp(28)
-                    height: composer.sp(28)
-                    x: sendButton.hovered && sendButton.enabled ? composer.sp(2) : 0
-                    y: sendButton.hovered && sendButton.enabled ? -composer.sp(2) : 0
-                    strokeColor: sendButton.enabled ? "#FFFFFF" : tokens.whiteAlpha(0.55)
-                    Behavior on x { NumberAnimation { duration: tokens.fastMotion; easing.type: Easing.OutCubic } }
-                    Behavior on y { NumberAnimation { duration: tokens.fastMotion; easing.type: Easing.OutCubic } }
+            Behavior on scale {
+                NumberAnimation {
+                    duration: tokens.fastMotion
+                    easing.type: Easing.OutCubic
                 }
+            }
 
-                Text {
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: "发送"
-                    color: sendButton.enabled ? "#FFFFFF" : tokens.whiteAlpha(0.55)
-                    font.family: tokens.sansFont
-                    font.pixelSize: composer.sp(11)
-                    font.weight: Font.Black
-                    font.capitalization: Font.AllUppercase
-                }
+            contentItem: Text {
+                text: "发送"
+                color: sendButton.enabled ? tokens.ink : tokens.inkAlpha(0.42)
+                font.family: tokens.sansFont
+                font.pixelSize: composer.sp(13)
+                font.weight: Font.DemiBold
+                horizontalAlignment: Text.AlignHCenter
+                verticalAlignment: Text.AlignVCenter
             }
 
             background: Rectangle {
                 radius: composer.sp(tokens.radiusControl)
-                color: sendButton.enabled
-                       ? (sendButton.hovered ? tokens.orange : tokens.ink)
-                       : tokens.inkAlpha(0.35)
-                Behavior on color { ColorAnimation { duration: tokens.fastMotion } }
+                color: sendButton.enabled ? tokens.orange : tokens.orangeAlpha(0.28)
+
+                Rectangle {
+                    anchors.fill: parent
+                    anchors.margins: composer.sp(4)
+                    radius: composer.sp(Math.max(3, tokens.radiusControl - 2))
+                    color: sendButton.hovered && sendButton.enabled ? tokens.paperLight : tokens.inputPaper
+                    border.color: tokens.blackAlpha(sendButton.enabled ? 0.28 : 0.12)
+                    border.width: 1
+
+                    Behavior on color {
+                        ColorAnimation {
+                            duration: tokens.fastMotion
+                        }
+                    }
+                }
             }
 
             onClicked: composer.submit()

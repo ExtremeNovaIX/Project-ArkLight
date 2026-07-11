@@ -13,8 +13,8 @@ ColumnLayout {
     SettingsSectionTitle {
         host: root.host
         tokens: root.tokens
-        eyebrow: "Game Mode"
-        title: "\u6e38\u620f\u63a7\u5236"
+        eyebrow: "03 / GAME LINK"
+        title: "\u6e38\u620f\u8054\u52a8"
     }
 
     GridLayout {
@@ -38,7 +38,7 @@ ColumnLayout {
         SettingsUiCard {
             host: root.host
             tokens: root.tokens
-            title: "\u6e38\u620f Session"
+            title: "\u6e38\u620f\u4f1a\u8bdd"
             detail: "\u7559\u7a7a\u65f6\u4f7f\u7528\u804a\u5929 Session\u3002"
             SettingsUiField {
                 host: root.host
@@ -51,7 +51,7 @@ ColumnLayout {
         SettingsUiCard {
             host: root.host
             tokens: root.tokens
-            title: "RP Session"
+            title: "\u89d2\u8272\u4f1a\u8bdd"
             detail: "\u7559\u7a7a\u65f6\u4f7f\u7528\u804a\u5929 Session\u3002"
             SettingsUiField {
                 host: root.host
@@ -64,7 +64,7 @@ ColumnLayout {
 
     GridLayout {
         Layout.fillWidth: true
-        columns: root.host.width > root.host.sp(1180) ? 4 : 2
+        columns: 2
         columnSpacing: root.host.sp(16)
         rowSpacing: root.host.sp(16)
 
@@ -124,7 +124,7 @@ ColumnLayout {
     SettingsUiCard {
         host: root.host
         tokens: root.tokens
-        title: "\u4f1a\u8bdd\u8be6\u60c5"
+        title: "\u8fd0\u884c\u4fe1\u606f"
         Text {
             Layout.fillWidth: true
             text: "gameSessionId=" + (root.host.gameSessionText || root.host.resolvedGameSessionId())

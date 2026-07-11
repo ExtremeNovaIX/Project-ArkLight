@@ -2,42 +2,71 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 
-Rectangle {
+Item {
     id: card
     property var host
     property var tokens
-    default property alias content: body.data
+    default property alias content: valueColumn.data
     property string title: ""
     property string detail: ""
+
     Layout.fillWidth: true
-    implicitHeight: Math.max(host.sp(112), body.implicitHeight + host.sp(40))
-    radius: host.sp(tokens.radiusFrame)
-    color: tokens.whiteAlpha(0.7)
-    border.color: tokens.ink
-    border.width: 2
-    ColumnLayout {
-        id: body
-        anchors.fill: parent
-        anchors.margins: host.sp(18)
-        spacing: host.sp(12)
-        Text {
-            Layout.fillWidth: true
-            text: card.title
-            color: tokens.ink
-            font.family: tokens.sansFont
-            font.pixelSize: host.sp(11)
-            font.weight: Font.Black
-            font.capitalization: Font.AllUppercase
-            elide: Text.ElideRight
+    implicitHeight: Math.max(host.sp(88), Math.max(labelColumn.implicitHeight, valueColumn.implicitHeight) + host.sp(30))
+
+    RowLayout {
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.top: parent.top
+        anchors.bottom: divider.top
+        anchors.leftMargin: host.sp(4)
+        anchors.rightMargin: host.sp(4)
+        anchors.topMargin: host.sp(14)
+        anchors.bottomMargin: host.sp(14)
+        spacing: host.sp(22)
+
+        ColumnLayout {
+            id: labelColumn
+            Layout.preferredWidth: Math.min(host.sp(170), card.width * 0.38)
+            Layout.alignment: Qt.AlignTop
+            spacing: host.sp(6)
+
+            Text {
+                Layout.fillWidth: true
+                text: card.title
+                color: tokens.ink
+                font.family: tokens.sansFont
+                font.pixelSize: host.sp(12)
+                font.weight: Font.DemiBold
+                wrapMode: Text.WordWrap
+            }
+
+            Text {
+                Layout.fillWidth: true
+                visible: card.detail.length > 0
+                text: card.detail
+                color: tokens.inkAlpha(0.42)
+                font.family: tokens.sansFont
+                font.pixelSize: host.sp(10)
+                wrapMode: Text.WordWrap
+                lineHeight: 1.35
+            }
         }
-        Text {
+
+        ColumnLayout {
+            id: valueColumn
             Layout.fillWidth: true
-            visible: card.detail.length > 0
-            text: card.detail
-            color: tokens.inkAlpha(0.55)
-            font.family: tokens.sansFont
-            font.pixelSize: host.sp(12)
-            wrapMode: Text.WordWrap
+            Layout.minimumWidth: 0
+            Layout.alignment: Qt.AlignTop
+            spacing: host.sp(10)
         }
+    }
+
+    Rectangle {
+        id: divider
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        height: 1
+        color: tokens.inkAlpha(0.10)
     }
 }

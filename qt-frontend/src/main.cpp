@@ -2,6 +2,7 @@
 #include <QDateTime>
 #include <QFile>
 #include <QGuiApplication>
+#include <QIcon>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QQuickStyle>
@@ -60,6 +61,7 @@ int main(int argc, char *argv[]) {
 
     // Create the Qt Quick GUI application object; it owns the event loop, windowing, and app lifetime.
     QGuiApplication app(argc, argv);
+    app.setWindowIcon(QIcon(QStringLiteral(":/qt/qml/Arklight/assets/app-icon/orbital-relay.png")));
 
     // These C++ objects are exposed to QML, so they must stay alive until app.exec() returns.
     FrontendSettings settings;

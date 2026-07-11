@@ -16,7 +16,7 @@ ColumnLayout {
         SettingsSectionTitle {
             host: root.host
             tokens: root.tokens
-            eyebrow: "本地配置"; title: "配置编辑" }
+            eyebrow: "02 / MODELS & SERVICES"; title: "模型与服务" }
     }
 
     GridLayout {
@@ -27,12 +27,12 @@ ColumnLayout {
         SettingsUiCard {
             host: root.host
             tokens: root.tokens
-            title: "配置目录"
+            title: "配置来源"
             detail: configCatalog.configDir.length > 0 ? configCatalog.configDir : "尚未读取"
             Text {
                 Layout.fillWidth: true
                 text: configCatalog.responseStatus.length > 0
-                      ? "响应: " + configCatalog.responseStatus + " / " + (configCatalog.lastFetchedAt || "未刷新")
+                      ? "同步: " + configCatalog.responseStatus + " / " + (configCatalog.lastFetchedAt || "未刷新")
                       : "未刷新"
                 color: root.tokens.inkAlpha(0.55)
                 font.family: root.tokens.monoFont
@@ -194,7 +194,7 @@ ColumnLayout {
             id: emptyConfigText
             anchors.fill: parent
             anchors.margins: root.host.sp(20)
-            text: "没有找到可编辑的本地配置文件。请确认 config 目录存在。"
+            text: "没有找到可编辑的服务配置。请确认配置目录存在。"
             color: root.tokens.inkAlpha(0.62)
             font.family: root.tokens.sansFont
             font.pixelSize: root.host.sp(13)

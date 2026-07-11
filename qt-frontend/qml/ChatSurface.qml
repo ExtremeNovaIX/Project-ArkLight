@@ -12,12 +12,12 @@ Rectangle {
     property string userInput: ""
     property bool assistantTyping: false
     property bool sendDisabled: false
+    property string relayTime: "00:00:00"
     signal openSettings()
     signal inputEdited(string value)
     signal submitMessage(string value)
 
     color: tokens.paper
-    radius: surface.sp(tokens.radiusFrame)
     clip: true
 
     ArkLightTokens {
@@ -32,75 +32,262 @@ Rectangle {
         return operatorName.length > 0 ? operatorName : "Local"
     }
 
+    function refreshRelayTime() {
+        relayTime = Qt.formatTime(new Date(), "hh:mm:ss")
+    }
+
+    Component.onCompleted: refreshRelayTime()
+
+    Timer {
+        interval: 1000
+        running: true
+        repeat: true
+        onTriggered: surface.refreshRelayTime()
+    }
+
+    TechnicalBackdrop {
+        anchors.fill: parent
+        scaleFactor: surface.scaleFactor
+    }
+
+    Text {
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        anchors.rightMargin: surface.sp(24)
+        anchors.bottomMargin: surface.sp(92)
+        text: "PIONEER"
+        color: tokens.inkAlpha(0.03)
+        font.family: tokens.displayFont
+        font.pixelSize: surface.sp(86)
+        font.weight: Font.Light
+        font.letterSpacing: surface.sp(1.2)
+        z: 0
+    }
+
+    Column {
+        anchors.left: parent.left
+        anchors.bottom: parent.bottom
+        anchors.leftMargin: surface.sp(34)
+        anchors.bottomMargin: surface.sp(176)
+        spacing: surface.sp(4)
+        opacity: 0.32
+        z: 0
+
+        Text {
+            text: "ORBITAL ARC: 9.2°"
+            color: tokens.inkAlpha(0.42)
+            font.family: tokens.monoFont
+            font.pixelSize: surface.sp(8)
+        }
+
+        Text {
+            text: "RING DIA.: 128,600 km"
+            color: tokens.inkAlpha(0.42)
+            font.family: tokens.monoFont
+            font.pixelSize: surface.sp(8)
+        }
+
+        Text {
+            text: "STN ID: PNR-07"
+            color: tokens.inkAlpha(0.42)
+            font.family: tokens.monoFont
+            font.pixelSize: surface.sp(8)
+        }
+    }
+
+    Column {
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        anchors.rightMargin: surface.sp(30)
+        anchors.bottomMargin: surface.sp(166)
+        spacing: surface.sp(4)
+        opacity: 0.34
+        z: 0
+
+        Text {
+            text: "REF. AX-7"
+            color: tokens.inkAlpha(0.44)
+            font.family: tokens.monoFont
+            font.pixelSize: surface.sp(8)
+        }
+
+        Text {
+            text: "VER. 2.7.1"
+            color: tokens.inkAlpha(0.44)
+            font.family: tokens.monoFont
+            font.pixelSize: surface.sp(8)
+        }
+
+        Text {
+            text: "X: 37.7749° N"
+            color: tokens.inkAlpha(0.44)
+            font.family: tokens.monoFont
+            font.pixelSize: surface.sp(8)
+        }
+
+        Text {
+            text: "Y: 122.4194° W"
+            color: tokens.inkAlpha(0.44)
+            font.family: tokens.monoFont
+            font.pixelSize: surface.sp(8)
+        }
+    }
+
     ColumnLayout {
         anchors.fill: parent
         spacing: 0
+        z: 2
 
         Rectangle {
             Layout.fillWidth: true
-            Layout.preferredHeight: surface.sp(80)
-            color: tokens.whiteAlpha(0.52)
-            border.color: tokens.inkAlpha(0.34)
+            Layout.preferredHeight: surface.sp(78)
+            color: tokens.whiteAlpha(0.10)
+            border.color: tokens.inkAlpha(0.14)
             border.width: 1
-            clip: true
-
-            SurfaceTexture {
-                anchors.fill: parent
-                scaleFactor: surface.scaleFactor
-                lineColor: tokens.chatGrid
-                lineAlpha: 0.026
-                geometryAlpha: 0.008
-                drawWatermark: false
-            }
 
             RowLayout {
                 anchors.fill: parent
-                anchors.leftMargin: surface.sp(40)
-                anchors.rightMargin: surface.sp(40)
-                spacing: surface.sp(24)
+                anchors.leftMargin: surface.sp(24)
+                anchors.rightMargin: surface.sp(22)
+                spacing: surface.sp(18)
+
+                Item {
+                    Layout.preferredWidth: surface.sp(176)
+                    Layout.fillHeight: true
+
+                    Column {
+                        anchors.left: parent.left
+                        anchors.verticalCenter: parent.verticalCenter
+                        spacing: surface.sp(2)
+
+                        Text {
+                            text: "RELAY INDEX"
+                            color: tokens.inkAlpha(0.48)
+                            font.family: tokens.monoFont
+                            font.pixelSize: surface.sp(8)
+                            font.letterSpacing: surface.sp(0.8)
+                        }
+
+                        Row {
+                            spacing: surface.sp(10)
+
+                            Text {
+                                text: surface.relayTime
+                                color: tokens.ink
+                                font.family: tokens.displayFont
+                                font.pixelSize: surface.sp(24)
+                                font.weight: Font.DemiBold
+                                font.letterSpacing: surface.sp(2.2)
+                            }
+
+                            Rectangle {
+                                width: surface.sp(6)
+                                height: surface.sp(6)
+                                radius: surface.sp(3)
+                                color: tokens.orange
+                                anchors.verticalCenter: parent.verticalCenter
+                            }
+                        }
+                    }
+                }
 
                 Item {
                     Layout.fillWidth: true
                 }
 
+                Column {
+                    Layout.alignment: Qt.AlignVCenter
+                    spacing: surface.sp(5)
+
+                    Row {
+                        spacing: surface.sp(8)
+
+                        Rectangle {
+                            width: surface.sp(8)
+                            height: surface.sp(8)
+                            radius: surface.sp(4)
+                            color: tokens.teal
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+
+                        Text {
+                            text: "ONLINE"
+                            color: tokens.inkAlpha(0.80)
+                            font.family: tokens.displayFont
+                            font.pixelSize: surface.sp(13)
+                            font.weight: Font.Medium
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+                    }
+
+                    Row {
+                        spacing: 0
+
+                        Rectangle {
+                            width: surface.sp(28)
+                            height: surface.sp(2)
+                            color: tokens.statusRedLight
+                        }
+                        Rectangle {
+                            width: surface.sp(28)
+                            height: surface.sp(2)
+                            color: tokens.statusYellow
+                        }
+                        Rectangle {
+                            width: surface.sp(32)
+                            height: surface.sp(2)
+                            color: tokens.statusTeal
+                        }
+                    }
+                }
+
                 Button {
                     id: settingsButton
-                    Layout.preferredHeight: surface.sp(40)
-                    Layout.preferredWidth: surface.sp(126)
+                    Layout.preferredWidth: surface.sp(94)
+                    Layout.preferredHeight: surface.sp(44)
                     Layout.alignment: Qt.AlignVCenter
                     focusPolicy: Qt.NoFocus
-                    scale: pressed ? 0.95 : (hovered ? 1.015 : 1)
+                    scale: pressed ? 0.96 : 1
 
-                    Behavior on scale { NumberAnimation { duration: 130; easing.type: Easing.OutCubic } }
+                    Behavior on scale {
+                        NumberAnimation {
+                            duration: tokens.fastMotion
+                            easing.type: Easing.OutCubic
+                        }
+                    }
 
                     contentItem: Row {
                         anchors.centerIn: parent
-                        spacing: surface.sp(10)
+                        spacing: surface.sp(8)
 
                         IconGear {
                             anchors.verticalCenter: parent.verticalCenter
-                            width: surface.sp(20)
-                            height: surface.sp(20)
-                            strokeColor: settingsButton.hovered ? "#FFFFFF" : tokens.ink
+                            width: surface.sp(18)
+                            height: surface.sp(18)
+                            strokeColor: tokens.orange
                         }
 
                         Text {
                             anchors.verticalCenter: parent.verticalCenter
                             text: "设置"
-                            color: settingsButton.hovered ? "#FFFFFF" : tokens.ink
+                            color: tokens.ink
                             font.family: tokens.sansFont
-                            font.pixelSize: surface.sp(10)
-                            font.weight: Font.Black
-                            font.capitalization: Font.AllUppercase
+                            font.pixelSize: surface.sp(12)
+                            font.weight: Font.DemiBold
                         }
                     }
 
                     background: Rectangle {
-                        radius: surface.sp(tokens.radiusFrame)
-                        color: settingsButton.hovered ? tokens.ink : "transparent"
-                        border.color: tokens.ink
-                        border.width: 2
-                        Behavior on color { ColorAnimation { duration: tokens.fastMotion } }
+                        radius: surface.sp(5)
+                        color: settingsButton.hovered ? tokens.paperLight : tokens.inputPaper
+                        border.color: tokens.orange
+                        border.width: 1
+
+                        Behavior on color {
+                            ColorAnimation {
+                                duration: tokens.fastMotion
+                            }
+                        }
                     }
 
                     onClicked: surface.openSettings()
@@ -108,51 +295,47 @@ Rectangle {
             }
         }
 
-        Rectangle {
+        Item {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            color: tokens.paper
             clip: true
-
-            Rectangle {
-                anchors.fill: parent
-                color: tokens.paper
-                opacity: 0.95
-            }
-
-            SurfaceTexture {
-                anchors.fill: parent
-                lineColor: tokens.chatGrid
-                lineAlpha: 0.052
-                geometryAlpha: 0.02
-                scaleFactor: surface.scaleFactor
-            }
 
             ListView {
                 id: chatList
-                anchors.left: parent.left
-                anchors.right: parent.right
-                anchors.top: parent.top
-                anchors.bottom: parent.bottom
-                anchors.leftMargin: surface.sp(32)
-                anchors.rightMargin: 0
-                anchors.topMargin: surface.sp(32)
-                anchors.bottomMargin: surface.sp(32)
-                spacing: surface.sp(20)
+                anchors.fill: parent
+                anchors.leftMargin: surface.sp(34)
+                anchors.rightMargin: surface.sp(28)
+                anchors.topMargin: surface.sp(42)
+                anchors.bottomMargin: surface.sp(26)
+                spacing: surface.sp(26)
                 clip: true
                 model: surface.messagesModel
                 boundsBehavior: Flickable.StopAtBounds
 
                 add: Transition {
                     ParallelAnimation {
-                        NumberAnimation { property: "opacity"; from: 0; to: 1; duration: 260; easing.type: Easing.OutCubic }
-                        NumberAnimation { property: "scale"; from: 0.98; to: 1; duration: 260; easing.type: Easing.OutCubic }
-                        NumberAnimation { property: "y"; from: 20; duration: 260; easing.type: Easing.OutCubic }
+                        NumberAnimation {
+                            property: "opacity"
+                            from: 0
+                            to: 1
+                            duration: tokens.baseMotion
+                            easing.type: Easing.OutCubic
+                        }
+                        NumberAnimation {
+                            property: "y"
+                            from: surface.sp(12)
+                            duration: tokens.baseMotion
+                            easing.type: Easing.OutCubic
+                        }
                     }
                 }
 
                 displaced: Transition {
-                    NumberAnimation { properties: "x,y"; duration: 180; easing.type: Easing.OutCubic }
+                    NumberAnimation {
+                        properties: "x,y"
+                        duration: tokens.fastMotion
+                        easing.type: Easing.OutCubic
+                    }
                 }
 
                 function scrollToEnd() {
@@ -165,165 +348,166 @@ Rectangle {
                     anchors.right: parent.right
                     policy: ScrollBar.AsNeeded
                     contentItem: Rectangle {
-                        implicitWidth: surface.sp(5)
-                        radius: surface.sp(3)
-                        color: tokens.inkAlpha(0.13)
+                        implicitWidth: surface.sp(3)
+                        radius: surface.sp(2)
+                        color: tokens.inkAlpha(0.12)
                     }
-                    background: Rectangle { color: "transparent" }
+                    background: Rectangle {
+                        color: "transparent"
+                    }
                 }
 
                 delegate: Item {
-                    width: chatList.width - surface.sp(32)
+                    id: messageItem
+                    width: chatList.width
                     height: messageColumn.implicitHeight
                     opacity: 1
-                    scale: 1
+
+                    property bool fromUser: messageRole === "user"
 
                     Column {
                         id: messageColumn
-                        width: Math.min(chatList.width * 0.86, surface.sp(512))
-                        anchors.right: messageRole === "user" ? parent.right : undefined
-                        anchors.left: messageRole === "user" ? undefined : parent.left
-                        spacing: surface.sp(6)
+                        width: Math.min(chatList.width * 0.82, surface.sp(560))
+                        anchors.left: messageItem.fromUser ? undefined : parent.left
+                        anchors.right: messageItem.fromUser ? parent.right : undefined
+                        spacing: surface.sp(8)
 
                         Row {
-                            spacing: surface.sp(8)
-                            layoutDirection: messageRole === "user" ? Qt.RightToLeft : Qt.LeftToRight
-                            anchors.right: messageRole === "user" ? parent.right : undefined
+                            spacing: surface.sp(9)
+                            layoutDirection: messageItem.fromUser ? Qt.RightToLeft : Qt.LeftToRight
+                            anchors.right: messageItem.fromUser ? parent.right : undefined
 
                             Rectangle {
-                                width: surface.sp(8)
-                                height: surface.sp(8)
-                                radius: surface.sp(4)
-                                color: messageRole === "user" ? tokens.orange : tokens.teal
+                                width: surface.sp(7)
+                                height: surface.sp(7)
+                                color: messageItem.fromUser ? tokens.orange : tokens.teal
                                 anchors.verticalCenter: parent.verticalCenter
                             }
 
                             Text {
-                                text: messageRole === "user"
+                                width: Math.min(implicitWidth, surface.sp(270))
+                                text: messageItem.fromUser
                                       ? "Operator / " + surface.displayOperatorName()
                                       : "ArkLight / Remote"
-                                color: tokens.inkAlpha(0.45)
-                                font.family: tokens.monoFont
-                                font.pixelSize: surface.sp(10)
-                                font.capitalization: Font.AllUppercase
-                                anchors.verticalCenter: parent.verticalCenter
+                                color: messageItem.fromUser ? tokens.orange : tokens.tealDark
+                                font.family: tokens.displayFont
+                                font.pixelSize: surface.sp(13)
+                                font.weight: Font.DemiBold
                                 elide: Text.ElideRight
-                                width: Math.min(implicitWidth, surface.sp(260))
-                            }
-
-                            Rectangle {
-                                width: surface.sp(32)
-                                height: 1
-                                color: tokens.inkAlpha(0.1)
                                 anchors.verticalCenter: parent.verticalCenter
                             }
                         }
 
-                        Rectangle {
-                            id: bubble
-                            width: Math.min(messageText.implicitWidth + surface.sp(40), messageColumn.width)
-                            implicitHeight: messageText.implicitHeight + surface.sp(28)
-                            radius: surface.sp(tokens.radiusBubble)
-                            color: messageRole === "user" ? tokens.ink : "#FFFFFF"
-                            border.color: messageRole === "user"
-                                          ? tokens.ink
-                                          : (bubbleHover.hovered ? tokens.tealAlpha(0.28) : tokens.inkAlpha(0.08))
-                            border.width: messageRole === "user" ? 0 : 1
-                            anchors.right: messageRole === "user" ? parent.right : undefined
-                            scale: bubbleHover.hovered ? 1.012 : 1
+                        Item {
+                            width: parent.width
+                            height: messageText.implicitHeight + surface.sp(24)
 
-                            HoverHandler {
-                                id: bubbleHover
+                            Rectangle {
+                                x: messageItem.fromUser ? parent.width - 1 : 0
+                                y: 0
+                                width: 1
+                                height: parent.height
+                                color: messageItem.fromUser ? tokens.orangeAlpha(0.23) : tokens.tealAlpha(0.22)
                             }
-
-                            Behavior on scale { NumberAnimation { duration: tokens.fastMotion; easing.type: Easing.OutCubic } }
-                            Behavior on border.color { ColorAnimation { duration: 160 } }
 
                             Text {
                                 id: messageText
-                                anchors.fill: parent
-                                anchors.margins: surface.sp(14)
-                                width: parent.width - surface.sp(28)
+                                anchors.left: parent.left
+                                anchors.right: parent.right
+                                anchors.top: parent.top
+                                anchors.leftMargin: surface.sp(16)
+                                anchors.rightMargin: surface.sp(16)
                                 text: messageContent
-                                wrapMode: Text.WrapAnywhere
-                                color: messageRole === "user" ? "#FFFFFF" : tokens.ink
+                                wrapMode: Text.Wrap
+                                horizontalAlignment: messageItem.fromUser ? Text.AlignRight : Text.AlignLeft
+                                color: tokens.ink
                                 font.family: tokens.sansFont
-                                font.pixelSize: surface.sp(15)
-                                lineHeight: 1.42
+                                font.pixelSize: surface.sp(14)
+                                lineHeight: 1.5
+                            }
+
+                            Text {
+                                anchors.left: parent.left
+                                anchors.right: parent.right
+                                anchors.bottom: parent.bottom
+                                anchors.leftMargin: surface.sp(16)
+                                anchors.rightMargin: surface.sp(16)
+                                text: "SEQ / " + (index < 9 ? "0" : "") + (index + 1)
+                                horizontalAlignment: messageItem.fromUser ? Text.AlignRight : Text.AlignLeft
+                                color: tokens.inkAlpha(0.34)
+                                font.family: tokens.monoFont
+                                font.pixelSize: surface.sp(8)
                             }
                         }
                     }
                 }
 
                 footer: Item {
-                    width: chatList.width - surface.sp(32)
-                    height: surface.assistantTyping ? typingColumn.implicitHeight + surface.sp(4) : 0
+                    width: chatList.width
+                    height: surface.assistantTyping ? typingColumn.implicitHeight + surface.sp(8) : 0
                     visible: surface.assistantTyping
 
                     Column {
                         id: typingColumn
-                        width: Math.min(chatList.width * 0.86, surface.sp(512))
-                        spacing: surface.sp(6)
+                        width: Math.min(chatList.width * 0.82, surface.sp(560))
+                        spacing: surface.sp(8)
 
                         Row {
-                            spacing: surface.sp(8)
+                            spacing: surface.sp(9)
+
                             Rectangle {
-                                width: surface.sp(8)
-                                height: surface.sp(8)
-                                radius: surface.sp(4)
+                                width: surface.sp(7)
+                                height: surface.sp(7)
                                 color: tokens.teal
                                 anchors.verticalCenter: parent.verticalCenter
                             }
+
                             Text {
                                 text: "ArkLight / Remote"
-                                color: tokens.inkAlpha(0.45)
-                                font.family: tokens.monoFont
-                                font.pixelSize: surface.sp(10)
-                                font.capitalization: Font.AllUppercase
-                                anchors.verticalCenter: parent.verticalCenter
-                            }
-                            Rectangle {
-                                width: surface.sp(32)
-                                height: 1
-                                color: tokens.inkAlpha(0.1)
-                                anchors.verticalCenter: parent.verticalCenter
+                                color: tokens.tealDark
+                                font.family: tokens.displayFont
+                                font.pixelSize: surface.sp(13)
+                                font.weight: Font.DemiBold
                             }
                         }
 
-                        Rectangle {
-                            width: Math.min(typingRow.implicitWidth + surface.sp(40), typingColumn.width)
-                            implicitHeight: typingRow.implicitHeight + surface.sp(28)
-                            radius: surface.sp(tokens.radiusBubble)
-                            color: "#FFFFFF"
-                            border.color: tokens.inkAlpha(0.08)
-                            border.width: 1
+                        Row {
+                            spacing: surface.sp(8)
 
-                            Row {
-                                id: typingRow
-                                anchors.centerIn: parent
-                                spacing: surface.sp(8)
-                                Repeater {
-                                    model: 3
-                                    Rectangle {
-                                        width: surface.sp(10)
-                                        height: surface.sp(10)
-                                        radius: surface.sp(5)
-                                        color: tokens.teal
-                                        SequentialAnimation on opacity {
-                                            loops: Animation.Infinite
-                                            PauseAnimation { duration: index * 120 }
-                                            NumberAnimation { from: 0.35; to: 0.95; duration: 520; easing.type: Easing.InOutSine }
-                                            NumberAnimation { from: 0.95; to: 0.35; duration: 520; easing.type: Easing.InOutSine }
+                            Repeater {
+                                model: 3
+
+                                Rectangle {
+                                    width: surface.sp(7)
+                                    height: surface.sp(7)
+                                    color: tokens.teal
+
+                                    SequentialAnimation on opacity {
+                                        loops: Animation.Infinite
+                                        PauseAnimation {
+                                            duration: index * 110
+                                        }
+                                        NumberAnimation {
+                                            from: 0.2
+                                            to: 0.85
+                                            duration: 460
+                                            easing.type: Easing.InOutSine
+                                        }
+                                        NumberAnimation {
+                                            from: 0.85
+                                            to: 0.2
+                                            duration: 460
+                                            easing.type: Easing.InOutSine
                                         }
                                     }
                                 }
-                                Text {
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    text: "对方正在输入..."
-                                    color: tokens.inkAlpha(0.6)
-                                    font.family: tokens.sansFont
-                                    font.pixelSize: surface.sp(14)
-                                }
+                            }
+
+                            Text {
+                                text: "对方正在输入..."
+                                color: tokens.inkAlpha(0.58)
+                                font.family: tokens.sansFont
+                                font.pixelSize: surface.sp(13)
                             }
                         }
                     }
@@ -336,6 +520,7 @@ Rectangle {
         }
 
         ChatComposer {
+            id: composer
             Layout.fillWidth: true
             scaleFactor: surface.scaleFactor
             value: surface.userInput
@@ -346,11 +531,6 @@ Rectangle {
             onSubmitRequested: function(value) {
                 surface.submitMessage(value)
             }
-        }
-
-        StatusStrip {
-            Layout.fillWidth: true
-            scaleFactor: surface.scaleFactor
         }
     }
 }
