@@ -36,13 +36,24 @@ Rectangle {
         relayTime = Qt.formatTime(new Date(), "hh:mm:ss")
     }
 
-    Component.onCompleted: refreshRelayTime()
+    function scheduleRelayTick() {
+        const now = Date.now()
+        relayTimer.interval = Math.max(16, 1002 - now % 1000)
+        relayTimer.restart()
+    }
+
+    Component.onCompleted: {
+        refreshRelayTime()
+        scheduleRelayTick()
+    }
 
     Timer {
-        interval: 1000
-        running: true
-        repeat: true
-        onTriggered: surface.refreshRelayTime()
+        id: relayTimer
+        repeat: false
+        onTriggered: {
+            surface.refreshRelayTime()
+            surface.scheduleRelayTick()
+        }
     }
 
     TechnicalBackdrop {
@@ -50,25 +61,45 @@ Rectangle {
         scaleFactor: surface.scaleFactor
     }
 
-    Text {
-        anchors.right: parent.right
+    AmbientSignalFlow {
+        anchors.fill: parent
+        scaleFactor: surface.scaleFactor
+        mode: "surface"
+        coreColor: tokens.teal
+        haloColor: tokens.orange
+        opacity: 0.52
+        z: 1
+    }
+
+    Item {
+        id: pioneerRail
+        anchors.left: parent.left
+        anchors.top: parent.top
         anchors.bottom: parent.bottom
-        anchors.rightMargin: surface.sp(24)
-        anchors.bottomMargin: surface.sp(92)
-        text: "PIONEER"
-        color: tokens.inkAlpha(0.03)
-        font.family: tokens.displayFont
-        font.pixelSize: surface.sp(86)
-        font.weight: Font.Light
-        font.letterSpacing: surface.sp(1.2)
+        anchors.topMargin: surface.sp(96)
+        anchors.bottomMargin: surface.sp(112)
+        width: surface.sp(44)
         z: 0
+
+        Text {
+            anchors.centerIn: parent
+            width: pioneerRail.height
+            text: "PIONEER"
+            rotation: -90
+            color: tokens.inkAlpha(0.034)
+            font.family: tokens.displayFont
+            font.pixelSize: surface.sp(52)
+            font.weight: Font.Light
+            font.letterSpacing: surface.sp(1.1)
+            horizontalAlignment: Text.AlignHCenter
+        }
     }
 
     Column {
         anchors.left: parent.left
         anchors.bottom: parent.bottom
-        anchors.leftMargin: surface.sp(34)
-        anchors.bottomMargin: surface.sp(176)
+        anchors.leftMargin: surface.sp(58)
+        anchors.bottomMargin: surface.sp(148)
         spacing: surface.sp(4)
         opacity: 0.32
         z: 0
@@ -98,10 +129,10 @@ Rectangle {
     Column {
         anchors.right: parent.right
         anchors.bottom: parent.bottom
-        anchors.rightMargin: surface.sp(30)
-        anchors.bottomMargin: surface.sp(166)
+        anchors.rightMargin: surface.sp(18)
+        anchors.bottomMargin: surface.sp(144)
         spacing: surface.sp(4)
-        opacity: 0.34
+        opacity: 0.28
         z: 0
 
         Text {
@@ -152,41 +183,37 @@ Rectangle {
                 spacing: surface.sp(18)
 
                 Item {
-                    Layout.preferredWidth: surface.sp(176)
+                    Layout.preferredWidth: surface.sp(194)
                     Layout.fillHeight: true
 
                     Column {
                         anchors.left: parent.left
                         anchors.verticalCenter: parent.verticalCenter
-                        spacing: surface.sp(2)
-
-                        Text {
-                            text: "RELAY INDEX"
-                            color: tokens.inkAlpha(0.48)
-                            font.family: tokens.monoFont
-                            font.pixelSize: surface.sp(8)
-                            font.letterSpacing: surface.sp(0.8)
-                        }
+                        spacing: surface.sp(3)
 
                         Row {
-                            spacing: surface.sp(10)
+                            spacing: surface.sp(8)
 
                             Text {
-                                text: surface.relayTime
-                                color: tokens.ink
-                                font.family: tokens.displayFont
-                                font.pixelSize: surface.sp(24)
-                                font.weight: Font.DemiBold
-                                font.letterSpacing: surface.sp(2.2)
+                                text: "RELAY INDEX"
+                                color: tokens.inkAlpha(0.48)
+                                font.family: tokens.monoFont
+                                font.pixelSize: surface.sp(8)
+                                font.letterSpacing: surface.sp(0.8)
                             }
 
-                            Rectangle {
-                                width: surface.sp(6)
-                                height: surface.sp(6)
-                                radius: surface.sp(3)
-                                color: tokens.orange
-                                anchors.verticalCenter: parent.verticalCenter
+                            Text {
+                                text: "MECH / 08"
+                                color: tokens.inkAlpha(0.28)
+                                font.family: tokens.monoFont
+                                font.pixelSize: surface.sp(7)
+                                font.letterSpacing: surface.sp(0.5)
                             }
+                        }
+
+                        MechanicalCounterClock {
+                            scaleFactor: surface.scaleFactor
+                            value: surface.relayTime
                         }
                     }
                 }
@@ -246,15 +273,8 @@ Rectangle {
                     Layout.preferredWidth: surface.sp(94)
                     Layout.preferredHeight: surface.sp(44)
                     Layout.alignment: Qt.AlignVCenter
-                    focusPolicy: Qt.NoFocus
-                    scale: pressed ? 0.96 : 1
-
-                    Behavior on scale {
-                        NumberAnimation {
-                            duration: tokens.fastMotion
-                            easing.type: Easing.OutCubic
-                        }
-                    }
+                    focusPolicy: Qt.StrongFocus
+                    hoverEnabled: true
 
                     contentItem: Row {
                         anchors.centerIn: parent
@@ -280,10 +300,35 @@ Rectangle {
                     background: Rectangle {
                         radius: surface.sp(5)
                         color: settingsButton.hovered ? tokens.paperLight : tokens.inputPaper
-                        border.color: tokens.orange
+                        border.color: settingsButton.hovered || settingsButton.activeFocus
+                                      ? tokens.orangeAlpha(0.78)
+                                      : tokens.orangeAlpha(0.54)
                         border.width: 1
 
+                        Rectangle {
+                            anchors.fill: parent
+                            anchors.margins: -surface.sp(3)
+                            radius: surface.sp(8)
+                            color: "transparent"
+                            border.color: tokens.orangeAlpha(0.18)
+                            border.width: 1
+                            opacity: settingsButton.hovered || settingsButton.activeFocus ? 1 : 0
+
+                            Behavior on opacity {
+                                NumberAnimation {
+                                    duration: tokens.fastMotion
+                                    easing.type: Easing.OutCubic
+                                }
+                            }
+                        }
+
                         Behavior on color {
+                            ColorAnimation {
+                                duration: tokens.fastMotion
+                            }
+                        }
+
+                        Behavior on border.color {
                             ColorAnimation {
                                 duration: tokens.fastMotion
                             }
@@ -303,8 +348,8 @@ Rectangle {
             ListView {
                 id: chatList
                 anchors.fill: parent
-                anchors.leftMargin: surface.sp(34)
-                anchors.rightMargin: surface.sp(28)
+                anchors.leftMargin: surface.sp(52)
+                anchors.rightMargin: surface.sp(26)
                 anchors.topMargin: surface.sp(42)
                 anchors.bottomMargin: surface.sp(26)
                 spacing: surface.sp(26)
@@ -345,13 +390,36 @@ Rectangle {
                 }
 
                 ScrollBar.vertical: ScrollBar {
+                    id: chatScrollBar
+                    parent: chatList.parent
+                    anchors.top: chatList.top
+                    anchors.bottom: chatList.bottom
                     anchors.right: parent.right
+                    anchors.rightMargin: surface.sp(6)
+                    implicitWidth: surface.sp(10)
                     policy: ScrollBar.AsNeeded
-                    contentItem: Rectangle {
-                        implicitWidth: surface.sp(3)
-                        radius: surface.sp(2)
-                        color: tokens.inkAlpha(0.12)
+                    hoverEnabled: true
+                    z: 3
+
+                    contentItem: Item {
+                        implicitWidth: surface.sp(10)
+
+                        Rectangle {
+                            anchors.top: parent.top
+                            anchors.bottom: parent.bottom
+                            anchors.right: parent.right
+                            width: surface.sp(2)
+                            radius: surface.sp(1)
+                            color: tokens.inkAlpha(chatScrollBar.active ? 0.28 : 0.12)
+
+                            Behavior on color {
+                                ColorAnimation {
+                                    duration: tokens.fastMotion
+                                }
+                            }
+                        }
                     }
+
                     background: Rectangle {
                         color: "transparent"
                     }

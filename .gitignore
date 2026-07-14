@@ -103,3 +103,5 @@ backend/benchmark/halumem/*.jsonl
 /config
 .mcp.json
 /.codex
+/tmp
+/gateway/target

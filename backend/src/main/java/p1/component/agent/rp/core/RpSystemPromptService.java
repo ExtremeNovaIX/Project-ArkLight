@@ -18,7 +18,7 @@ public class RpSystemPromptService {
 
     /**
      * 构建本轮 RP system prompt。
-     *
+     *2
      * @param sessionId      RP 会话 id
      * @param rolePrompt     角色设定提示词
      * @param currentSummary 历史对话摘要

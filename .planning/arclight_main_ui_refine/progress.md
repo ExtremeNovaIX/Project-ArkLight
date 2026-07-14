@@ -1,0 +1,35 @@
+# Progress
+
+- Read design, UI UX, TDD, planning, and verification instructions.
+- Inspected four user references and current QML structure.
+- Confirmed unrelated dirty files exist only under .planning/codex_browser_crash and must be preserved.
+- Confirmed BootOverlay.qml is currently clean.
+- Inspected current layout components and overlay raster assets.
+- Identified SettingsCategoryGlyph assembly motion and CharacterStage hover scaling as the two focus-motion sources.
+- Identified ChatSurface attached scrollbar inset caused by the ListView right margin.
+- Attempted to read root CMakePresets.json, but the preset file is located elsewhere or generated. Will locate it via file listing instead of repeating the same path.
+- Added test-first QML source contracts for the mechanical counter, edge zoning, ambient flow, edge scrollbar, and glow focus.
+- Initial test launch returned exit code 1 without QtTest output because the test process did not inherit the Qt and MinGW runtime paths. Next attempt will set the paths explicitly.
+- User clarified the clock must snap directly from one displayed value to the next at the tick, with no slow rolling transition.
+- RED confirmed: four new QtTest source contracts failed for the missing clock, edge zones, ambient flow, and glow focus.
+- GREEN confirmed: all four focused contracts now pass, 6 total test functions passed in the targeted run.
+- Added MechanicalCounterClock and AmbientSignalFlow components and integrated the first layout/focus pass.
+- Re-read the active plan after reconnect and visually inspected the current default and compact previews.
+- Confirmed the clock source uses direct character binding with no digit motion animation; awaiting fresh build/test verification.
+- Error: the first planning append attempt failed in the JavaScript wrapper because PowerShell backticks terminated the template literal; retried with Environment.NewLine and literal ASCII strings.
+- Regenerated default, compact, large, and settings-glyph previews after the fresh Qt build and visually inspected them.
+- qmllint completed with exit code 0. It reported existing unqualified-access warnings, including warnings in new Repeater delegates, but no QML syntax errors.
+- Generated two isolated AmbientSignalFlow captures 1000 ms apart. Pixel comparison found 386 changed pixels across bounds 60,48..1303,371, confirming movement on the intended edge paths.
+- Error: the first System.Drawing comparison passed PathInfo objects to the Bitmap constructor and produced invalid zero results; reran with resolved .Path strings and ErrorActionPreference Stop.
+- Added a temporary long-conversation preview harness and visually confirmed the reparented scrollbar is not clipped.
+- Final verification: scripts/verify.ps1 -Scope qt exited 0; CTest passed 2/2 targets; qmllint exited 0 with 130 unqualified-access warnings and 0 errors; git diff --check passed; UTF-8 damage scan found no suspicious question-mark sequences.
+- Final code review found no functional Critical issues. The two new QML files remain untracked and must be included in the eventual commit. Temporary verification harnesses were removed.
+- Started the mechanical split-flap revision. Scope includes MechanicalCounterClock.qml, its test contract, one project raster asset, CMake resource registration, and final git tracking of the two new QML files.
+- RED confirmed: the focused counter test failed on the missing previousCharacter split-flap state before any production implementation.
+- Generated the split-flap material with built-in image generation, copied it into qt-frontend/assets/ui/clock/split-flap-cell-texture.png, and losslessly integrated a high-quality 256x384 project derivative at about 101 KB.
+- GREEN confirmed for the focused source contract after adding the AI texture resource and the initial 168ms two-phase split-flap implementation.
+- Full Qt/QML build succeeded and the default interface preview was regenerated with the textured clock.
+- Rendered four 4x clock frames. Rest states were clean, but both upper and lower motion frames showed black transformed halves; a second RED/GREEN cycle is required for layer-backed faces and corrected rotation sign.
+- Second GREEN confirmed for the layer-backed flip contract. A new four-frame capture verified the black-frame defect is gone.
+- Regenerated and inspected all three representative viewport scales after the final texture opacity and border reduction.
+- Full Qt verification passed and CTest passed 2/2 before review. Review requested a third RED/GREEN cycle for non-interrupting latest-value re-entry.

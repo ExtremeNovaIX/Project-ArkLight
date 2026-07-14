@@ -58,6 +58,8 @@ qt_add_qml_module(arklight_qt
     QML_FILES
         qml/ArkLightScene.qml
         qml/ArkLightTokens.qml
+        qml/AmbientSignalFlow.qml
+        qml/MechanicalCounterClock.qml
         qml/BootOverlay.qml
         qml/CharacterStage.qml
         qml/DeepSpaceBackdrop.qml
@@ -92,6 +94,7 @@ qt_add_qml_module(arklight_qt
         qml/SurfaceTexture.qml
     RESOURCES
         assets/ui/technical-overlays/megastructure-raster.png
+        assets/ui/clock/split-flap-cell-texture.png
         assets/ui/technical-overlays/technical-graphics-raster.png
         assets/app-icon/orbital-relay.png
 )

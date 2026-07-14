@@ -1,0 +1,105 @@
+# Progress
+
+- 2026-07-13: Started passive crash investigation.
+- 2026-07-13: Worktree was clean apart from branch being ahead by 3 commits.
+- 2026-07-13: Planning-related terms were absent from .gitignore.- 2026-07-13: A parallel evidence query aborted because invoking the packaged codex.exe was denied by WindowsApps permissions.- 2026-07-13: Collected process list, package tree, and Application event log. No matching Codex crash events were found.- 2026-07-13: Located active browser plugin configuration and discovered possible app/plugin version skew.- 2026-07-13: Discarded the version-skew hypothesis and defined a two-stage runtime reproduction.- 2026-07-13: Browser handshake and hidden about:blank tab creation both passed.- 2026-07-13: Root cause confirmed as a stale persisted browser tab that triggers a URL-less unmatched webview attach.- 2026-07-13: Post-repair verification disproved hypothesis 1; returned to root-cause investigation.- 2026-07-13: Recovered the exact crash-producing Browser call from the original thread rollout.- Compared successful visible direct-open and failed hidden blank-then-goto sequences.
+- Ruled out target page as a deterministic crash trigger.
+- Current focus: inspect browser client route/new-tab implementation and choose the smallest reversible guard.- Applied atomic one-site hotfix with a same-directory backup.
+- Static checks passed: exact guard count, original backup integrity, insertion-only byte diff, Node syntax.
+- Runtime verification is waiting on Codex restart so the patched module is loaded.
+- Restart completed; startup regeneration removed the hotfix before Browser import.
+- Paused runtime test to avoid testing an unpatched module.
+
+- Restarted-session Browser handshake passed with the patched client loaded before first import.
+
+- Runtime regression FAILED: Codex crashed again despite the 500 ms guard.
+- Returned to root-cause analysis; no further Browser calls until logs are read.
+
+- Corrected boundary: crash happens inside tabs.new(), before the client delay and before goto.
+- Plugin reconciliation anomaly is background noise, not yet causal.
+
+- Compared healthy and failing hidden-tab lifecycle logs field by field.
+- Failure occurs after Electron DOM-ready but before debugger listener/tool return; client-side repair boundary is exhausted.
+
+- Verified ineffective hotfix is fully gone and current Codex is responding.
+- Paused at approval boundary for clean Browser plugin cache reinstall.
+- User authorized a clean Browser cache reinstall with a mandatory backup.
+- Armed helper PID 27472 against Codex main PID 13144; planned backup is C:\Users\PC\.codex\backups\browser-clean-reinstall-20260713-204817-pid13144.
+- Helper has no deletion operation and will hash-verify all 374 files after the move.
+- After restart, helper status was helper_failed before manifest creation or Move-Item.
+- Failure: Measure-Object rejected the Property argument while summing the inventory.
+- Source cache remains untouched at 374 files and 7,819,719 bytes; no backup browser directory or manifest exists yet.
+- Added an isolated integration test that runs the exact helper against a synthetic USERPROFILE.
+- RED confirmed: the original helper failed with GenericMeasurePropertyNotFound before moving the 3-file fixture.
+- Minimal sum-loop fix removed that failure, but the first GREEN attempt exceeded the 30-second test timeout during the move retry phase; next step is to capture the exact move error with a shorter diagnostic path.
+- Direct Move-Item on the synthetic cache returned MoveDirectoryItemIOError / access denied under the workspace sandbox.
+- This is distinct from the helper logic failure; the next green test must run the same isolated fixture with escalated filesystem access.
+- Escalated workspace integration test still failed at directory move with access denied after the 60-second retry ceiling.
+- Direct System.IO.Directory.Move also failed on the workspace fixture; Copy-Item succeeded but same-parent Rename-Item was denied.
+- The workspace environment therefore cannot validate directory rename semantics. Next validation must run the same exact helper against an isolated synthetic profile under C:\Users\PC\.codex\backups, which matches the real filesystem scope without touching the live cache.
+- GREEN passed under C:\Users\PC\.codex\backups: exact production helper moved 3 files / 14 bytes and returned backup_complete with verified=true.
+- Production helper parse check is clean, contains no Remove-Item, and contains no Measure-Object -Property length usage.
+- Ready to arm the corrected helper against the current Codex main process; one more full exit is required.
+- Corrected helper re-armed at 21:08 against current Codex main PID 18200; helper PID is 21456.
+- Planned real backup: C:\Users\PC\.codex\backups\browser-clean-reinstall-20260713-210801-pid18200.
+- Status is armed; live source remains 374 files / 7,819,719 bytes with original browser-client hash until Codex exits.
+- Real backup completed at 21:09 with verified=true: 374 files and 7,819,719 bytes.
+- Independent rehash found 0 missing, unexpected, length-mismatched, or SHA-256-mismatched files; manifest hash 1D5142BEBC650E9D7F50778022E90EC9E1988EC0DA36AB744E74EFA00DCE8318 matches status.
+- Fresh startup installed Browser because it was missing and logged plugin_install_succeeded; new cache is version 26.707.61608 with 374 files and the original browser-client hash.
+- Current Codex main PID 23332 is alive/responding. Static reinstall phase complete; runtime IAB regression remains.
+- Reinstalled Browser plugin contains the complete control-in-app-browser skill and browser-client.mjs at the expected paths.
+- Read the complete Browser skill; runtime check will use a persistent IAB binding, complete documentation read, one minimal hidden tab, and cleanup if the app survives.
+- Runtime stage 1 passed after clean reinstall: IAB selection and complete documentation returned in 1.6 seconds; Codex did not exit.
+- Stage 2 pass/fail is defined as whether one fresh hidden IAB tabs.new() returns a bound tab and the same Codex main PID remains alive.
+- Runtime stage 2 PASS: first post-reinstall hidden IAB tabs.new() returned tab id 1, about:blank, title New tab in 0.4 seconds.
+- Codex main PID remained 23332 and responding; latest log remained the same session and recorded the full hidden WebView attach/map/dom-ready sequence.
+- Because prior healthy controls existed, one pass is not sufficient; run two create-close repetitions before final cleanup.
+- Runtime stability repetition PASS: two additional create-close cycles returned tabs 2 and 3 as about:blank / New tab.
+- App log independently shows 3 Browser Use opened events, 3 about:blank dom-ready events, and 3 closed events; main PID remained 23332 and responding.
+- No Browser Use tab remains open; finalize the Browser session, then perform a fresh non-browser final verification.
+- Browser session finalized with no kept test tabs.
+- Combined final verification timed out at 60 seconds; split evidence checks to isolate the slow component.
+- Live 374-file target-vs-backup rehash timed out at 60s and again at 90s; exact full new-vs-old byte equality remains unproven and is not required for the backup/reinstall/runtime claim.
+- Do not repeat full live target hashing while Browser is active; use bounded final checks.
+- Final bounded verification PASS: backup_complete, verified=true, 374 files / 7,819,719 bytes, manifest hash match, verification mismatch count 0.
+- Fresh cache exists with 374 files / 7,819,719 bytes and browser-client SHA-256 F8B28403A0497B2E0BED024969FA474BB1F564509A59993449924C4ECAB9DB0D.
+- Browser install success count is 1; runtime lifecycle counts are opened=3, dom-ready=3, closed=3; PID 23332 remained alive/responding.
+- Test-window fatal count=0 and IAB failure count=0. All 19 error-level lines were the same unrelated ResizeObserver notification warning.
+- Git tracked status is empty. Browser session was finalized and no Browser Use test tab was kept.
+- Outcome: resolved with caveats. The crash boundary is closed-source IAB post-DOM-ready lifecycle handling; clean reinstall restored stable behavior in 3/3 tests, but cache corruption is not proven as the sole cause because older sessions also had intermittent passes.
+- 2026-07-14: User reports the in-app browser still crashes Codex after the clean reinstall and 3/3 temporary passes.
+- Safety constraint: several agents are active. This phase is passive-only: no Browser calls, no Node browser runtime, no restart, no plugin/global-state mutation.
+- Reopened diagnosis; prior clean reinstall is now disproven as a durable fix.
+- Passive inventory confirms current main PID 8196 is alive/responding and its session began at 2026-07-14 10:12:00 +08:00.
+- The first compact-log query over-serialized PowerShell line objects; retry will cast to plain strings and avoid content expansion.
+- Recurrence window: prior session PID 14632 stopped at 2026-07-14T02:11:32.823Z; current PID 8196 launched at 02:12:00.121Z (27.3s gap).
+- Unlike earlier failures, the last IAB event was only a browser-sidebar route rebind at 02:11:27.297Z. No createTab, WebView attach, page mapping, or dom-ready event was logged before exit.
+- The final 37 seconds contained 33 unknown-conversation / conversation-state-not-found errors involving two concurrently active conversation IDs.
+- Candidate hypothesis: concurrent agent activity desynchronized the renderer conversation registry; the browser invocation triggered a route rebind but the app exited before IAB tab creation.
+- PID 14632 has only t0/t1/t4 logs; no separate crash-time Browser process log exists.
+- At 02:10:57.199Z BrowserUseThreadConfig selected the bundled Node/Node-REPL runtime, but no tabs.new/createTab event followed before exit.
+- A Windows Store updater session started one second after the old app stopped and reported manifestBuildVersion=26.707.9564.0 versus prior build 26.707.8168.0. Must rule out update-driven restart before attributing this recurrence to IAB.
+- Automatic-update explanation ruled out: current app is still build 26.707.8168.0; Store reports update available but SilentDownloadNotAllowed and no install occurred.
+- Multi-pass PowerShell log metrics timed out; retry will use bounded single-pass Select-String counts.
+- Unknown-conversation hypothesis as a sufficient cause is DISCARDED: the current stable session has 734 matching errors, 23 route rebinds, and 7 Browser runtime-config events while PID 8196 remains responsive.
+- Both the failed and current sessions have zero createTab and zero dom-ready events; failure occurs before actual IAB tab creation in this recurrence.
+- Session-root search found 20 JSONL files containing Browser/Node-REPL terms, but the matching files do not yet align directly with the 10:11 crash timestamp. Next step is timestamp-first rollout selection, then inspect only tool records.
+- Timestamp-first rollout selection found three sessions at the crash window: one ending 02:10:55 and two concurrent sessions ending 02:11:32.296/02:11:32.979.
+- The two sessions matching the unknown-conversation IDs continued to issue ordinary exec calls and received tool outputs through the final second. Their raw files do not contain Browser/Node-REPL keywords.
+- Therefore the browser trigger likely belongs to the third session ending at 02:10:55, or to app UI/runtime state outside those two agent rollouts. Next query extracts nested tool names only, not conversation text.
+- Selective tool extraction confirms both concurrent crash-window sessions used only shell_command and received outputs; no Browser-related nested tool input exists.
+- A timestamp-constrained search across all 2026-07-14 session JSONL files found zero persisted mcp__node_repl__js/browser-client/setupBrowserRuntime/tabs.new calls at 02:10-02:11Z.
+- The Browser trigger either occurs before the agent tool-call record is persisted, or is initiated by app UI/thread route activation rather than a recorded Browser tool call.
+- 2026-07-14: Parsed only the 02:10:55-02:10:57 records from the suspected rollout. It is an approval-review task interrupted immediately, not a Browser tool invocation.
+- 2026-07-14: Application event log has no matching crash/WER/AppModel record in the recurrence window.
+- 2026-07-14: WMI process query failed with access denied; changed method to `Get-Process`. Current accessible process family start times match the post-crash restart, while old PIDs are absent.
+- 2026-07-14: Fetched the current official Codex manual through its CLI helper after a sandbox-only EPERM; no in-app Browser was used.
+- 2026-07-14: Official Browser and troubleshooting sections contain no documented native-crash recovery beyond feedback/log collection and Browser data settings.
+- 2026-07-14: Extracted Cockpit Tools v1.3.0 release notes over HTTP. The release explicitly fixes automatic Codex profile takeover and `config.toml`/`auth.json` rewrites on Cockpit startup.
+- 2026-07-14: Current config passively confirms `codex_local_access` at localhost:57485; compact session/provider and orphan-tab checks are next.
+- 2026-07-14: Confirmed the pre-repair config selected `codex_local_access` while all 173 backed-up active sessions still declared `openai`; all corresponding live sessions were later rewritten to `codex_local_access`.
+- 2026-07-14: Attributed the 10:11:33 `session-visibility-repair` backup to Cockpit 1.1.4 using exact implementation strings embedded in its executable.
+- 2026-07-14: Confirmed the historical BrowserUse tab remains active in persisted state with the panel closed and is repeatedly restored/owner-synced as a non-BrowserUse tab.
+- 2026-07-14: No Browser runtime, tab creation, app restart, Cockpit update, or global-state mutation was performed.
+- 2026-07-14: Found open OpenAI issues matching the upstream failure class: #27349 (Browser with other active threads), #25094 (IAB/sidebar lifecycle during thread switch), and #32040 (Windows 26.707 Browser closes app).
+- 2026-07-14: Root-cause hypothesis is now specific enough for a reversible repair plan, but runtime confirmation is intentionally deferred until other active agents have finished.

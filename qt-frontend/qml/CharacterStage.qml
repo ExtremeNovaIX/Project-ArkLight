@@ -1,5 +1,4 @@
 import QtQuick
-import QtQuick.Controls
 import QtQuick.Effects
 import QtQuick.Layouts
 
@@ -32,11 +31,49 @@ Rectangle {
         rasterOpacity: 0.32
     }
 
+    Canvas {
+        id: characterFocusGlow
+        anchors.fill: parent
+        antialiasing: true
+        opacity: stageHover.hovered ? 0.56 : 0.06
+        z: 1
+
+        onPaint: {
+            const ctx = getContext("2d")
+            ctx.reset()
+            ctx.clearRect(0, 0, width, height)
+
+            const glow = ctx.createRadialGradient(
+                width * 0.55,
+                height * 0.50,
+                0,
+                width * 0.55,
+                height * 0.50,
+                Math.max(width, height) * 0.48
+            )
+            glow.addColorStop(0, "rgba(116,177,170,0.09)")
+            glow.addColorStop(0.42, "rgba(121,139,151,0.036)")
+            glow.addColorStop(1, "rgba(17,25,27,0)")
+            ctx.fillStyle = glow
+            ctx.fillRect(0, 0, width, height)
+        }
+
+        Behavior on opacity {
+            NumberAnimation {
+                duration: tokens.baseMotion
+                easing.type: Easing.OutCubic
+            }
+        }
+
+        onWidthChanged: requestPaint()
+        onHeightChanged: requestPaint()
+    }
+
     Image {
         id: peripheralTechnicalLayer
         anchors.fill: parent
         source: "../assets/ui/technical-overlays/technical-graphics-raster.png"
-        fillMode: Image.PreserveAspectFit
+        fillMode: Image.PreserveAspectCrop
         horizontalAlignment: Image.AlignHCenter
         verticalAlignment: Image.AlignVCenter
         smooth: true
@@ -45,10 +82,20 @@ Rectangle {
         z: 1
         layer.enabled: true
         layer.effect: MultiEffect {
-            brightness: 1.0
+            brightness: 0.70
             colorization: 1.0
-            colorizationColor: "#B8C8C4"
+            colorizationColor: "#AEBDB9"
         }
+    }
+
+    AmbientSignalFlow {
+        anchors.fill: parent
+        scaleFactor: stage.scaleFactor
+        mode: "stage"
+        coreColor: tokens.paperLight
+        haloColor: tokens.orange
+        opacity: 0.56
+        z: 4
     }
 
     Rectangle {
@@ -62,9 +109,9 @@ Rectangle {
 
     Image {
         id: characterImage
-        width: stage.width * 1.18
+        width: stage.width * 1.10
         height: stage.height - stage.sp(58)
-        x: stage.width * 0.06
+        x: -stage.width * 0.015
         anchors.bottom: parent.bottom
         anchors.bottomMargin: -stage.sp(8)
         source: stage.characterImageUrl
@@ -76,7 +123,7 @@ Rectangle {
         verticalAlignment: Image.AlignBottom
         visible: source.toString().length > 0
         opacity: status === Image.Ready ? 1 : 0
-        scale: status === Image.Ready ? (stageHover.hovered ? 1.018 : 1) : 0.99
+        scale: status === Image.Ready ? 1 : 0.995
         transformOrigin: Item.Bottom
         z: 2
 
@@ -133,9 +180,9 @@ Rectangle {
 
         RowLayout {
             anchors.fill: parent
-            anchors.leftMargin: stage.sp(30)
-            anchors.rightMargin: stage.sp(26)
-            spacing: stage.sp(15)
+            anchors.leftMargin: stage.sp(24)
+            anchors.rightMargin: stage.sp(22)
+            spacing: stage.sp(13)
 
             Text {
                 Layout.maximumWidth: stage.width * 0.54
@@ -177,57 +224,58 @@ Rectangle {
 
     Column {
         id: commsBlock
-        x: stage.sp(30)
-        y: stage.sp(112)
-        width: Math.min(stage.width * 0.38, stage.sp(184))
-        spacing: stage.sp(5)
+        anchors.left: parent.left
+        anchors.top: parent.top
+        anchors.leftMargin: stage.sp(16)
+        anchors.topMargin: stage.sp(94)
+        width: Math.min(stage.width * 0.32, stage.sp(152))
+        spacing: stage.sp(3)
         z: 5
 
         Text {
             text: "COMMS NODE"
-            color: tokens.whiteAlpha(0.62)
+            color: tokens.whiteAlpha(0.56)
             font.family: tokens.monoFont
-            font.pixelSize: stage.sp(9)
+            font.pixelSize: stage.sp(8)
             font.letterSpacing: stage.sp(0.6)
         }
 
         Text {
             text: "CH-01"
-            color: tokens.whiteAlpha(0.92)
+            color: tokens.whiteAlpha(0.90)
             font.family: tokens.displayFont
-            font.pixelSize: stage.sp(33)
+            font.pixelSize: stage.sp(27)
             font.weight: Font.DemiBold
-            font.letterSpacing: stage.sp(1.2)
+            font.letterSpacing: stage.sp(1.0)
         }
 
         Text {
-            text: "NODE ID: ARK-1847A"
-            color: tokens.whiteAlpha(0.54)
+            text: "NODE / ARK-1847A"
+            color: tokens.whiteAlpha(0.46)
             font.family: tokens.monoFont
-            font.pixelSize: stage.sp(9)
+            font.pixelSize: stage.sp(8)
         }
 
         Item {
             width: parent.width
-            height: stage.sp(18)
+            height: stage.sp(12)
 
             Text {
                 anchors.left: parent.left
                 anchors.verticalCenter: parent.verticalCenter
-                text: "LINK:"
-                color: tokens.whiteAlpha(0.55)
+                text: "LINK"
+                color: tokens.whiteAlpha(0.46)
                 font.family: tokens.monoFont
-                font.pixelSize: stage.sp(9)
+                font.pixelSize: stage.sp(8)
             }
 
             Text {
-                anchors.left: parent.left
-                anchors.leftMargin: stage.sp(43)
+                anchors.right: parent.right
                 anchors.verticalCenter: parent.verticalCenter
                 text: "ONLINE"
-                color: tokens.teal
+                color: tokens.statusTeal
                 font.family: tokens.monoFont
-                font.pixelSize: stage.sp(9)
+                font.pixelSize: stage.sp(8)
             }
         }
 
@@ -252,22 +300,41 @@ Rectangle {
                 color: tokens.statusTeal
             }
         }
+    }
 
-        Item {
-            width: 1
-            height: stage.sp(4)
-        }
+    Column {
+        id: telemetryRail
+        anchors.right: parent.right
+        anchors.top: parent.top
+        anchors.rightMargin: stage.sp(12)
+        anchors.topMargin: stage.sp(96)
+        width: Math.min(stage.width * 0.28, stage.sp(132))
+        spacing: stage.sp(3)
+        z: 5
 
         Text {
-            text: "FREQ: 7.142.540 MHZ"
-            color: tokens.whiteAlpha(0.48)
+            width: parent.width
+            horizontalAlignment: Text.AlignRight
+            text: "FREQ / 7.142.540"
+            color: tokens.whiteAlpha(0.34)
             font.family: tokens.monoFont
             font.pixelSize: stage.sp(8)
         }
 
         Text {
-            text: "COORD: 37.7749°N, 122.4194°W"
-            color: tokens.whiteAlpha(0.42)
+            width: parent.width
+            horizontalAlignment: Text.AlignRight
+            text: "COORD / 37.7749 N"
+            color: tokens.whiteAlpha(0.30)
+            font.family: tokens.monoFont
+            font.pixelSize: stage.sp(8)
+        }
+
+        Text {
+            width: parent.width
+            horizontalAlignment: Text.AlignRight
+            text: "ARRAY / DS.N-62"
+            color: tokens.whiteAlpha(0.28)
             font.family: tokens.monoFont
             font.pixelSize: stage.sp(8)
         }
@@ -275,76 +342,86 @@ Rectangle {
 
     Item {
         id: lowerData
-        x: stage.sp(30)
-        y: stage.height - stage.sp(188)
-        width: Math.min(stage.width * 0.36, stage.sp(174))
-        height: stage.sp(128)
+        anchors.left: parent.left
+        anchors.bottom: parent.bottom
+        anchors.leftMargin: stage.sp(8)
+        anchors.bottomMargin: stage.sp(12)
+        width: Math.min(stage.width * 0.35, stage.sp(154))
+        height: stage.sp(64)
         z: 5
 
         Rectangle {
-            x: 0
-            y: stage.sp(22)
-            width: stage.sp(44)
-            height: 1
-            color: tokens.whiteAlpha(0.28)
-            rotation: -48
-            transformOrigin: Item.Left
-        }
-
-        Rectangle {
-            x: stage.sp(34)
-            y: stage.sp(54)
-            width: 1
-            height: stage.sp(24)
-            color: tokens.whiteAlpha(0.28)
-        }
-
-        Rectangle {
-            x: stage.sp(31)
-            y: stage.sp(76)
-            width: stage.sp(6)
-            height: stage.sp(6)
-            color: tokens.paperLight
-            opacity: 0.55
+            anchors.fill: parent
+            radius: stage.sp(1)
+            gradient: Gradient {
+                orientation: Gradient.Horizontal
+                GradientStop {
+                    position: 0
+                    color: tokens.blackAlpha(0.28)
+                }
+                GradientStop {
+                    position: 0.72
+                    color: tokens.blackAlpha(0.08)
+                }
+                GradientStop {
+                    position: 1
+                    color: tokens.blackAlpha(0)
+                }
+            }
         }
 
         Column {
-            x: stage.sp(54)
-            y: stage.sp(5)
-            spacing: stage.sp(4)
+            x: stage.sp(8)
+            y: stage.sp(6)
+            spacing: stage.sp(2)
 
             Text {
-                text: "ARRAY: DS.N-62"
-                color: tokens.whiteAlpha(0.43)
+                text: "RNG / 2.1e+10 km"
+                color: tokens.whiteAlpha(0.48)
                 font.family: tokens.monoFont
                 font.pixelSize: stage.sp(8)
             }
 
             Text {
-                text: "BAND: X"
-                color: tokens.whiteAlpha(0.38)
-                font.family: tokens.monoFont
-                font.pixelSize: stage.sp(8)
-            }
-        }
-
-        Column {
-            x: stage.sp(54)
-            y: stage.sp(90)
-            spacing: stage.sp(4)
-
-            Text {
-                text: "RNG: 2.1e+10 km"
+                text: "STATUS / STANDBY"
                 color: tokens.whiteAlpha(0.42)
                 font.family: tokens.monoFont
                 font.pixelSize: stage.sp(8)
             }
 
             Text {
-                text: "STATUS: STANDBY"
-                color: tokens.whiteAlpha(0.38)
+                text: "BAND / X  ·  REF / 62"
+                color: tokens.whiteAlpha(0.34)
                 font.family: tokens.monoFont
                 font.pixelSize: stage.sp(8)
+            }
+        }
+
+        Item {
+            x: stage.sp(8)
+            y: stage.sp(48)
+            width: stage.sp(92)
+            height: stage.sp(10)
+
+            Rectangle {
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                height: 1
+                color: tokens.whiteAlpha(0.18)
+            }
+
+            Repeater {
+                model: 7
+
+                Rectangle {
+                    required property int index
+                    x: index * stage.sp(15)
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 1
+                    height: index === 0 || index === 6 ? stage.sp(8) : stage.sp(4)
+                    color: tokens.whiteAlpha(0.22)
+                }
             }
         }
     }
@@ -352,14 +429,14 @@ Rectangle {
     Text {
         anchors.right: parent.right
         anchors.bottom: parent.bottom
-        anchors.rightMargin: stage.sp(22)
-        anchors.bottomMargin: stage.sp(20)
+        anchors.rightMargin: stage.sp(18)
+        anchors.bottomMargin: stage.sp(16)
         width: stage.width * 0.42
         horizontalAlignment: Text.AlignRight
         text: stage.activeEmotion.length > 0
               ? "PERSONA / " + stage.activeEmotion.toUpperCase()
               : "PERSONA / NEUTRAL"
-        color: tokens.whiteAlpha(0.34)
+        color: tokens.whiteAlpha(0.30)
         font.family: tokens.monoFont
         font.pixelSize: stage.sp(8)
         elide: Text.ElideRight

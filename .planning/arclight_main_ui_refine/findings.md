@@ -1,0 +1,28 @@
+# Findings
+
+- Current user screenshot shows the megastructure, contour rings, PIONEER wordmark, right-side data block, and character-safe visual channel competing around the center-right and lower-right.
+- Current CharacterStage scales the character on hover. This is the likely undesirable focus motion and should become a non-geometric glow.
+- SettingsCategoryGlyph also assembles and shifts geometry on active/hover. User explicitly prefers glow over focus motion, so its geometry should remain fixed while luminance/glow changes.
+- ChatSurface scrollbar is attached to a ListView with a 28px right margin, leaving it visibly inset from the shell edge.
+- The committed BootOverlay is already the earlier, simpler letter-rise version and currently has no git diff.
+- Current clock is one Text node. A mechanical counter requires six fixed digit cells with instant text replacement and separators.
+- Ambient motion should be sparse, low-contrast, and confined to edge rails or decorative pathways, not the central reading area.
+- UI UX database recommendations skewed toward high-contrast retro-futurism and are rejected where they conflict with the established low-contrast warm engineering direction. Retained guidance: 150-300ms focus transitions, stable layout, reduced/discreet continuous motion.
+- Clock clarification: digit changes are discrete at the second boundary. There is no interpolated wheel motion and no intermediate numerals. Instrument character comes from fixed digit windows and instantaneous mechanical state change.
+- Current default and compact previews keep the character and chat regions separated. The clock renders as fixed digit windows; the preview font process still shows tofu glyphs, so typography cannot be judged from these captures.
+- At compact scale the edge HUD remains outside the face and message text. The lower-left telemetry approaches the character silhouette but stays in the border channel.
+- Fresh default, compact, and large renders show no direct overlap between message content, contour zone, megastructure zone, and character HUD. Edge decorations remain legible only on close inspection, matching the low-contrast direction.
+- The clock keeps fixed cell geometry across all three scale factors. The offscreen font issue prevents judging the final glyph form but does not affect the hard-cut timing semantics.
+- Ambient flow is intentionally below normal visual salience. Two captures look nearly identical at a glance, but pixel analysis confirms sparse particles move across both stage and surface edge paths.
+- A 28-message render confirms the scrollbar thumb is visible at the outer 6 px edge channel, remains inside the surface clip, and does not overlap message text or the composer.
+- Final review classified runtime QML tests and shared/pauseable ambient animation timing as future improvements, not blockers for this UI pass.
+- User revised the clock requirement: digits must use a fast split-flap motion with visible depth, not a hard cut and not a slow rolling odometer. The texture should remain clean, warm off-white, and low contrast.
+- Existing clock source is a flat fixed cell with direct character binding, so it cannot express the requested depth or flip state.
+- Qt resources are listed directly in qt-frontend/CMakeLists.txt, so the new clock texture must be added there. The current mechanical-counter test explicitly bans NumberAnimation and must be replaced with a flip-specific contract before implementation.
+- The clock occupies a small header slot, so the texture must read at 18x27 logical pixels. Large screws, heavy noise, strong perspective, or embedded digits would collapse at runtime; only the center hinge, bevel, and plastic grain should survive downscaling.
+- The generated 256x384 texture preserves a centered hinge, clean molded-plastic bevel, and very low contrast after downscaling. It has no embedded digits or dirt, so it can be reused beneath both static and moving halves.
+- The static full-interface render shows the texture adds visible bevel and hinge depth without increasing the header contrast beyond the settings button. The offscreen font still renders tofu, so digit shapes remain unjudgeable in this preview.
+- The first motion capture exposed a real rendering defect: the rotating half becomes an opaque black rectangle in the software scene graph. The moving face needs a temporary layer texture and the lower half should rotate from -90 to 0. The AI texture also reads best near 0.56 opacity without a duplicate border or center seam.
+- Layer-backed faces and the corrected lower rotation sign remove the black transformed rectangles. The upper phase now reads as a shallow physical flap; the lower capture was too late in the 142ms cycle and needs an earlier frame for inspection.
+- Compact, default, and large renders preserve the 2:3 flap ratio and keep the clock inside its original header footprint. The material remains visible at 0.8 scale and gains depth at 1.4 without competing with the status or settings controls.
+- Final review found one important re-entry edge case after a long GUI-thread stall: a second time value can arrive within 16ms of the first recovered value. Stopping the active flap would create a hard-cut frame. The state machine must keep only the latest pending character and finish the current flap before starting it.

@@ -11,6 +11,10 @@ private slots:
     void rewritesBlockList();
     void settingsHistoryUsesDropdownPopup();
     void settingsVisualLanguageUsesUserFacingNavigation();
+    void mainSurfaceUsesMechanicalCounter();
+    void mainDecorationsUseExplicitEdgeZones();
+    void ambientFlowAndScrollbarStayAtEdges();
+    void focusFeedbackUsesGlowWithoutGeometryMovement();
 };
 
 void ConfigCatalogSupportTest::updatesNestedScalar() {
@@ -70,5 +74,99 @@ void ConfigCatalogSupportTest::settingsVisualLanguageUsesUserFacingNavigation() 
     QVERIFY(!navQml.contains(QStringLiteral("语音调试")));
 }
 
+void ConfigCatalogSupportTest::mainSurfaceUsesMechanicalCounter() {
+    QFile surfaceFile(QStringLiteral(ARKLIGHT_QML_DIR) + QStringLiteral("/ChatSurface.qml"));
+    QVERIFY2(surfaceFile.open(QIODevice::ReadOnly | QIODevice::Text), qPrintable(surfaceFile.fileName()));
+    const QString surfaceQml = QString::fromUtf8(surfaceFile.readAll());
+
+    QFile clockFile(QStringLiteral(ARKLIGHT_QML_DIR) + QStringLiteral("/MechanicalCounterClock.qml"));
+    QVERIFY2(clockFile.open(QIODevice::ReadOnly | QIODevice::Text), qPrintable(clockFile.fileName()));
+    const QString clockQml = QString::fromUtf8(clockFile.readAll());
+
+    QVERIFY(surfaceQml.contains(QStringLiteral("MechanicalCounterClock {")));
+    QVERIFY(surfaceQml.contains(QStringLiteral("scheduleRelayTick()")));
+    QVERIFY(!surfaceQml.contains(QStringLiteral("text: surface.relayTime")));
+    QVERIFY(clockQml.contains(QStringLiteral("id: digitCell")));
+    QVERIFY(clockQml.contains(QStringLiteral("model: clock.value.length")));
+    QFile textureFile(QStringLiteral(ARKLIGHT_QML_DIR)
+                      + QStringLiteral("/../assets/ui/clock/split-flap-cell-texture.png"));
+    QFile cmakeFile(QStringLiteral(ARKLIGHT_QML_DIR) + QStringLiteral("/../CMakeLists.txt"));
+    QVERIFY2(cmakeFile.open(QIODevice::ReadOnly | QIODevice::Text), qPrintable(cmakeFile.fileName()));
+    const QString cmake = QString::fromUtf8(cmakeFile.readAll());
+
+    QVERIFY(clockQml.contains(QStringLiteral("property string previousCharacter")));
+    QVERIFY(clockQml.contains(QStringLiteral("property string pendingCharacter")));
+    QVERIFY(clockQml.contains(QStringLiteral("property real topFlipAngle")));
+    QVERIFY(clockQml.contains(QStringLiteral("property real bottomFlipAngle: -90")));
+    QVERIFY(clockQml.contains(QStringLiteral("property int flipDuration: 142")));
+    QCOMPARE(clockQml.count(QStringLiteral("layer.enabled: digitSlot.flipping")), 2);
+    QVERIFY(clockQml.contains(QStringLiteral("opacity: 0.56")));
+    QVERIFY(clockQml.contains(QStringLiteral("SequentialAnimation")));
+    QVERIFY(clockQml.contains(QStringLiteral("Rotation {")));
+    QCOMPARE(clockQml.count(QStringLiteral("axis.x: 1")), 2);
+    QVERIFY(clockQml.contains(QStringLiteral("duration: clock.flipDuration * 0.44")));
+    QVERIFY(clockQml.contains(QStringLiteral("duration: clock.flipDuration * 0.56")));
+    QVERIFY(clockQml.contains(QStringLiteral("if (flipAnimation.running)")));
+    QVERIFY(clockQml.contains(QStringLiteral("pendingCharacter = characterValue")));
+    QVERIFY(clockQml.contains(QStringLiteral("function finishFlip()")));
+    QVERIFY(clockQml.contains(QStringLiteral("Qt.callLater")));
+    QVERIFY(!clockQml.contains(QStringLiteral("flipAnimation.stop()\n                            displayedCharacter = incomingCharacter")));
+    QVERIFY(clockQml.contains(QStringLiteral("source: \"../assets/ui/clock/split-flap-cell-texture.png\"")));
+    QVERIFY(!clockQml.contains(QStringLiteral("SmoothedAnimation")));
+    QVERIFY2(textureFile.exists(), qPrintable(textureFile.fileName()));
+    QVERIFY(cmake.contains(QStringLiteral("assets/ui/clock/split-flap-cell-texture.png")));
+}
+
+void ConfigCatalogSupportTest::mainDecorationsUseExplicitEdgeZones() {
+    QFile surfaceFile(QStringLiteral(ARKLIGHT_QML_DIR) + QStringLiteral("/ChatSurface.qml"));
+    QVERIFY2(surfaceFile.open(QIODevice::ReadOnly | QIODevice::Text), qPrintable(surfaceFile.fileName()));
+    const QString surfaceQml = QString::fromUtf8(surfaceFile.readAll());
+
+    QFile backdropFile(QStringLiteral(ARKLIGHT_QML_DIR) + QStringLiteral("/TechnicalBackdrop.qml"));
+    QVERIFY2(backdropFile.open(QIODevice::ReadOnly | QIODevice::Text), qPrintable(backdropFile.fileName()));
+    const QString backdropQml = QString::fromUtf8(backdropFile.readAll());
+
+    QVERIFY(surfaceQml.contains(QStringLiteral("id: pioneerRail")));
+    QVERIFY(backdropQml.contains(QStringLiteral("id: megastructureZone")));
+    QVERIFY(backdropQml.contains(QStringLiteral("id: contourZone")));
+    QVERIFY(backdropQml.contains(QStringLiteral("id: rasterGeometryZone")));
+}
+
+void ConfigCatalogSupportTest::ambientFlowAndScrollbarStayAtEdges() {
+    QFile surfaceFile(QStringLiteral(ARKLIGHT_QML_DIR) + QStringLiteral("/ChatSurface.qml"));
+    QVERIFY2(surfaceFile.open(QIODevice::ReadOnly | QIODevice::Text), qPrintable(surfaceFile.fileName()));
+    const QString surfaceQml = QString::fromUtf8(surfaceFile.readAll());
+
+    QFile stageFile(QStringLiteral(ARKLIGHT_QML_DIR) + QStringLiteral("/CharacterStage.qml"));
+    QVERIFY2(stageFile.open(QIODevice::ReadOnly | QIODevice::Text), qPrintable(stageFile.fileName()));
+    const QString stageQml = QString::fromUtf8(stageFile.readAll());
+
+    QFile flowFile(QStringLiteral(ARKLIGHT_QML_DIR) + QStringLiteral("/AmbientSignalFlow.qml"));
+    QVERIFY2(flowFile.open(QIODevice::ReadOnly | QIODevice::Text), qPrintable(flowFile.fileName()));
+    const QString flowQml = QString::fromUtf8(flowFile.readAll());
+
+    QVERIFY(surfaceQml.contains(QStringLiteral("AmbientSignalFlow {")));
+    QVERIFY(stageQml.contains(QStringLiteral("AmbientSignalFlow {")));
+    QVERIFY(surfaceQml.contains(QStringLiteral("parent: chatList.parent")));
+    QVERIFY(surfaceQml.contains(QStringLiteral("anchors.rightMargin: surface.sp(6)")));
+    QVERIFY(!surfaceQml.contains(QStringLiteral("anchors.rightMargin: -surface.sp(20)")));
+    QVERIFY(flowQml.contains(QStringLiteral("property real edgeFade")));
+}
+
+void ConfigCatalogSupportTest::focusFeedbackUsesGlowWithoutGeometryMovement() {
+    QFile stageFile(QStringLiteral(ARKLIGHT_QML_DIR) + QStringLiteral("/CharacterStage.qml"));
+    QVERIFY2(stageFile.open(QIODevice::ReadOnly | QIODevice::Text), qPrintable(stageFile.fileName()));
+    const QString stageQml = QString::fromUtf8(stageFile.readAll());
+
+    QFile glyphFile(QStringLiteral(ARKLIGHT_QML_DIR) + QStringLiteral("/SettingsCategoryGlyph.qml"));
+    QVERIFY2(glyphFile.open(QIODevice::ReadOnly | QIODevice::Text), qPrintable(glyphFile.fileName()));
+    const QString glyphQml = QString::fromUtf8(glyphFile.readAll());
+
+    QVERIFY(stageQml.contains(QStringLiteral("id: characterFocusGlow")));
+    QVERIFY(!stageQml.contains(QStringLiteral("stageHover.hovered ? 1.018 : 1")));
+    QVERIFY(glyphQml.contains(QStringLiteral("property real glowStrength")));
+    QVERIFY(glyphQml.contains(QStringLiteral("shadowBlur")));
+    QVERIFY(!glyphQml.contains(QStringLiteral("property real assembly")));
+}
 QTEST_GUILESS_MAIN(ConfigCatalogSupportTest)
 #include "ConfigCatalogSupportTest.moc"

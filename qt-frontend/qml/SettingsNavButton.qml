@@ -40,6 +40,7 @@ Button {
             kind: navButton.glyphKind
             active: host.activeView === navButton.viewKey
             hovered: navButton.hovered
+            focused: navButton.activeFocus
         }
 
         ColumnLayout {
@@ -97,9 +98,12 @@ Button {
         Rectangle {
             visible: host.activeView === navButton.viewKey
             anchors.left: parent.left
-            anchors.verticalCenter: parent.verticalCenter
-            width: host.sp(2)
-            height: host.sp(24)
+            anchors.bottom: parent.bottom
+            anchors.leftMargin: host.sp(18)
+            anchors.bottomMargin: host.sp(8)
+            width: host.sp(18)
+            height: host.sp(2)
+            radius: host.sp(1)
             color: tokens.orange
         }
 
